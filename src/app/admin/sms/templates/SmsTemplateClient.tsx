@@ -53,9 +53,9 @@ const ALL_VARIABLES = [
 
 // 수신 대상 배지 색상 매핑
 const TARGET_COLORS: Record<string, string> = {
-    ADMIN: "bg-[var(--doc-grid-head)] text-[var(--doc-ink-2)]",
-    COACH: "bg-[var(--doc-accent-soft)] text-[var(--doc-accent)]",
-    PARENT: "bg-[var(--doc-grid-head)] text-[var(--doc-warn)]",
+    ADMIN: "bg-blue-100 text-blue-700",
+    COACH: "bg-green-100 text-green-700",
+    PARENT: "bg-orange-100 text-orange-700",
 };
 const TARGET_LABELS: Record<string, string> = {
     ADMIN: "관리자",
@@ -68,41 +68,41 @@ function SmsTemplatesLoadingFallback() {
         <div className="space-y-6">
             <div className="flex items-center justify-between gap-4">
                 <div>
-                    <div className="h-8 w-48 rounded bg-[var(--doc-grid-head)]" />
-                    <div className="mt-2 h-4 w-96 max-w-full rounded bg-[var(--doc-grid-head)]" />
+                    <div className="h-8 w-48 animate-pulse rounded bg-gray-200 dark:bg-gray-700" />
+                    <div className="mt-2 h-4 w-96 max-w-full animate-pulse rounded bg-gray-100 dark:bg-gray-800" />
                 </div>
-                <div className="h-10 w-24 rounded-[3px] bg-[var(--doc-grid-head)]" />
+                <div className="h-10 w-24 animate-pulse rounded-lg bg-gray-200 dark:bg-gray-700" />
             </div>
-            <div className="flex w-fit gap-1 rounded-[3px] bg-[var(--doc-grid-head)] p-1">
-                <div className="h-9 w-36 rounded-[3px] bg-[var(--doc-surface)]" />
-                <div className="h-9 w-28 rounded-[3px] bg-[var(--doc-grid-head)]" />
+            <div className="flex w-fit gap-1 rounded-lg bg-gray-100 p-1 dark:bg-gray-800">
+                <div className="h-9 w-36 animate-pulse rounded-md bg-white dark:bg-gray-700" />
+                <div className="h-9 w-28 animate-pulse rounded-md bg-gray-200 dark:bg-gray-700" />
             </div>
             <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
                 {Array.from({ length: 6 }).map((_, index) => (
                     <div
                         key={index}
-                        className="overflow-hidden rounded-[3px] border border-[var(--doc-rule)] bg-[var(--doc-surface)]"
+                        className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800"
                     >
-                        <div className="flex items-center justify-between border-b border-[var(--doc-rule)] px-5 py-4">
+                        <div className="flex items-center justify-between border-b border-gray-100 px-5 py-4 dark:border-gray-800">
                             <div className="flex min-w-0 items-center gap-2.5">
-                                <div className="h-5 w-40 rounded bg-[var(--doc-grid-head)]" />
-                                <div className="h-5 w-14 rounded-[3px] bg-[var(--doc-grid-head)]" />
+                                <div className="h-5 w-40 animate-pulse rounded bg-gray-200 dark:bg-gray-700" />
+                                <div className="h-5 w-14 animate-pulse rounded-full bg-gray-100 dark:bg-gray-700" />
                             </div>
-                            <div className="h-6 w-11 rounded-[3px] bg-[var(--doc-grid-head)]" />
+                            <div className="h-6 w-11 animate-pulse rounded-full bg-gray-100 dark:bg-gray-700" />
                         </div>
                         <div className="px-5 pt-3">
-                            <div className="h-4 w-64 max-w-full rounded bg-[var(--doc-grid-head)]" />
+                            <div className="h-4 w-64 max-w-full animate-pulse rounded bg-gray-100 dark:bg-gray-700" />
                         </div>
                         <div className="px-5 py-3">
-                            <div className="h-28 rounded-[3px] bg-[var(--doc-grid-head)]" />
+                            <div className="h-28 animate-pulse rounded-lg bg-gray-100 dark:bg-gray-700" />
                             <div className="mt-3 flex flex-wrap gap-2">
                                 {Array.from({ length: 5 }).map((_, chipIndex) => (
-                                    <div key={chipIndex} className="h-7 w-20 rounded-[3px] bg-[var(--doc-grid-head)]" />
+                                    <div key={chipIndex} className="h-7 w-20 animate-pulse rounded-full bg-gray-100 dark:bg-gray-700" />
                                 ))}
                             </div>
                             <div className="mt-4 flex justify-end gap-2">
-                                <div className="h-9 w-20 rounded-[3px] bg-[var(--doc-grid-head)]" />
-                                <div className="h-9 w-20 rounded-[3px] bg-[var(--doc-grid-head)]" />
+                                <div className="h-9 w-20 animate-pulse rounded-lg bg-gray-100 dark:bg-gray-700" />
+                                <div className="h-9 w-20 animate-pulse rounded-lg bg-gray-200 dark:bg-gray-700" />
                             </div>
                         </div>
                     </div>
@@ -114,12 +114,12 @@ function SmsTemplatesLoadingFallback() {
 
 function SmsTemplatesErrorState({ onRetry }: { onRetry: () => void }) {
     return (
-        <div className="rounded-[3px] border border-[var(--doc-crit)] bg-[var(--doc-crit-soft)] p-6 text-center">
-            <p className="text-sm font-bold text-[var(--doc-crit)]">SMS 템플릿을 불러오지 못했습니다.</p>
+        <div className="rounded-xl border border-red-200 bg-red-50 p-6 text-center dark:border-red-800 dark:bg-red-950/30">
+            <p className="text-sm font-bold text-red-700 dark:text-red-200">SMS 템플릿을 불러오지 못했습니다.</p>
             <button
                 type="button"
                 onClick={onRetry}
-                className="mt-4 rounded-[3px] bg-[var(--doc-crit)] px-4 py-2 text-sm font-bold text-white transition hover:bg-[var(--doc-crit)]"
+                className="mt-4 rounded-lg bg-red-600 px-4 py-2 text-sm font-bold text-white transition hover:bg-red-700"
             >
                 다시 불러오기
             </button>
@@ -173,25 +173,25 @@ export default function SmsTemplateClient({ templates }: { templates?: SmsTempla
     return (
         <div className="space-y-6">
             {/* 탭 전환 */}
-            <div className="flex gap-1 bg-[var(--doc-grid-head)] p-1 rounded-[3px] w-fit">
+            <div className="flex gap-1 bg-gray-100 dark:bg-gray-800 p-1 rounded-lg w-fit">
                 <button
                     onClick={() => setActiveTab("staff")}
-                    className={`px-4 py-2 text-sm font-semibold rounded-[3px] transition-colors ${
- activeTab === "staff"
- ? "bg-[var(--doc-surface)] text-[var(--doc-ink)] "
- : "text-[var(--doc-ink-2)] hover:text-[var(--doc-ink-2)] "
- }`}
+                    className={`px-4 py-2 text-sm font-semibold rounded-md transition-colors ${
+                        activeTab === "staff"
+                            ? "bg-white dark:bg-gray-800 text-gray-900 dark:text-white shadow-sm"
+                            : "text-gray-500 hover:text-gray-700 dark:text-gray-200"
+                    }`}
                 >
                     <span className="material-symbols-outlined text-[16px] align-middle mr-1">admin_panel_settings</span>
                     관리자/코치 ({staffTemplates.length})
                 </button>
                 <button
                     onClick={() => setActiveTab("parent")}
-                    className={`px-4 py-2 text-sm font-semibold rounded-[3px] transition-colors ${
- activeTab === "parent"
- ? "bg-[var(--doc-surface)] text-[var(--doc-ink)] "
- : "text-[var(--doc-ink-2)] hover:text-[var(--doc-ink-2)] "
- }`}
+                    className={`px-4 py-2 text-sm font-semibold rounded-md transition-colors ${
+                        activeTab === "parent"
+                            ? "bg-white dark:bg-gray-800 text-gray-900 dark:text-white shadow-sm"
+                            : "text-gray-500 hover:text-gray-700 dark:text-gray-200"
+                    }`}
                 >
                     <span className="material-symbols-outlined text-[16px] align-middle mr-1">family_restroom</span>
                     학부모 ({parentTemplates.length})
@@ -206,7 +206,7 @@ export default function SmsTemplateClient({ templates }: { templates?: SmsTempla
             </div>
 
             {filtered.length === 0 && (
-                <div className="text-center py-16 text-[var(--doc-ink-3)]">
+                <div className="text-center py-16 text-gray-400">
                     <span className="material-symbols-outlined text-5xl block mb-3">sms</span>
                     <p>등록된 템플릿이 없습니다</p>
                 </div>
@@ -331,12 +331,12 @@ function TemplateCard({ template, onReload }: { template: SmsTemplate; onReload:
     const isModified = body !== template.body || isActive !== template.isActive;
 
     return (
-        <div className={`bg-[var(--doc-surface)] rounded-[3px] border ${isActive ? "border-[var(--doc-rule)] " : "border-[var(--doc-rule)] opacity-60"} overflow-hidden`}>
+        <div className={`bg-white dark:bg-gray-800 rounded-xl border ${isActive ? "border-gray-200 dark:border-gray-700" : "border-gray-200 dark:border-gray-700 opacity-60"} shadow-sm overflow-hidden`}>
             {/* 카드 상단: 이름 + 배지 + 토글 */}
-            <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--doc-rule)]">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 dark:border-gray-800">
                 <div className="flex items-center gap-2.5 min-w-0">
-                    <h3 className="font-semibold text-[var(--doc-ink)] text-sm truncate">{template.name}</h3>
-                    <span className={`inline-flex items-center px-2 py-0.5 rounded-[3px] text-[11px] font-medium ${TARGET_COLORS[template.target] || "bg-[var(--doc-grid-head)] text-[var(--doc-ink-2)] "}`}>
+                    <h3 className="font-semibold text-gray-900 dark:text-white text-sm truncate">{template.name}</h3>
+                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium ${TARGET_COLORS[template.target] || "bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300"}`}>
                         {TARGET_LABELS[template.target] || template.target}
                     </span>
                 </div>
@@ -344,22 +344,22 @@ function TemplateCard({ template, onReload }: { template: SmsTemplate; onReload:
                 <button
                     onClick={handleToggle}
                     disabled={isPending}
-                    className={`relative inline-flex h-6 w-11 items-center rounded-[3px] transition-colors flex-shrink-0 ${
- isActive ? "bg-[var(--doc-accent)]" : "bg-[var(--doc-grid-head)]"
- }`}
+                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors flex-shrink-0 ${
+                        isActive ? "bg-green-500" : "bg-gray-300"
+                    }`}
                     title={isActive ? "발송 중 (클릭하면 OFF)" : "발송 중지 (클릭하면 ON)"}
                 >
                     <span
-                        className={`inline-block h-4 w-4 rounded-[3px] bg-[var(--doc-surface)] transition-transform ${
- isActive ? "translate-x-6" : "translate-x-1"
- }`}
+                        className={`inline-block h-4 w-4 rounded-full bg-white dark:bg-gray-800 transition-transform shadow-sm ${
+                            isActive ? "translate-x-6" : "translate-x-1"
+                        }`}
                     />
                 </button>
             </div>
 
             {/* 설명 */}
             {template.description && (
-                <p className="px-5 pt-3 text-xs text-[var(--doc-ink-2)]">
+                <p className="px-5 pt-3 text-xs text-gray-500 dark:text-gray-400">
                     <span className="material-symbols-outlined text-[14px] align-middle mr-0.5">info</span>
                     {template.description}
                 </p>
@@ -372,7 +372,7 @@ function TemplateCard({ template, onReload }: { template: SmsTemplate; onReload:
                     value={body}
                     onChange={e => { setBody(e.target.value); setPreview(null); }}
                     rows={4}
-                    className="w-full px-3 py-2.5 text-sm border border-[var(--doc-rule)] rounded-[3px] resize-none focus:outline-none focus: focus:/20 focus:border-[var(--doc-rule)] font-mono leading-relaxed"
+                    className="w-full px-3 py-2.5 text-sm border border-gray-200 dark:border-gray-700 rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 font-mono leading-relaxed"
                     placeholder="메시지를 입력하세요..."
                 />
 
@@ -382,7 +382,7 @@ function TemplateCard({ template, onReload }: { template: SmsTemplate; onReload:
                         <button
                             key={v.key}
                             onClick={() => insertVariable(v.key)}
-                            className="inline-flex items-center gap-1 px-2 py-1 text-[11px] font-medium bg-[var(--doc-grid-head)] text-[var(--doc-ink-2)] rounded-[3px] hover:bg-[var(--doc-grid-head)] transition-colors"
+                            className="inline-flex items-center gap-1 px-2 py-1 text-[11px] font-medium bg-blue-50 text-blue-700 rounded-md hover:bg-blue-100 transition-colors"
                             title={`커서 위치에 {{${v.key}}} 삽입`}
                         >
                             <span className="material-symbols-outlined text-[12px]">add</span>
@@ -393,7 +393,7 @@ function TemplateCard({ template, onReload }: { template: SmsTemplate; onReload:
 
                 {/* 자동 변환 메시지 */}
                 {convertMsg && (
-                    <p className="mt-2 text-xs text-[var(--doc-accent)] bg-[var(--doc-accent-soft)] px-2 py-1 rounded">
+                    <p className="mt-2 text-xs text-green-600 bg-green-50 px-2 py-1 rounded">
                         {convertMsg}
                     </p>
                 )}
@@ -401,28 +401,28 @@ function TemplateCard({ template, onReload }: { template: SmsTemplate; onReload:
 
             {/* 미리보기 영역 */}
             {preview !== null && (
-                <div className="mx-5 mb-3 p-3 bg-[var(--doc-grid-head)] rounded-[3px] border border-[var(--doc-rule)]">
-                    <p className="text-[11px] font-medium text-[var(--doc-ink-2)] mb-1.5">
+                <div className="mx-5 mb-3 p-3 bg-gray-50 dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700">
+                    <p className="text-[11px] font-medium text-gray-500 dark:text-gray-400 mb-1.5">
                         <span className="material-symbols-outlined text-[12px] align-middle mr-0.5">visibility</span>
                         미리보기 (샘플 데이터)
                     </p>
-                    <p className="text-sm text-[var(--doc-ink)] whitespace-pre-line font-mono">{preview}</p>
+                    <p className="text-sm text-gray-800 dark:text-gray-100 whitespace-pre-line font-mono">{preview}</p>
                 </div>
             )}
 
             {/* 하단 버튼 바 */}
-            <div className="flex items-center justify-between px-5 py-3 bg-[var(--doc-grid-head)] border-t border-[var(--doc-rule)]">
+            <div className="flex items-center justify-between px-5 py-3 bg-gray-50 dark:bg-gray-900 border-t border-gray-100 dark:border-gray-800">
                 <div className="flex gap-2">
                     <button
                         onClick={handlePreview}
-                        className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-[var(--doc-ink-2)] bg-[var(--doc-surface)] border border-[var(--doc-rule)] rounded-[3px] hover:bg-[var(--doc-grid-head)] transition-colors"
+                        className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-gray-600 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:bg-gray-900 transition-colors"
                     >
                         <span className="material-symbols-outlined text-[14px]">visibility</span>
                         {preview !== null ? "닫기" : "미리보기"}
                     </button>
                     <button
                         onClick={handleAutoConvert}
-                        className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-[var(--doc-ink-2)] bg-[var(--doc-grid-head)] border border-[var(--doc-rule)] rounded-[3px] hover:bg-[var(--doc-grid-head)] transition-colors"
+                        className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-purple-600 bg-purple-50 border border-purple-200 rounded-lg hover:bg-purple-100 transition-colors"
                         title="한글 키워드를 자동으로 변수로 변환"
                     >
                         <span className="material-symbols-outlined text-[14px]">auto_fix_high</span>
@@ -430,7 +430,7 @@ function TemplateCard({ template, onReload }: { template: SmsTemplate; onReload:
                     </button>
                     <button
                         onClick={handleReset}
-                        className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-[var(--doc-ink-2)] bg-[var(--doc-surface)] border border-[var(--doc-rule)] rounded-[3px] hover:bg-[var(--doc-grid-head)] transition-colors"
+                        className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-gray-500 dark:text-gray-400 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:bg-gray-900 transition-colors"
                         title="기본 템플릿으로 초기화"
                     >
                         <span className="material-symbols-outlined text-[14px]">restart_alt</span>
@@ -440,13 +440,13 @@ function TemplateCard({ template, onReload }: { template: SmsTemplate; onReload:
                 <button
                     onClick={handleSave}
                     disabled={saving || !isModified}
-                    className={`inline-flex items-center gap-1.5 px-4 py-1.5 text-xs font-semibold rounded-[3px] transition-colors ${
- saved
- ? "bg-[var(--doc-accent)] text-white"
- : isModified
- ? "bg-[var(--doc-grid-head)] text-white hover:bg-[var(--doc-grid-head)]"
- : "bg-[var(--doc-grid-head)] text-[var(--doc-ink-3)] cursor-not-allowed"
- }`}
+                    className={`inline-flex items-center gap-1.5 px-4 py-1.5 text-xs font-semibold rounded-lg transition-colors ${
+                        saved
+                            ? "bg-green-500 text-white"
+                            : isModified
+                                ? "bg-blue-600 text-white hover:bg-blue-700"
+                                : "bg-gray-200 text-gray-400 cursor-not-allowed"
+                    }`}
                 >
                     <span className="material-symbols-outlined text-[14px]">
                         {saved ? "check" : "save"}

@@ -126,12 +126,12 @@ type TrialDateFilter = "ALL" | "UPCOMING" | "TODAY" | "THIS_WEEK" | "PAST" | "MI
 type ContactActionType = "CONTACTED" | "NO_ANSWER" | "FOLLOW_UP" | "MEMO";
 type ContactModalState = { lead: TrialLead; defaultAction: ContactActionType } | null;
 type EnrollGuideConfirmState = { lead: TrialLead; convertAfterConfirm: boolean } | null;
-const LIST_ACTION_TRIGGER_CLASS = "inline-flex size-9 items-center justify-center rounded-[3px] bg-[var(--doc-crit)] text-white  -red-500/20 transition hover:scale-105 hover:bg-[var(--doc-crit)] focus:outline-none focus: focus: disabled:opacity-50  dark:text-[var(--doc-ink)] dark:-brand-neon-lime/20 dark:hover:bg-lime-300";
-const LIST_ACTION_MENU_CLASS = "fixed z-[80] flex w-40 -translate-y-1/2 flex-col gap-2 rounded-[6px] border border-[var(--doc-rule)] bg-[var(--doc-surface)]/95 p-2 text-left    ";
-const LIST_ACTION_ITEM_CLASS = "flex min-h-9 w-full items-center justify-between gap-2 rounded-[3px] border border-[var(--doc-rule)] bg-[var(--doc-surface)] px-2 pl-3 text-left text-xs font-bold text-[var(--doc-ink-2)]  transition hover:border-[var(--doc-accent)] hover:bg-[var(--doc-accent)] hover:text-[var(--doc-accent)] disabled:opacity-50      ";
-const LIST_ACTION_PRIMARY_CLASS = "flex min-h-9 w-full items-center justify-between gap-2 rounded-[3px] bg-brand-neon-lime px-2 pl-3 text-left text-xs font-bold text-[var(--doc-ink)]  transition hover:bg-lime-300 disabled:opacity-50";
-const LIST_ACTION_ICON_CLASS = "inline-flex size-7 shrink-0 items-center justify-center rounded-[3px] bg-[var(--doc-grid-head)] text-white  dark:text-[var(--doc-ink)]";
-const DETAIL_ACTION_CLASS = "inline-flex min-h-8 items-center gap-1.5 rounded-[3px] border border-[var(--doc-rule)] px-3 text-xs font-bold text-[var(--doc-ink-2)] transition hover:border-[var(--doc-accent)] hover:bg-[var(--doc-accent)] hover:text-[var(--doc-accent)]    ";
+const LIST_ACTION_TRIGGER_CLASS = "inline-flex size-9 items-center justify-center rounded-full bg-red-500 text-white shadow-lg shadow-red-500/20 transition hover:scale-105 hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-red-300 disabled:opacity-50 dark:bg-brand-neon-lime dark:text-brand-navy-900 dark:shadow-brand-neon-lime/20 dark:hover:bg-lime-300";
+const LIST_ACTION_MENU_CLASS = "fixed z-[80] flex w-40 -translate-y-1/2 flex-col gap-2 rounded-2xl border border-gray-200 bg-white/95 p-2 text-left shadow-2xl backdrop-blur dark:border-gray-700 dark:bg-gray-950/95";
+const LIST_ACTION_ITEM_CLASS = "flex min-h-9 w-full items-center justify-between gap-2 rounded-full border border-gray-200 bg-white px-2 pl-3 text-left text-xs font-black text-gray-700 shadow-sm transition hover:border-brand-orange-300 hover:bg-brand-orange-50 hover:text-brand-orange-700 disabled:opacity-50 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100 dark:hover:border-brand-neon-lime dark:hover:bg-brand-neon-lime/10 dark:hover:text-brand-neon-lime";
+const LIST_ACTION_PRIMARY_CLASS = "flex min-h-9 w-full items-center justify-between gap-2 rounded-full bg-brand-neon-lime px-2 pl-3 text-left text-xs font-black text-brand-navy-900 shadow-sm transition hover:bg-lime-300 disabled:opacity-50";
+const LIST_ACTION_ICON_CLASS = "inline-flex size-7 shrink-0 items-center justify-center rounded-full bg-gray-900 text-white dark:bg-brand-neon-lime dark:text-brand-navy-900";
+const DETAIL_ACTION_CLASS = "inline-flex min-h-8 items-center gap-1.5 rounded-md border border-gray-200 px-3 text-xs font-bold text-gray-700 transition hover:border-brand-orange-300 hover:bg-brand-orange-50 hover:text-brand-orange-700 dark:border-gray-700 dark:text-gray-100 dark:hover:border-brand-neon-lime dark:hover:bg-brand-neon-lime/10";
 const QUICK_ACTION_MENU_WIDTH = 160;
 const QUICK_ACTION_MENU_HALF_HEIGHT = 132;
 
@@ -165,13 +165,13 @@ const EMPTY_STATS: TrialStats = {
 // ── 상태별 라벨/색상/아이콘 매핑 ──────────────────────────────────────────────
 
 const STATUS_CONFIG: Record<string, { label: string; color: string; icon: string }> = {
-    NEW: { label: "신규", color: "bg-[var(--doc-grid-head)] text-[var(--doc-ink-2)]  ", icon: "fiber_new" },
-    CONTACTED: { label: "연락완료", color: "bg-[var(--doc-grid-head)] text-[var(--doc-warn)]  ", icon: "call" },
-    SCHEDULED: { label: "체험예정", color: "bg-[var(--doc-grid-head)] text-[var(--doc-ink-2)]  ", icon: "event" },
-    ATTENDED: { label: "체험완료", color: "bg-[var(--doc-accent-soft)] text-[var(--doc-accent)]  ", icon: "check_circle" },
-    CONVERTED: { label: "등록전환", color: "bg-[var(--doc-accent-soft)] text-[var(--doc-accent)]  ", icon: "how_to_reg" },
-    LOST: { label: "이탈", color: "bg-[var(--doc-grid-head)]  text-[var(--doc-ink-2)] ", icon: "person_off" },
-    CANCELLED: { label: "취소", color: "bg-[var(--doc-grid-head)]  text-[var(--doc-ink-2)] ", icon: "block" },
+    NEW: { label: "신규", color: "bg-blue-100 text-blue-800 dark:bg-blue-950/50 dark:text-blue-200", icon: "fiber_new" },
+    CONTACTED: { label: "연락완료", color: "bg-yellow-100 text-yellow-800 dark:bg-yellow-950/50 dark:text-yellow-200", icon: "call" },
+    SCHEDULED: { label: "체험예정", color: "bg-purple-100 text-purple-800 dark:bg-purple-950/50 dark:text-purple-200", icon: "event" },
+    ATTENDED: { label: "체험완료", color: "bg-green-100 text-green-800 dark:bg-green-950/50 dark:text-green-200", icon: "check_circle" },
+    CONVERTED: { label: "등록전환", color: "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-200", icon: "how_to_reg" },
+    LOST: { label: "이탈", color: "bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400", icon: "person_off" },
+    CANCELLED: { label: "취소", color: "bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400", icon: "block" },
 };
 
 // 유입경로 라벨
@@ -512,7 +512,7 @@ function getTrialScheduleItems(
             label: "신청일",
             icon: "inbox",
             value: formatCompactDate(lead.createdAt),
-            className: "border-[var(--doc-rule)] bg-[var(--doc-grid-head)] text-[var(--doc-ink-2)]   ",
+            className: "border-gray-100 bg-gray-50 text-gray-700 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-200",
         },
         {
             label: "체험일",
@@ -524,13 +524,13 @@ function getTrialScheduleItems(
             label: "수업교시",
             icon: "schedule",
             value: preferredSchedule || "미입력",
-            className: "border-[var(--doc-rule)] bg-[var(--doc-grid-head)] text-[var(--doc-ink-2)]   ",
+            className: "border-purple-100 bg-purple-50 text-purple-800 dark:border-purple-900/50 dark:bg-purple-950/30 dark:text-purple-200",
         },
         {
             label: "확정일정",
             icon: "event_available",
             value: confirmedSchedule || "미확정",
-            className: "border-[var(--doc-rule)] bg-[var(--doc-grid-head)] text-[var(--doc-ink-2)]   ",
+            className: "border-sky-100 bg-sky-50 text-sky-800 dark:border-sky-900/50 dark:bg-sky-950/30 dark:text-sky-200",
         },
     ];
     return items.map((item, index) => {
@@ -579,16 +579,16 @@ function TrialCrmLoadingFallback() {
         <div className="space-y-6">
             <div className="flex items-center justify-between">
                 <div className="space-y-2">
-                    <div className="h-8 w-48 rounded bg-[var(--doc-grid-head)]" />
-                    <div className="h-4 w-80 rounded bg-[var(--doc-grid-head)]" />
+                    <div className="h-8 w-48 rounded bg-gray-200 dark:bg-gray-700 animate-pulse" />
+                    <div className="h-4 w-80 rounded bg-gray-100 dark:bg-gray-800 animate-pulse" />
                 </div>
-                <div className="h-11 w-36 rounded-[3px] bg-[var(--doc-grid-head)]" />
+                <div className="h-11 w-36 rounded-lg bg-gray-200 dark:bg-gray-700 animate-pulse" />
             </div>
             <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3">
                 {Array.from({ length: 7 }).map((_, index) => (
                     <div
                         key={index}
-                        className="h-28 rounded-[3px] border border-[var(--doc-rule)] bg-[var(--doc-surface)]"
+                        className="h-28 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 animate-pulse"
                     />
                 ))}
             </div>
@@ -596,7 +596,7 @@ function TrialCrmLoadingFallback() {
                 {Array.from({ length: 6 }).map((_, index) => (
                     <div
                         key={index}
-                        className="h-8 w-20 rounded-[3px] bg-[var(--doc-grid-head)]"
+                        className="h-8 w-20 rounded-full bg-gray-100 dark:bg-gray-800 animate-pulse"
                     />
                 ))}
             </div>
@@ -604,7 +604,7 @@ function TrialCrmLoadingFallback() {
                 {Array.from({ length: 4 }).map((_, index) => (
                     <div
                         key={index}
-                        className="h-40 rounded-[3px] border border-[var(--doc-rule)] bg-[var(--doc-surface)]"
+                        className="h-40 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 animate-pulse"
                     />
                 ))}
             </div>
@@ -614,13 +614,13 @@ function TrialCrmLoadingFallback() {
 
 function TrialCrmErrorState({ onRetry }: { onRetry: () => void }) {
     return (
-        <div className="rounded-[6px] border border-[var(--doc-crit)] bg-[var(--doc-surface)] p-8 text-center">
-            <span className="material-symbols-outlined mb-3 text-4xl text-[var(--doc-crit)]">error</span>
-            <p className="font-bold text-[var(--doc-ink)]">체험 문의 정보를 불러오지 못했습니다.</p>
+        <div className="rounded-2xl border border-red-100 bg-white p-8 text-center shadow-sm dark:border-red-900/40 dark:bg-gray-800">
+            <span className="material-symbols-outlined mb-3 text-4xl text-red-500">error</span>
+            <p className="font-bold text-gray-900 dark:text-white">체험 문의 정보를 불러오지 못했습니다.</p>
             <button
                 type="button"
                 onClick={onRetry}
-                className="mt-4 rounded-[3px] bg-[var(--doc-accent)] px-4 py-2 text-sm font-bold text-white transition hover:bg-[var(--doc-grid-head)] dark:text-[var(--doc-ink)]"
+                className="mt-4 rounded-xl bg-brand-orange-500 px-4 py-2 text-sm font-bold text-white transition hover:bg-orange-600 dark:bg-brand-neon-lime dark:text-brand-navy-900"
             >
                 다시 시도
             </button>
@@ -964,7 +964,7 @@ export default function TrialCrmClient({
 
     function renderActionIcon(icon: string, primary = false) {
         return (
-            <span className={primary ? "inline-flex size-7 shrink-0 items-center justify-center rounded-[3px] bg-[var(--doc-ink)] text-white" : LIST_ACTION_ICON_CLASS}>
+            <span className={primary ? "inline-flex size-7 shrink-0 items-center justify-center rounded-full bg-brand-navy-900 text-white" : LIST_ACTION_ICON_CLASS}>
                 <span className="material-symbols-outlined text-base">{icon}</span>
             </span>
         );
@@ -1042,7 +1042,7 @@ export default function TrialCrmClient({
                     value={lead.status}
                     onChange={(event) => handleStatusChange(lead, event.target.value)}
                     disabled={busy}
-                    className="h-8 w-[98px] shrink-0 rounded-[3px] border border-[var(--doc-rule)] bg-[var(--doc-surface)] px-1.5 text-center text-xs font-bold text-[var(--doc-ink)] focus:outline-none focus: focus:ring-brand-orange-500 disabled:opacity-50 dark:focus:ring-brand-neon-lime"
+                    className="h-8 w-[98px] shrink-0 rounded-lg border border-gray-200 bg-white px-1.5 text-center text-xs font-black text-gray-900 focus:outline-none focus:ring-2 focus:ring-brand-orange-500 disabled:opacity-50 dark:border-gray-700 dark:bg-gray-900 dark:text-white dark:focus:ring-brand-neon-lime"
                 >
                     {STATUS_ORDER.map((s) => (
                         <option key={s} value={s}>
@@ -1051,7 +1051,7 @@ export default function TrialCrmClient({
                     ))}
                 </select>
                 {lead.enrollApplicationReceivedAt && (
-                    <span className="inline-flex h-8 shrink-0 items-center rounded-[3px] bg-[var(--doc-accent-soft)] px-2 text-xs font-bold text-[var(--doc-accent)]">
+                    <span className="inline-flex h-8 shrink-0 items-center rounded-lg bg-emerald-50 px-2 text-xs font-black text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-200">
                         신청 접수
                     </span>
                 )}
@@ -1061,7 +1061,7 @@ export default function TrialCrmClient({
 
     function renderTrialList() {
         return (
-            <div className="overflow-x-auto overflow-y-visible rounded-[3px] border border-[var(--doc-rule)] bg-[var(--doc-surface)]">
+            <div className="overflow-x-auto overflow-y-visible rounded-xl border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800">
                 <table className="w-full min-w-[760px] table-fixed border-collapse text-center text-[13px] lg:min-w-0">
                     <colgroup>
                         <col className="w-[12%]" />
@@ -1075,8 +1075,8 @@ export default function TrialCrmClient({
                         <col className="w-[16%]" />
                         <col className="w-[8%]" />
                     </colgroup>
-                    <thead className="sticky top-0 z-10 bg-[var(--doc-grid-head)] text-xs font-bold uppercase text-[var(--doc-ink-2)]">
-                        <tr className="divide-x divide-[var(--doc-rule)] dark:divide-[var(--doc-rule)]">
+                    <thead className="sticky top-0 z-10 bg-gray-50 text-xs font-black uppercase text-gray-500 dark:bg-gray-900 dark:text-gray-400">
+                        <tr className="divide-x divide-gray-200 dark:divide-gray-700">
                             <th className="px-2 py-2">상태</th>
                             <th className="px-2 py-2">신청일</th>
                             <th className="px-2 py-2">체험일</th>
@@ -1089,7 +1089,7 @@ export default function TrialCrmClient({
                             <th className="px-2 py-2">액션</th>
                         </tr>
                     </thead>
-                    <tbody className="divide-y divide-[var(--doc-rule)]">
+                    <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
                         {visibleLeads.map((lead) => {
                             const cfg = STATUS_CONFIG[lead.status] || STATUS_CONFIG.NEW;
                             const isClosed = isClosedTrialStatus(lead.status);
@@ -1122,52 +1122,52 @@ export default function TrialCrmClient({
                                             setShowDetailModal(lead);
                                         }
                                     }}
-                                    className="cursor-pointer divide-x divide-[var(--doc-rule)] transition hover:bg-[var(--doc-grid-head)]/80 focus:bg-[var(--doc-accent)] focus:outline-none dark:divide-[var(--doc-rule)] dark:focus:bg-brand-neon-lime/10"
+                                    className="cursor-pointer divide-x divide-gray-100 transition hover:bg-gray-50/80 focus:bg-brand-orange-50 focus:outline-none dark:divide-gray-700 dark:hover:bg-gray-900/50 dark:focus:bg-brand-neon-lime/10"
                                 >
                                     <td className="px-2 py-1.5 text-center align-middle">
-                                        <span className={`inline-flex h-8 w-8 items-center justify-center rounded-[3px] text-xs font-bold sm:h-auto sm:w-auto sm:max-w-full sm:gap-1 sm:px-2 sm:py-1 ${cfg.color}`} title={cfg.label}>
+                                        <span className={`inline-flex h-8 w-8 items-center justify-center rounded-full text-xs font-bold sm:h-auto sm:w-auto sm:max-w-full sm:gap-1 sm:px-2 sm:py-1 ${cfg.color}`} title={cfg.label}>
                                             <span className="material-symbols-outlined text-lg sm:text-sm">{cfg.icon}</span>
                                             <span className="hidden truncate sm:inline">{cfg.label}</span>
                                         </span>
                                     </td>
                                     <td className="px-2 py-1.5 text-center align-middle">
-                                        <span className="hidden truncate font-bold text-[var(--doc-ink)] sm:block" title={createdDateLabel}>
+                                        <span className="hidden truncate font-bold text-gray-800 sm:block dark:text-gray-100" title={createdDateLabel}>
                                             {createdDateLabel}
                                         </span>
-                                        <span className="block truncate font-bold text-[var(--doc-ink)] sm:hidden" title={createdDateLabel}>
+                                        <span className="block truncate font-bold text-gray-800 sm:hidden dark:text-gray-100" title={createdDateLabel}>
                                             {createdDateMobileLabel}
                                         </span>
                                     </td>
                                     <td className="px-2 py-1.5 text-center align-middle">
-                                        <span className="hidden truncate font-bold text-[var(--doc-ink)] sm:block" title={trialDateLabel}>
+                                        <span className="hidden truncate font-bold text-gray-800 sm:block dark:text-gray-100" title={trialDateLabel}>
                                             {trialDateLabel}
                                         </span>
-                                        <span className="block truncate font-bold text-[var(--doc-ink)] sm:hidden" title={trialDateLabel}>
+                                        <span className="block truncate font-bold text-gray-800 sm:hidden dark:text-gray-100" title={trialDateLabel}>
                                             {trialDateMobileLabel}
                                         </span>
                                     </td>
                                     <td className="px-2 py-1.5 text-center align-middle">
-                                        <span className="block truncate font-bold text-[var(--doc-ink)]" title={scheduleLabel}>
+                                        <span className="block truncate font-bold text-gray-800 dark:text-gray-100" title={scheduleLabel}>
                                             {scheduleLabel}
                                         </span>
                                     </td>
                                     <td className="px-2 py-1.5 text-center align-middle">
-                                        <span className="block truncate font-bold text-[var(--doc-ink-2)]" title={teacherLabel}>
+                                        <span className="block truncate font-bold text-gray-700 dark:text-gray-200" title={teacherLabel}>
                                             {teacherLabel}
                                         </span>
                                     </td>
                                     <td className="px-2 py-1.5 text-center align-middle">
-                                        <span className="block truncate font-bold text-[var(--doc-ink)]" title={rowTitle}>
+                                        <span className="block truncate font-black text-gray-900 dark:text-white" title={rowTitle}>
                                             {lead.childName}
                                         </span>
                                     </td>
                                     <td className="px-2 py-1.5 text-center align-middle">
-                                        <span className="block truncate font-bold text-[var(--doc-ink-2)]" title={schoolLabel}>
+                                        <span className="block truncate font-bold text-gray-700 dark:text-gray-200" title={schoolLabel}>
                                             {schoolLabel}
                                         </span>
                                     </td>
                                     <td className="px-2 py-1.5 text-center align-middle">
-                                        <span className="block truncate font-bold text-[var(--doc-ink-2)]" title={gradeLabel}>
+                                        <span className="block truncate font-bold text-gray-700 dark:text-gray-200" title={gradeLabel}>
                                             {gradeLabel}
                                         </span>
                                     </td>
@@ -1236,7 +1236,7 @@ export default function TrialCrmClient({
                                                     {renderActionIcon("done_all")}
                                                 </button>
                                                 {lead.trialFeeConfirmed ? (
-                                                    <div className={`${LIST_ACTION_ITEM_CLASS} pointer-events-none bg-[var(--doc-accent-soft)] text-[var(--doc-accent)] opacity-90 `}>
+                                                    <div className={`${LIST_ACTION_ITEM_CLASS} pointer-events-none bg-emerald-50 text-emerald-700 opacity-90 dark:bg-emerald-950/30 dark:text-emerald-200`}>
                                                         <span>입금 완료</span>
                                                         {renderActionIcon("paid")}
                                                     </div>
@@ -1290,11 +1290,11 @@ export default function TrialCrmClient({
         <div className="space-y-6">
             {feedback && (
                 <div
-                    className={`flex items-center gap-2 rounded-[3px] border px-4 py-3 text-sm font-semibold ${
- feedback.type === "success"
- ? "border-[var(--doc-accent)] bg-[var(--doc-accent-soft)] text-[var(--doc-accent)] "
- : "border-[var(--doc-crit)] bg-[var(--doc-crit-soft)] text-[var(--doc-crit)] "
- }`}
+                    className={`flex items-center gap-2 rounded-xl border px-4 py-3 text-sm font-semibold ${
+                        feedback.type === "success"
+                            ? "border-green-200 bg-green-50 text-green-700 dark:border-green-800 dark:bg-green-950/40 dark:text-green-200"
+                            : "border-red-200 bg-red-50 text-red-700 dark:border-red-800 dark:bg-red-950/40 dark:text-red-200"
+                    }`}
                     role="status"
                 >
                     <span className="material-symbols-outlined text-lg">
@@ -1305,14 +1305,14 @@ export default function TrialCrmClient({
             )}
 
             {/* ── 한 줄 파이프라인 필터 ── */}
-            <div className="flex flex-wrap items-center gap-2 rounded-[3px] border border-[var(--doc-rule)] bg-[var(--doc-surface)] px-3 py-2">
+            <div className="flex flex-wrap items-center gap-2 rounded-xl border border-gray-200 bg-white px-3 py-2 shadow-sm dark:border-gray-700 dark:bg-gray-800">
                 <button
                     onClick={() => setFilter("ALL")}
-                    className={`inline-flex min-h-8 items-center gap-1.5 rounded-[3px] px-3 text-sm font-bold transition-colors ${
- filter === "ALL"
- ? "bg-[var(--doc-grid-head)] text-white dark:text-[var(--doc-ink)]"
- : "bg-[var(--doc-grid-head)] text-[var(--doc-ink-2)] hover:bg-[var(--doc-grid-head)]"
- }`}
+                    className={`inline-flex min-h-8 items-center gap-1.5 rounded-full px-3 text-sm font-bold transition-colors ${
+                        filter === "ALL"
+                            ? "bg-gray-900 text-white dark:bg-brand-neon-lime dark:text-brand-navy-900"
+                            : "bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-200"
+                    }`}
                 >
                     전체 ({stats.total})
                 </button>
@@ -1323,9 +1323,9 @@ export default function TrialCrmClient({
                         <button
                             key={s}
                             onClick={() => setFilter(filter === s ? "ALL" : s)}
-                            className={`inline-flex min-h-8 items-center gap-1.5 rounded-[3px] px-3 text-sm font-bold transition-colors ${
+                            className={`inline-flex min-h-8 items-center gap-1.5 rounded-full px-3 text-sm font-bold transition-colors ${
                                 filter === s
-                                    ? "bg-[var(--doc-grid-head)] text-white  dark:text-[var(--doc-ink)]"
+                                    ? "bg-gray-900 text-white dark:bg-brand-neon-lime dark:text-brand-navy-900"
                                     : `${cfg.color} hover:opacity-80`
                             }`}
                         >
@@ -1334,41 +1334,41 @@ export default function TrialCrmClient({
                         </button>
                     );
                 })}
-                <span className="inline-flex min-h-8 items-center gap-1.5 rounded-[3px] bg-[var(--doc-accent-soft)] px-3 text-sm font-bold text-[var(--doc-accent)]">
+                <span className="inline-flex min-h-8 items-center gap-1.5 rounded-full bg-emerald-50 px-3 text-sm font-black text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-200">
                     <span className="material-symbols-outlined text-sm">trending_up</span>
                     전환율 {stats.conversionRate}%
                 </span>
             </div>
 
-            <div className="rounded-[3px] border border-[var(--doc-rule)] bg-[var(--doc-surface)] p-4">
+            <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-800">
                 <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
-                    <label className="flex min-w-0 flex-1 items-center gap-2 rounded-[3px] border border-[var(--doc-rule)] bg-[var(--doc-grid-head)] px-3 py-2.5 text-sm text-[var(--doc-ink-2)] focus-within:border-[var(--doc-accent)] focus-within:bg-[var(--doc-surface)] dark:focus-within:border-brand-neon-lime">
-                        <span className="material-symbols-outlined text-lg text-[var(--doc-ink-3)]">search</span>
+                    <label className="flex min-w-0 flex-1 items-center gap-2 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2.5 text-sm text-gray-600 focus-within:border-brand-orange-400 focus-within:bg-white dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 dark:focus-within:border-brand-neon-lime">
+                        <span className="material-symbols-outlined text-lg text-gray-400">search</span>
                         <input
                             type="search"
                             value={searchQuery}
                             onChange={(event) => setSearchQuery(event.target.value)}
                             placeholder="학생, 보호자, 전화번호, 학교, 메모로 검색"
-                            className="min-w-0 flex-1 bg-transparent outline-none placeholder:text-[var(--doc-ink-3)]"
+                            className="min-w-0 flex-1 bg-transparent outline-none placeholder:text-gray-400"
                         />
                         {searchQuery && (
                             <button
                                 type="button"
                                 onClick={() => setSearchQuery("")}
-                                className="rounded-[3px] p-1 text-[var(--doc-ink-3)] hover:bg-[var(--doc-grid-head)] hover:text-[var(--doc-ink-2)]"
+                                className="rounded-full p-1 text-gray-400 hover:bg-gray-200 hover:text-gray-700 dark:hover:bg-gray-700 dark:hover:text-gray-100"
                                 title="검색어 지우기"
                             >
                                 <span className="material-symbols-outlined text-base">close</span>
                             </button>
                         )}
                     </label>
-                    <label className="flex shrink-0 items-center gap-2 rounded-[3px] border border-[var(--doc-rule)] bg-[var(--doc-grid-head)] px-3 py-2.5 text-sm font-bold text-[var(--doc-ink-2)]">
-                        <span className="material-symbols-outlined text-lg text-[var(--doc-ink-3)]">event</span>
+                    <label className="flex shrink-0 items-center gap-2 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2.5 text-sm font-bold text-gray-700 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-200">
+                        <span className="material-symbols-outlined text-lg text-gray-400">event</span>
                         <span className="sr-only">체험일 필터</span>
                         <select
                             value={dateFilter}
                             onChange={(event) => setDateFilter(event.target.value as TrialDateFilter)}
-                            className="bg-transparent text-sm font-bold outline-none"
+                            className="bg-transparent text-sm font-black outline-none"
                         >
                             {TRIAL_DATE_FILTERS.map((item) => (
                                 <option key={item.value} value={item.value}>
@@ -1380,7 +1380,7 @@ export default function TrialCrmClient({
                     <button
                         type="button"
                         onClick={() => setShowAddModal(true)}
-                        className="inline-flex min-h-10 shrink-0 items-center justify-center gap-1.5 rounded-[3px] bg-[var(--doc-accent)] px-3 text-sm font-bold text-white transition-colors hover:bg-[var(--doc-accent)] dark:text-[var(--doc-ink)] dark:hover:bg-lime-400"
+                        className="inline-flex min-h-10 shrink-0 items-center justify-center gap-1.5 rounded-lg bg-brand-orange-500 px-3 text-sm font-black text-white transition-colors hover:bg-brand-orange-600 dark:bg-brand-neon-lime dark:text-brand-navy-900 dark:hover:bg-lime-400"
                     >
                         <span className="material-symbols-outlined text-lg">person_add</span>
                         체험 신청 등록
@@ -1392,15 +1392,15 @@ export default function TrialCrmClient({
                             key={item.value}
                             type="button"
                             onClick={() => setWorkFilter(item.value)}
-                            className={`inline-flex items-center gap-1.5 rounded-[3px] px-3 py-1.5 text-xs font-bold transition ${
- workFilter === item.value
- ? "bg-[var(--doc-grid-head)] text-white dark:text-[var(--doc-ink)]"
- : "bg-[var(--doc-grid-head)] text-[var(--doc-ink-2)] hover:bg-[var(--doc-grid-head)] "
- }`}
+                            className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-bold transition ${
+                                workFilter === item.value
+                                    ? "bg-gray-900 text-white dark:bg-brand-neon-lime dark:text-brand-navy-900"
+                                    : "bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-gray-900 dark:text-gray-300 dark:hover:bg-gray-700"
+                            }`}
                         >
                             <span className="material-symbols-outlined text-sm">{item.icon}</span>
                             {item.label}
-                            <span className="font-bold">{workFilterCounts[item.value]}</span>
+                            <span className="font-black">{workFilterCounts[item.value]}</span>
                         </button>
                     ))}
                 </div>
@@ -1408,9 +1408,9 @@ export default function TrialCrmClient({
 
             {/* ── 리드 목록 ── */}
             {filteredLeads.length === 0 ? (
-                <div className="text-center py-16 bg-[var(--doc-surface)] rounded-[3px] border border-[var(--doc-rule)]">
-                    <span className="material-symbols-outlined text-5xl text-[var(--doc-ink-3)]">person_search</span>
-                    <p className="text-[var(--doc-ink-2)] mt-3">
+                <div className="text-center py-16 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700">
+                    <span className="material-symbols-outlined text-5xl text-gray-300">person_search</span>
+                    <p className="text-gray-500 dark:text-gray-400 mt-3">
                         {searchQuery || workFilter !== "ALL" || dateFilter !== "ALL"
                             ? "조건에 맞는 체험 문의가 없습니다"
                             : filter === "ALL"
@@ -1422,7 +1422,7 @@ export default function TrialCrmClient({
                             type="button"
                             onClick={handleShowMoreLeads}
                             disabled={loadingMore}
-                            className="mt-4 rounded-[3px] border border-[var(--doc-rule)] px-4 py-2 text-sm font-bold text-[var(--doc-ink-2)] transition hover:bg-[var(--doc-grid-head)] disabled:opacity-60"
+                            className="mt-4 rounded-lg border border-gray-200 px-4 py-2 text-sm font-bold text-gray-700 transition hover:bg-gray-50 disabled:opacity-60 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-900"
                         >
                             {loadingMore ? "불러오는 중..." : "다음 50건에서 더 찾아보기"}
                         </button>
@@ -1431,7 +1431,7 @@ export default function TrialCrmClient({
             ) : (
                 <div className="grid gap-4">
                     {renderTrialList()}
-                    <div className="flex flex-col gap-3 rounded-[3px] border border-[var(--doc-rule)] bg-[var(--doc-surface)] px-4 py-3 text-sm text-[var(--doc-ink-2)] sm:flex-row sm:items-center sm:justify-between">
+                    <div className="flex flex-col gap-3 rounded-xl border border-gray-100 bg-white px-4 py-3 text-sm text-gray-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-400 sm:flex-row sm:items-center sm:justify-between">
                         <span>
                             {filteredLeads.length}건 중 {visibleLeads.length}건 표시
                         </span>
@@ -1440,7 +1440,7 @@ export default function TrialCrmClient({
                                 type="button"
                                 onClick={handleShowMoreLeads}
                                 disabled={loadingMore}
-                                className="rounded-[3px] border border-[var(--doc-rule)] px-4 py-2 font-bold text-[var(--doc-ink-2)] transition hover:bg-[var(--doc-grid-head)]"
+                                className="rounded-lg border border-gray-200 px-4 py-2 font-bold text-gray-700 transition hover:bg-gray-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-900"
                             >
                                 {loadingMore ? "불러오는 중..." : "50건 더 보기"}
                             </button>
@@ -1544,31 +1544,31 @@ function EnrollGuideConfirmModal({
         <AdminModal onClose={busy ? () => undefined : onClose} titleId="trial-enroll-guide-confirm-title" panelClassName="max-w-md">
             <div className="p-6">
                 <div className="flex items-start gap-3">
-                    <span className="inline-flex size-11 shrink-0 items-center justify-center rounded-[3px] bg-brand-neon-lime text-[var(--doc-ink)]">
+                    <span className="inline-flex size-11 shrink-0 items-center justify-center rounded-full bg-brand-neon-lime text-brand-navy-900">
                         <span className="material-symbols-outlined">send</span>
                     </span>
                     <div>
-                        <p className="text-xs font-bold uppercase tracking-widest text-[var(--doc-accent)]">
+                        <p className="text-xs font-black uppercase tracking-widest text-brand-orange-500 dark:text-brand-neon-lime">
                             수강신청 전환
                         </p>
-                        <h2 id="trial-enroll-guide-confirm-title" className="mt-1 text-xl font-bold text-[var(--doc-ink)]">
+                        <h2 id="trial-enroll-guide-confirm-title" className="mt-1 text-xl font-black text-gray-900 dark:text-white">
                             수강신청서를 전송하시겠습니까?
                         </h2>
-                        <p className="mt-2 text-sm font-semibold leading-6 text-[var(--doc-ink-2)]">
+                        <p className="mt-2 text-sm font-semibold leading-6 text-gray-600 dark:text-gray-300">
                             {lead.childName} 보호자에게 수강신청서 링크를 문자로 발송합니다.
                             같은 신청 건은 중복 발송되지 않습니다.
                         </p>
                     </div>
                 </div>
 
-                <div className="mt-5 rounded-[3px] border border-[var(--doc-rule)] bg-[var(--doc-grid-head)] p-4 text-sm">
+                <div className="mt-5 rounded-xl border border-gray-200 bg-gray-50 p-4 text-sm dark:border-gray-700 dark:bg-gray-900">
                     <div className="flex items-center justify-between gap-3">
-                        <span className="font-bold text-[var(--doc-ink-2)]">수강생</span>
-                        <span className="font-bold text-[var(--doc-ink)]">{lead.childName}</span>
+                        <span className="font-bold text-gray-500 dark:text-gray-400">수강생</span>
+                        <span className="font-black text-gray-900 dark:text-white">{lead.childName}</span>
                     </div>
                     <div className="mt-2 flex items-center justify-between gap-3">
-                        <span className="font-bold text-[var(--doc-ink-2)]">처리</span>
-                        <span className="font-bold text-[var(--doc-ink)]">
+                        <span className="font-bold text-gray-500 dark:text-gray-400">처리</span>
+                        <span className="font-black text-gray-900 dark:text-white">
                             {convertAfterConfirm ? "등록전환 + 문자 발송" : "문자 발송"}
                         </span>
                     </div>
@@ -1579,7 +1579,7 @@ function EnrollGuideConfirmModal({
                         type="button"
                         onClick={onConfirm}
                         disabled={busy}
-                        className="min-h-11 w-full rounded-[3px] bg-[var(--doc-accent)] px-4 text-sm font-bold text-white transition hover:bg-[var(--doc-accent)] disabled:opacity-50 dark:text-[var(--doc-ink)] dark:hover:bg-lime-300"
+                        className="min-h-11 w-full rounded-xl bg-brand-orange-500 px-4 text-sm font-black text-white transition hover:bg-brand-orange-600 disabled:opacity-50 dark:bg-brand-neon-lime dark:text-brand-navy-900 dark:hover:bg-lime-300"
                     >
                         {busy ? "처리 중..." : convertAfterConfirm ? "등록전환 + 문자 발송" : "문자 발송"}
                     </button>
@@ -1588,7 +1588,7 @@ function EnrollGuideConfirmModal({
                             type="button"
                             onClick={onConfirmNoSms}
                             disabled={busy}
-                            className="min-h-11 w-full rounded-[3px] border border-[var(--doc-accent)] px-4 text-sm font-bold text-[var(--doc-accent)] transition hover:bg-[var(--doc-accent)] disabled:opacity-50"
+                            className="min-h-11 w-full rounded-xl border border-brand-orange-300 px-4 text-sm font-black text-brand-orange-600 transition hover:bg-brand-orange-50 disabled:opacity-50 dark:border-brand-neon-lime/40 dark:text-brand-neon-lime dark:hover:bg-brand-neon-lime/10"
                         >
                             {busy ? "처리 중..." : "문자 없이 전환만"}
                         </button>
@@ -1597,7 +1597,7 @@ function EnrollGuideConfirmModal({
                         type="button"
                         onClick={onClose}
                         disabled={busy}
-                        className="min-h-11 w-full rounded-[3px] border border-[var(--doc-rule)] px-4 text-sm font-bold text-[var(--doc-ink-2)] transition hover:bg-[var(--doc-grid-head)] disabled:opacity-50"
+                        className="min-h-11 w-full rounded-xl border border-gray-200 px-4 text-sm font-black text-gray-700 transition hover:bg-gray-50 disabled:opacity-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-900"
                     >
                         취소
                     </button>
@@ -1648,16 +1648,16 @@ function TrialLeadDetailModal({
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                     <div>
                         <div className="flex flex-wrap items-center gap-2">
-                            <span className={`inline-flex items-center gap-1 rounded-[3px] px-2.5 py-1 text-xs font-bold ${cfg.color}`}>
+                            <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-black ${cfg.color}`}>
                                 <span className="material-symbols-outlined text-sm">{cfg.icon}</span>
                                 {cfg.label}
                             </span>
-                            <span className="text-xs font-bold text-[var(--doc-ink-2)]">접수 {formatCompactDateTime(lead.createdAt)}</span>
+                            <span className="text-xs font-bold text-gray-500 dark:text-gray-400">접수 {formatCompactDateTime(lead.createdAt)}</span>
                         </div>
-                        <h2 id="trial-detail-modal-title" className="mt-2 text-xl font-bold text-[var(--doc-ink)]">
+                        <h2 id="trial-detail-modal-title" className="mt-2 text-xl font-black text-gray-900 dark:text-white">
                             {lead.childName} 체험 신청 상세
                         </h2>
-                        <p className="mt-1 text-sm font-bold text-[var(--doc-ink-2)]">
+                        <p className="mt-1 text-sm font-bold text-gray-500 dark:text-gray-400">
                             행 목록에서는 핵심만 보고, 상세 정보는 여기서 확인합니다.
                         </p>
                     </div>
@@ -1672,21 +1672,21 @@ function TrialLeadDetailModal({
 
                 <div className="mt-5 grid gap-2 sm:grid-cols-2">
                     {scheduleItems.map((item) => (
-                        <div key={`trial-detail-${item.label}`} className={`rounded-[3px] border px-3 py-2 ${item.className}`}>
-                            <p className="flex items-center gap-1 text-[11px] font-bold uppercase opacity-80">
+                        <div key={`trial-detail-${item.label}`} className={`rounded-lg border px-3 py-2 ${item.className}`}>
+                            <p className="flex items-center gap-1 text-[11px] font-black uppercase opacity-80">
                                 <span className="material-symbols-outlined text-sm">{item.icon}</span>
                                 {item.label}
                             </p>
-                            <p className="mt-1 break-keep text-sm font-bold">{item.value}</p>
+                            <p className="mt-1 break-keep text-sm font-black">{item.value}</p>
                         </div>
                     ))}
                 </div>
 
                 <dl className="mt-5 grid gap-2 sm:grid-cols-2">
                     {details.map(([label, value]) => (
-                        <div key={`trial-detail-row-${label}`} className="rounded-[3px] border border-[var(--doc-rule)] bg-[var(--doc-grid-head)] px-3 py-2">
-                            <dt className="text-[11px] font-bold text-[var(--doc-ink-2)]">{label}</dt>
-                            <dd className="mt-0.5 break-keep text-sm font-bold text-[var(--doc-ink)]">{value || "미입력"}</dd>
+                        <div key={`trial-detail-row-${label}`} className="rounded-lg border border-gray-100 bg-gray-50 px-3 py-2 dark:border-gray-700 dark:bg-gray-900">
+                            <dt className="text-[11px] font-black text-gray-500 dark:text-gray-400">{label}</dt>
+                            <dd className="mt-0.5 break-keep text-sm font-bold text-gray-900 dark:text-white">{value || "미입력"}</dd>
                         </div>
                     ))}
                 </dl>
@@ -1694,17 +1694,17 @@ function TrialLeadDetailModal({
                 {(lead.hopeNote || lead.memo || lead.openFollowUpNote) && (
                     <div className="mt-5 space-y-2">
                         {lead.hopeNote && (
-                            <p className="rounded-[3px] bg-lime-50 px-3 py-2 text-sm font-bold text-lime-800 dark:bg-lime-950/30 dark:text-lime-200">
+                            <p className="rounded-lg bg-lime-50 px-3 py-2 text-sm font-bold text-lime-800 dark:bg-lime-950/30 dark:text-lime-200">
                                 희망 메모: {lead.hopeNote}
                             </p>
                         )}
                         {lead.memo && (
-                            <p className="rounded-[3px] bg-[var(--doc-grid-head)] px-3 py-2 text-sm font-bold text-[var(--doc-ink-2)]">
+                            <p className="rounded-lg bg-gray-50 px-3 py-2 text-sm font-bold text-gray-700 dark:bg-gray-900 dark:text-gray-200">
                                 관리 메모: {lead.memo}
                             </p>
                         )}
                         {lead.openFollowUpNote && (
-                            <p className="rounded-[3px] bg-[var(--doc-grid-head)] px-3 py-2 text-sm font-bold text-[var(--doc-ink-2)]">
+                            <p className="rounded-lg bg-blue-50 px-3 py-2 text-sm font-bold text-blue-800 dark:bg-blue-950/30 dark:text-blue-200">
                                 재연락 메모: {lead.openFollowUpNote}
                             </p>
                         )}
@@ -1712,7 +1712,7 @@ function TrialLeadDetailModal({
                 )}
 
                 <div className="mt-6 flex flex-wrap justify-end gap-2">
-                    <button type="button" onClick={onClose} className="rounded-[3px] px-4 py-2 text-sm font-bold text-[var(--doc-ink-2)] hover:bg-[var(--doc-grid-head)]">
+                    <button type="button" onClick={onClose} className="rounded-lg px-4 py-2 text-sm font-bold text-gray-500 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-900">
                         닫기
                     </button>
                     <button type="button" onClick={onMemo} className={DETAIL_ACTION_CLASS}>
@@ -1747,7 +1747,7 @@ function TrialLeadDetailModal({
                         <span className="material-symbols-outlined text-base">event_available</span>
                         일정
                     </button>
-                    <button type="button" onClick={onEdit} className="inline-flex min-h-8 items-center gap-1.5 rounded-[3px] bg-[var(--doc-accent)] px-3 text-xs font-bold text-white transition hover:bg-[var(--doc-accent)] dark:text-[var(--doc-ink)] dark:hover:bg-lime-400">
+                    <button type="button" onClick={onEdit} className="inline-flex min-h-8 items-center gap-1.5 rounded-md bg-brand-orange-500 px-3 text-xs font-black text-white transition hover:bg-brand-orange-600 dark:bg-brand-neon-lime dark:text-brand-navy-900 dark:hover:bg-lime-400">
                         <span className="material-symbols-outlined text-base">edit</span>
                         수정
                     </button>
@@ -1795,11 +1795,11 @@ function TrialContactModal({
                 onSubmit={handleSubmit}
                 className="w-full p-6 pb-[max(1.5rem,env(safe-area-inset-bottom))]"
             >
-                <h2 id="trial-contact-modal-title" className="flex items-center gap-2 text-lg font-bold text-[var(--doc-ink)]">
-                    <span className="material-symbols-outlined text-[var(--doc-accent)]">phone_callback</span>
+                <h2 id="trial-contact-modal-title" className="flex items-center gap-2 text-lg font-black text-gray-900 dark:text-white">
+                    <span className="material-symbols-outlined text-brand-orange-500 dark:text-brand-neon-lime">phone_callback</span>
                     후속 연락 기록
                 </h2>
-                <p className="mt-1 text-sm text-[var(--doc-ink-2)]">
+                <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
                     {lead.childName} · {lead.parentName} {lead.parentPhone}
                 </p>
 
@@ -1809,11 +1809,11 @@ function TrialContactModal({
                             key={option}
                             type="button"
                             onClick={() => setAction(option)}
-                            className={`rounded-[3px] border px-3 py-2 text-sm font-bold transition ${
- action === option
- ? "border-[var(--doc-accent)] bg-[var(--doc-accent)] text-[var(--doc-accent)]  "
- : "border-[var(--doc-rule)] text-[var(--doc-ink-2)] hover:bg-[var(--doc-grid-head)] "
- }`}
+                            className={`rounded-xl border px-3 py-2 text-sm font-black transition ${
+                                action === option
+                                    ? "border-brand-orange-500 bg-brand-orange-50 text-brand-orange-700 dark:border-brand-neon-lime dark:bg-brand-neon-lime/10 dark:text-brand-neon-lime"
+                                    : "border-gray-200 text-gray-600 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-900"
+                            }`}
                         >
                             {CONTACT_ACTION_LABELS[option]}
                         </button>
@@ -1821,30 +1821,30 @@ function TrialContactModal({
                 </div>
 
                 {action === "FOLLOW_UP" && (
-                    <label className="mt-4 block text-sm font-bold text-[var(--doc-ink-2)]">
+                    <label className="mt-4 block text-sm font-bold text-gray-700 dark:text-gray-200">
                         다음 연락 예정
                         <input
                             type="datetime-local"
                             value={nextFollowUpAt}
                             onChange={(event) => setNextFollowUpAt(event.target.value)}
-                            className="mt-1 w-full rounded-[3px] border border-[var(--doc-rule)] bg-[var(--doc-surface)] px-3 py-2 text-sm outline-none focus:border-[var(--doc-accent)] dark:focus:border-brand-neon-lime"
+                            className="mt-1 w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:border-brand-orange-500 dark:border-gray-700 dark:bg-gray-900 dark:focus:border-brand-neon-lime"
                         />
                     </label>
                 )}
 
-                <label className="mt-4 block text-sm font-bold text-[var(--doc-ink-2)]">
+                <label className="mt-4 block text-sm font-bold text-gray-700 dark:text-gray-200">
                     상담 메모
                     <textarea
                         value={note}
                         onChange={(event) => setNote(event.target.value)}
                         rows={4}
-                        className="mt-1 w-full resize-none rounded-[3px] border border-[var(--doc-rule)] bg-[var(--doc-surface)] px-3 py-2 text-sm outline-none focus:border-[var(--doc-accent)] dark:focus:border-brand-neon-lime"
+                        className="mt-1 w-full resize-none rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:border-brand-orange-500 dark:border-gray-700 dark:bg-gray-900 dark:focus:border-brand-neon-lime"
                         placeholder="상담 내용이나 다음에 확인할 내용을 적어주세요"
                     />
                 </label>
 
                 {formError && (
-                    <p className="mt-3 rounded-[3px] bg-[var(--doc-crit-soft)] px-3 py-2 text-sm font-bold text-[var(--doc-crit)]">
+                    <p className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-sm font-bold text-red-700 dark:bg-red-950/40 dark:text-red-200">
                         {formError}
                     </p>
                 )}
@@ -1853,14 +1853,14 @@ function TrialContactModal({
                     <button
                         type="button"
                         onClick={onClose}
-                        className="rounded-[3px] px-4 py-2 text-sm font-bold text-[var(--doc-ink-2)] hover:bg-[var(--doc-grid-head)]"
+                        className="rounded-xl px-4 py-2 text-sm font-bold text-gray-500 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-900"
                     >
                         닫기
                     </button>
                     <button
                         type="submit"
                         disabled={busy}
-                        className="rounded-[3px] bg-[var(--doc-accent)] px-5 py-2 text-sm font-bold text-white transition hover:bg-[var(--doc-accent)] disabled:opacity-50 dark:text-[var(--doc-ink)] dark:hover:bg-lime-400"
+                        className="rounded-xl bg-brand-orange-500 px-5 py-2 text-sm font-black text-white transition hover:bg-brand-orange-600 disabled:opacity-50 dark:bg-brand-neon-lime dark:text-brand-navy-900 dark:hover:bg-lime-400"
                     >
                         {busy ? "저장 중..." : "저장"}
                     </button>

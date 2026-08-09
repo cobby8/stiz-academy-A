@@ -17,10 +17,10 @@ function kakaoMapUrl(label: string | null, lat: number, lng: number): string {
 }
 
 function StatusDot({ sharing, secondsAgo }: { sharing: boolean; secondsAgo: number }) {
-  if (!sharing) return <span className="h-3 w-3 rounded-[3px] bg-[var(--doc-grid-head)] shrink-0" title="공유 중단" />;
-  if (secondsAgo < 30) return <span className="h-3 w-3 rounded-[3px] bg-[var(--doc-accent)] shrink-0" title="실시간" />;
-  if (secondsAgo < 120) return <span className="h-3 w-3 rounded-[3px] bg-[var(--doc-grid-head)] shrink-0" title="지연" />;
-  return <span className="h-3 w-3 rounded-[3px] bg-red-400 shrink-0" title="끊김" />;
+  if (!sharing) return <span className="h-3 w-3 rounded-full bg-gray-400 shrink-0" title="공유 중단" />;
+  if (secondsAgo < 30) return <span className="h-3 w-3 rounded-full bg-green-500 shrink-0 animate-pulse" title="실시간" />;
+  if (secondsAgo < 120) return <span className="h-3 w-3 rounded-full bg-yellow-500 shrink-0" title="지연" />;
+  return <span className="h-3 w-3 rounded-full bg-red-400 shrink-0" title="끊김" />;
 }
 
 export default function DriverLocationPanel({ onClose }: { onClose: () => void }) {
@@ -54,51 +54,51 @@ export default function DriverLocationPanel({ onClose }: { onClose: () => void }
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
       <div
-        className="w-full max-w-md rounded-[6px] bg-[var(--doc-surface)]"
+        className="w-full max-w-md rounded-2xl bg-white shadow-2xl dark:bg-gray-900"
         onClick={(e) => e.stopPropagation()}
       >
         {/* 헤더 */}
-        <div className="flex items-center justify-between border-b border-[var(--doc-rule)] px-5 py-4">
+        <div className="flex items-center justify-between border-b border-gray-200 px-5 py-4 dark:border-gray-700">
           <div>
-            <h2 className="text-[17px] font-bold text-[var(--doc-ink)]">
+            <h2 className="text-[17px] font-black text-gray-900 dark:text-white">
               🚌 실시간 차량 위치
             </h2>
             {lastRefresh && (
-              <p className="text-[12px] text-[var(--doc-ink-3)] mt-0.5">
+              <p className="text-[12px] text-gray-400 mt-0.5">
                 30초마다 자동 갱신 · 마지막: {lastRefresh.toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
               </p>
             )}
           </div>
-          <button type="button" onClick={onClose} className="text-[22px] text-[var(--doc-ink-3)] hover:text-[var(--doc-ink-2)]">✕</button>
+          <button type="button" onClick={onClose} className="text-[22px] text-gray-400 hover:text-gray-700">✕</button>
         </div>
 
         {/* 본문 */}
         <div className="max-h-[60vh] overflow-y-auto p-4 space-y-3">
           {loading && (
-            <p className="py-8 text-center text-sm text-[var(--doc-ink-3)]">불러오는 중…</p>
+            <p className="py-8 text-center text-sm text-gray-400">불러오는 중…</p>
           )}
           {!loading && locations.length === 0 && (
             <div className="py-8 text-center">
-              <p className="text-[15px] font-bold text-[var(--doc-ink-2)]">현재 위치를 공유 중인 기사님이 없습니다</p>
-              <p className="mt-1 text-[13px] text-[var(--doc-ink-3)]">기사님 화면에서 위치 공유를 켜면 여기에 표시됩니다</p>
+              <p className="text-[15px] font-bold text-gray-500">현재 위치를 공유 중인 기사님이 없습니다</p>
+              <p className="mt-1 text-[13px] text-gray-400">기사님 화면에서 위치 공유를 켜면 여기에 표시됩니다</p>
             </div>
           )}
           {locations.map((loc) => (
             <div
               key={loc.token}
-              className={`rounded-[3px] border-2 p-4 ${
- !loc.sharing ? "border-[var(--doc-rule)] bg-[var(--doc-grid-head)] " :
- loc.secondsAgo < 120 ? "border-[var(--doc-accent)] bg-[var(--doc-accent-soft)] " :
- "border-[var(--doc-warn)] bg-[var(--doc-grid-head)] "
- }`}
+              className={`rounded-xl border-2 p-4 ${
+                !loc.sharing ? "border-gray-200 bg-gray-50 dark:border-gray-700 dark:bg-gray-800/50" :
+                loc.secondsAgo < 120 ? "border-green-300 bg-green-50 dark:border-green-700 dark:bg-green-950/20" :
+                "border-yellow-300 bg-yellow-50 dark:border-yellow-700 dark:bg-yellow-950/20"
+              }`}
             >
               <div className="flex items-start gap-3">
                 <StatusDot sharing={loc.sharing} secondsAgo={loc.secondsAgo} />
                 <div className="min-w-0 flex-1">
-                  <p className="text-[15px] font-bold text-[var(--doc-ink)]">
+                  <p className="text-[15px] font-black text-gray-900 dark:text-white">
                     {loc.label ?? "기사님"}
                   </p>
-                  <p className="text-[13px] text-[var(--doc-ink-2)]">
+                  <p className="text-[13px] text-gray-500 dark:text-gray-400">
                     {loc.sharing
                       ? `${elapsedLabel(loc.secondsAgo)} 업데이트${loc.accuracy != null ? ` · 정확도 ${Math.round(loc.accuracy)}m` : ""}`
                       : "위치 공유 중단"}
@@ -109,7 +109,7 @@ export default function DriverLocationPanel({ onClose }: { onClose: () => void }
                     href={kakaoMapUrl(loc.label, loc.latitude, loc.longitude)}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="shrink-0 rounded-[3px] bg-[var(--doc-grid-head)] px-3 py-2 text-[13px] font-bold text-[var(--doc-ink)] hover:bg-[var(--doc-grid-head)]"
+                    className="shrink-0 rounded-lg bg-yellow-400 px-3 py-2 text-[13px] font-black text-gray-900 hover:bg-yellow-300"
                   >
                     지도↗
                   </a>
@@ -121,7 +121,7 @@ export default function DriverLocationPanel({ onClose }: { onClose: () => void }
 
         {/* 하단 요약 */}
         {!loading && locations.length > 0 && (
-          <div className="border-t border-[var(--doc-rule)] px-5 py-3 text-[13px] text-[var(--doc-ink-2)]">
+          <div className="border-t border-gray-200 px-5 py-3 text-[13px] text-gray-500 dark:border-gray-700">
             활성 {activeCount}대 · 전체 {locations.length}대 (최근 10분 기준)
           </div>
         )}

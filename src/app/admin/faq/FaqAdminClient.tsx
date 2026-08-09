@@ -43,33 +43,33 @@ function FaqLoadingFallback() {
         <div className="space-y-6">
             <div className="flex items-center justify-between gap-4">
                 <div>
-                    <div className="h-8 w-32 rounded bg-[var(--doc-grid-head)]" />
-                    <div className="mt-2 h-4 w-80 max-w-full rounded bg-[var(--doc-grid-head)]" />
+                    <div className="h-8 w-32 animate-pulse rounded bg-gray-200 dark:bg-gray-700" />
+                    <div className="mt-2 h-4 w-80 max-w-full animate-pulse rounded bg-gray-100 dark:bg-gray-800" />
                 </div>
-                <div className="h-11 w-28 rounded-[3px] bg-[var(--doc-grid-head)]" />
+                <div className="h-11 w-28 animate-pulse rounded-xl bg-gray-200 dark:bg-gray-700" />
             </div>
             <div className="space-y-3">
                 {Array.from({ length: 5 }).map((_, index) => (
                     <div
                         key={index}
-                        className="rounded-[6px] border border-[var(--doc-rule)] bg-[var(--doc-surface)] p-5"
+                        className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm dark:border-gray-700 dark:bg-gray-800"
                     >
                         <div className="flex items-start justify-between gap-4">
                             <div className="min-w-0 flex-1 space-y-3">
                                 <div className="flex items-center gap-2">
-                                    <div className="h-5 w-5 rounded bg-[var(--doc-grid-head)]" />
-                                    <div className="h-5 w-2/3 rounded bg-[var(--doc-grid-head)]" />
+                                    <div className="h-5 w-5 animate-pulse rounded bg-gray-100 dark:bg-gray-700" />
+                                    <div className="h-5 w-2/3 animate-pulse rounded bg-gray-200 dark:bg-gray-700" />
                                 </div>
-                                <div className="ml-7 h-4 w-full rounded bg-[var(--doc-grid-head)]" />
-                                <div className="ml-7 h-4 w-3/4 rounded bg-[var(--doc-grid-head)]" />
+                                <div className="ml-7 h-4 w-full animate-pulse rounded bg-gray-100 dark:bg-gray-700" />
+                                <div className="ml-7 h-4 w-3/4 animate-pulse rounded bg-gray-100 dark:bg-gray-700" />
                                 <div className="ml-7 flex gap-2">
-                                    <div className="h-5 w-16 rounded-[3px] bg-[var(--doc-grid-head)]" />
-                                    <div className="h-5 w-16 rounded-[3px] bg-[var(--doc-grid-head)]" />
+                                    <div className="h-5 w-16 animate-pulse rounded-full bg-gray-100 dark:bg-gray-700" />
+                                    <div className="h-5 w-16 animate-pulse rounded-full bg-gray-100 dark:bg-gray-700" />
                                 </div>
                             </div>
                             <div className="hidden gap-1 sm:flex">
-                                <div className="h-8 w-8 rounded-[3px] bg-[var(--doc-grid-head)]" />
-                                <div className="h-8 w-8 rounded-[3px] bg-[var(--doc-grid-head)]" />
+                                <div className="h-8 w-8 animate-pulse rounded-lg bg-gray-100 dark:bg-gray-700" />
+                                <div className="h-8 w-8 animate-pulse rounded-lg bg-gray-100 dark:bg-gray-700" />
                             </div>
                         </div>
                     </div>
@@ -81,12 +81,12 @@ function FaqLoadingFallback() {
 
 function FaqErrorState({ onRetry }: { onRetry: () => void }) {
     return (
-        <div className="rounded-[6px] border border-[var(--doc-crit)] bg-[var(--doc-crit-soft)] p-6 text-center">
-            <p className="text-sm font-bold text-[var(--doc-crit)]">FAQ를 불러오지 못했습니다.</p>
+        <div className="rounded-2xl border border-red-200 bg-red-50 p-6 text-center dark:border-red-800 dark:bg-red-950/30">
+            <p className="text-sm font-bold text-red-700 dark:text-red-200">FAQ를 불러오지 못했습니다.</p>
             <button
                 type="button"
                 onClick={onRetry}
-                className="mt-4 rounded-[3px] bg-[var(--doc-crit)] px-4 py-2 text-sm font-bold text-white hover:bg-[var(--doc-crit)]"
+                className="mt-4 rounded-lg bg-red-600 px-4 py-2 text-sm font-bold text-white hover:bg-red-700"
             >
                 다시 불러오기
             </button>
@@ -191,11 +191,11 @@ export default function FaqAdminClient({ faqs: initialFaqs }: { faqs?: FaqData[]
             {/* 페이지 헤더 */}
             <div className="flex items-center justify-between">
                 <div>
-                    <h1 className="text-2xl font-bold text-[var(--doc-ink)]">FAQ 관리</h1>
-                    <p className="text-sm text-[var(--doc-ink-2)] mt-1">체험신청 페이지에 표시</p>
+                    <h1 className="text-2xl font-bold text-gray-900 dark:text-white">FAQ 관리</h1>
+                    <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">체험신청 페이지에 표시</p>
                 </div>
                 <button onClick={() => { resetForm(); setShowForm(true); }}
-                    className="flex items-center gap-2 bg-[var(--doc-accent)] dark:text-[var(--doc-ink)] text-white px-4 py-2.5 rounded-[3px] font-bold hover:bg-[var(--doc-grid-head)] transition">
+                    className="flex items-center gap-2 bg-brand-orange-500 dark:bg-brand-neon-lime dark:text-brand-navy-900 text-white px-4 py-2.5 rounded-xl font-bold hover:bg-orange-600 transition">
                     <SymbolIcon name="add" size={18} /> 새 FAQ
                 </button>
             </div>
@@ -203,46 +203,46 @@ export default function FaqAdminClient({ faqs: initialFaqs }: { faqs?: FaqData[]
             {/* 생성/수정 모달 */}
             {showForm && (
                 <AdminModal onClose={resetForm} titleId="faq-form-modal-title" panelClassName="max-w-2xl">
-                        <div className="p-6 border-b border-[var(--doc-rule)] flex items-center justify-between">
+                        <div className="p-6 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between">
                             <h2 id="faq-form-modal-title" className="text-lg font-bold">{editId ? "FAQ 수정" : "새 FAQ"}</h2>
-                            <button onClick={resetForm} className="p-1 hover:bg-[var(--doc-grid-head)] rounded-[3px]">
+                            <button onClick={resetForm} className="p-1 hover:bg-gray-100 dark:bg-gray-800 rounded-lg">
                                 <SymbolIcon name="close" size={20} />
                             </button>
                         </div>
                         <div className="p-6 space-y-4">
                             {/* 질문 입력 */}
                             <div>
-                                <label className="block text-sm font-medium text-[var(--doc-ink-2)] mb-1">질문</label>
+                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">질문</label>
                                 <input value={question} onChange={e => setQuestion(e.target.value)}
                                     placeholder="자주 묻는 질문을 입력하세요"
-                                    className="w-full border border-[var(--doc-rule)] rounded-[3px] px-4 py-2.5 text-sm" />
+                                    className="w-full border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-2.5 text-sm" />
                             </div>
                             {/* 답변 입력 */}
                             <div>
-                                <label className="block text-sm font-medium text-[var(--doc-ink-2)] mb-1">답변</label>
+                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">답변</label>
                                 <textarea value={answer} onChange={e => setAnswer(e.target.value)}
                                     rows={4} placeholder="답변을 입력하세요"
-                                    className="w-full border border-[var(--doc-rule)] rounded-[3px] px-4 py-2.5 text-sm" />
+                                    className="w-full border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-2.5 text-sm" />
                             </div>
                             {/* 순서와 공개여부 — 가로 배치 */}
                             <div className="flex gap-4">
                                 <div className="flex-1">
-                                    <label className="block text-sm font-medium text-[var(--doc-ink-2)] mb-1">표시 순서</label>
+                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">표시 순서</label>
                                     <input type="number" value={order} onChange={e => setOrder(Number(e.target.value))}
-                                        className="w-full border border-[var(--doc-rule)] rounded-[3px] px-4 py-2.5 text-sm" />
-                                    <p className="text-xs text-[var(--doc-ink-3)] mt-1">숫자가 작을수록 위에 표시됩니다</p>
+                                        className="w-full border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-2.5 text-sm" />
+                                    <p className="text-xs text-gray-400 mt-1">숫자가 작을수록 위에 표시됩니다</p>
                                 </div>
                                 <div className="flex items-center gap-2 pt-6">
                                     <input type="checkbox" id="isPublic" checked={isPublic} onChange={e => setIsPublic(e.target.checked)} className="rounded" />
-                                    <label htmlFor="isPublic" className="text-sm text-[var(--doc-ink-2)]">공개</label>
+                                    <label htmlFor="isPublic" className="text-sm text-gray-700 dark:text-gray-200">공개</label>
                                 </div>
                             </div>
                         </div>
                         {/* 모달 하단 버튼 */}
-                        <div className="p-6 border-t border-[var(--doc-rule)] flex justify-end gap-3">
-                            <button onClick={resetForm} className="px-4 py-2 text-sm text-[var(--doc-ink-2)] hover:bg-[var(--doc-grid-head)] rounded-[3px] transition">취소</button>
+                        <div className="p-6 border-t border-gray-100 dark:border-gray-800 flex justify-end gap-3">
+                            <button onClick={resetForm} className="px-4 py-2 text-sm text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:bg-gray-800 rounded-xl transition">취소</button>
                             <button onClick={handleSubmit} disabled={isPending}
-                                className="px-6 py-2 bg-[var(--doc-accent)] dark:text-[var(--doc-ink)] text-white font-bold rounded-[3px] hover:bg-[var(--doc-grid-head)] transition disabled:opacity-50">
+                                className="px-6 py-2 bg-brand-orange-500 dark:bg-brand-neon-lime dark:text-brand-navy-900 text-white font-bold rounded-xl hover:bg-orange-600 transition disabled:opacity-50">
                                 {isPending ? "저장 중..." : editId ? "수정" : "등록"}
                             </button>
                         </div>
@@ -251,34 +251,34 @@ export default function FaqAdminClient({ faqs: initialFaqs }: { faqs?: FaqData[]
 
             {/* FAQ 목록 */}
             {faqs.length === 0 ? (
-                <div className="bg-[var(--doc-surface)] rounded-[6px] border border-[var(--doc-rule)] transition-colors duration-300 p-12 text-center text-[var(--doc-ink-3)]">
-                    <SymbolIcon name="help" size={48} className="mx-auto mb-3 text-[var(--doc-ink-3)]" />
+                <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 transition-colors duration-300 p-12 text-center text-gray-400">
+                    <SymbolIcon name="help" size={48} className="mx-auto mb-3 text-gray-300" />
                     <p className="font-medium">아직 FAQ가 없습니다</p>
                     <p className="text-sm mt-1">&quot;새 FAQ&quot; 버튼으로 질문을 추가하세요</p>
                 </div>
             ) : (
                 <div className="space-y-3">
                     {faqs.map(faq => (
-                        <div key={faq.id} className="bg-[var(--doc-surface)] rounded-[6px] border border-[var(--doc-rule)] transition-colors duration-300 p-5 hover: transition">
+                        <div key={faq.id} className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 transition-colors duration-300 shadow-sm p-5 hover:shadow-md transition">
                             <div className="flex items-start justify-between gap-4">
                                 <div className="flex-1 min-w-0">
                                     {/* 질문 */}
                                     <div className="flex items-center gap-2 mb-1">
-                                        <span className="text-[var(--doc-accent)] font-bold text-sm">Q.</span>
-                                        <h3 className="font-bold text-[var(--doc-ink)]">{faq.question}</h3>
+                                        <span className="text-brand-orange-500 dark:text-brand-neon-lime font-bold text-sm">Q.</span>
+                                        <h3 className="font-bold text-gray-900 dark:text-white">{faq.question}</h3>
                                     </div>
                                     {/* 답변 미리보기 */}
-                                    <p className="text-sm text-[var(--doc-ink-2)] line-clamp-2 mb-2 pl-6">{faq.answer}</p>
+                                    <p className="text-sm text-gray-500 dark:text-gray-400 line-clamp-2 mb-2 pl-6">{faq.answer}</p>
                                     {/* 메타 정보 */}
                                     <div className="flex items-center gap-2 flex-wrap pl-6">
-                                        <span className="text-xs text-[var(--doc-ink-3)]">순서: {faq.order}</span>
-                                        <span className={`text-xs px-2 py-0.5 rounded-[3px] flex items-center gap-1 ${
- faq.isPublic ? "bg-[var(--doc-accent-soft)] text-[var(--doc-accent)]" : "bg-[var(--doc-grid-head)] text-[var(--doc-ink-2)] "
- }`}>
+                                        <span className="text-xs text-gray-400">순서: {faq.order}</span>
+                                        <span className={`text-xs px-2 py-0.5 rounded-full flex items-center gap-1 ${
+                                            faq.isPublic ? "bg-green-50 text-green-600" : "bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400"
+                                        }`}>
                                             <SymbolIcon name={faq.isPublic ? "visibility" : "visibility_off"} size={10} />
                                             {faq.isPublic ? "공개" : "비공개"}
                                         </span>
-                                        <span className="text-xs text-[var(--doc-ink-3)]">
+                                        <span className="text-xs text-gray-400">
                                             {new Date(faq.createdAt).toLocaleDateString("ko-KR")}
                                         </span>
                                     </div>
@@ -286,11 +286,11 @@ export default function FaqAdminClient({ faqs: initialFaqs }: { faqs?: FaqData[]
                                 {/* 수정/삭제 버튼 */}
                                 <div className="flex gap-1 flex-shrink-0">
                                     <button onClick={() => startEdit(faq)}
-                                        className="p-2 text-[var(--doc-ink-3)] hover:text-[var(--doc-accent)] hover:bg-[var(--doc-grid-head)] rounded-[3px] transition">
+                                        className="p-2 text-gray-400 hover:text-brand-orange-500 dark:text-brand-neon-lime hover:bg-orange-50 rounded-lg transition">
                                         <SymbolIcon name="edit" size={16} />
                                     </button>
                                     <button onClick={() => handleDelete(faq.id)}
-                                        className="p-2 text-[var(--doc-ink-3)] hover:text-[var(--doc-crit)] hover:bg-[var(--doc-crit-soft)] rounded-[3px] transition">
+                                        className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition">
                                         <SymbolIcon name="delete" size={16} />
                                     </button>
                                 </div>

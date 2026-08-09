@@ -10,7 +10,7 @@ import AdminModal from "@/components/admin/AdminModal";
 const RichTextEditor = dynamic(() => import("@/components/RichTextEditor"), {
     ssr: false,
     loading: () => (
-        <div className="border border-[var(--doc-rule)] rounded-[3px] p-4 min-h-[180px] bg-[var(--doc-grid-head)] flex items-center justify-center text-sm text-[var(--doc-ink-3)]">
+        <div className="border border-gray-300 dark:border-gray-700 rounded-xl p-4 min-h-[180px] bg-gray-50 dark:bg-gray-900 flex items-center justify-center text-sm text-gray-400">
             에디터 로딩중...
         </div>
     ),
@@ -84,31 +84,31 @@ function NoticesLoadingFallback() {
         <div className="space-y-6">
             <div className="flex items-center justify-between gap-4">
                 <div>
-                    <div className="h-8 w-40 rounded bg-[var(--doc-grid-head)]" />
-                    <div className="mt-2 h-4 w-64 rounded bg-[var(--doc-grid-head)]" />
+                    <div className="h-8 w-40 animate-pulse rounded bg-gray-200 dark:bg-gray-700" />
+                    <div className="mt-2 h-4 w-64 animate-pulse rounded bg-gray-100 dark:bg-gray-800" />
                 </div>
-                <div className="h-11 w-28 rounded-[3px] bg-[var(--doc-grid-head)]" />
+                <div className="h-11 w-28 animate-pulse rounded-xl bg-gray-200 dark:bg-gray-700" />
             </div>
             <div className="space-y-3">
                 {Array.from({ length: 6 }).map((_, index) => (
                     <div
                         key={index}
-                        className="rounded-[6px] border border-[var(--doc-rule)] bg-[var(--doc-surface)] p-5"
+                        className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm dark:border-gray-700 dark:bg-gray-800"
                     >
                         <div className="flex items-start justify-between gap-4">
                             <div className="flex-1 space-y-3">
-                                <div className="h-5 w-2/3 rounded bg-[var(--doc-grid-head)]" />
-                                <div className="h-4 w-full rounded bg-[var(--doc-grid-head)]" />
-                                <div className="h-4 w-3/4 rounded bg-[var(--doc-grid-head)]" />
+                                <div className="h-5 w-2/3 animate-pulse rounded bg-gray-200 dark:bg-gray-700" />
+                                <div className="h-4 w-full animate-pulse rounded bg-gray-100 dark:bg-gray-700" />
+                                <div className="h-4 w-3/4 animate-pulse rounded bg-gray-100 dark:bg-gray-700" />
                                 <div className="flex gap-2">
-                                    <div className="h-6 w-16 rounded-[3px] bg-[var(--doc-grid-head)]" />
-                                    <div className="h-6 w-20 rounded-[3px] bg-[var(--doc-grid-head)]" />
+                                    <div className="h-6 w-16 animate-pulse rounded-full bg-gray-100 dark:bg-gray-700" />
+                                    <div className="h-6 w-20 animate-pulse rounded-full bg-gray-100 dark:bg-gray-700" />
                                 </div>
                             </div>
                             <div className="hidden gap-2 sm:flex">
-                                <div className="h-8 w-8 rounded-[3px] bg-[var(--doc-grid-head)]" />
-                                <div className="h-8 w-8 rounded-[3px] bg-[var(--doc-grid-head)]" />
-                                <div className="h-8 w-8 rounded-[3px] bg-[var(--doc-grid-head)]" />
+                                <div className="h-8 w-8 animate-pulse rounded-lg bg-gray-100 dark:bg-gray-700" />
+                                <div className="h-8 w-8 animate-pulse rounded-lg bg-gray-100 dark:bg-gray-700" />
+                                <div className="h-8 w-8 animate-pulse rounded-lg bg-gray-100 dark:bg-gray-700" />
                             </div>
                         </div>
                     </div>
@@ -120,12 +120,12 @@ function NoticesLoadingFallback() {
 
 function NoticesErrorState({ onRetry }: { onRetry: () => void }) {
     return (
-        <div className="rounded-[6px] border border-[var(--doc-crit)] bg-[var(--doc-crit-soft)] p-6 text-center">
-            <p className="text-sm font-bold text-[var(--doc-crit)]">공지사항을 불러오지 못했습니다.</p>
+        <div className="rounded-2xl border border-red-200 bg-red-50 p-6 text-center dark:border-red-800 dark:bg-red-950/30">
+            <p className="text-sm font-bold text-red-700 dark:text-red-200">공지사항을 불러오지 못했습니다.</p>
             <button
                 type="button"
                 onClick={onRetry}
-                className="mt-4 rounded-[3px] bg-[var(--doc-crit)] px-4 py-2 text-sm font-bold text-white hover:bg-[var(--doc-crit)]"
+                className="mt-4 rounded-lg bg-red-600 px-4 py-2 text-sm font-bold text-white hover:bg-red-700"
             >
                 다시 불러오기
             </button>
@@ -326,10 +326,10 @@ export default function NoticesAdminClient({
         <div className="space-y-6">
             <div className="flex items-center justify-between">
                 <div>
-                    <h1 className="text-2xl font-bold text-[var(--doc-ink)]">공지사항 관리</h1>
+                    <h1 className="text-2xl font-bold text-gray-900 dark:text-white">공지사항 관리</h1>
                 </div>
                 <button onClick={() => { resetForm(); setShowForm(true); }}
-                    className="flex items-center gap-2 bg-[var(--doc-accent)] dark:text-[var(--doc-ink)] text-white px-4 py-2.5 rounded-[3px] font-bold hover:bg-[var(--doc-grid-head)] transition">
+                    className="flex items-center gap-2 bg-brand-orange-500 dark:bg-brand-neon-lime dark:text-brand-navy-900 text-white px-4 py-2.5 rounded-xl font-bold hover:bg-orange-600 transition">
                     <SymbolIcon name="add" size={18} /> 새 공지
                 </button>
             </div>
@@ -337,19 +337,19 @@ export default function NoticesAdminClient({
             {/* Form Modal */}
             {showForm && (
                 <AdminModal onClose={resetForm} titleId="notice-form-modal-title" panelClassName="max-w-2xl">
-                        <div className="p-6 border-b border-[var(--doc-rule)] flex items-center justify-between">
+                        <div className="p-6 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between">
                             <h2 id="notice-form-modal-title" className="text-lg font-bold">{editId ? "공지 수정" : "새 공지"}</h2>
-                            <button onClick={resetForm} className="p-1 hover:bg-[var(--doc-grid-head)] rounded-[3px]"><SymbolIcon name="close" size={20} /></button>
+                            <button onClick={resetForm} className="p-1 hover:bg-gray-100 dark:bg-gray-800 rounded-lg"><SymbolIcon name="close" size={20} /></button>
                         </div>
                         <div className="p-6 space-y-4">
                             <div>
-                                <label className="block text-sm font-medium text-[var(--doc-ink-2)] mb-1">제목</label>
+                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">제목</label>
                                 <input value={formTitle} onChange={e => setFormTitle(e.target.value)}
                                     placeholder="공지 제목을 입력하세요"
-                                    className="w-full border border-[var(--doc-rule)] rounded-[3px] px-4 py-2.5 text-sm" />
+                                    className="w-full border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-2.5 text-sm" />
                             </div>
                             <div>
-                                <label className="block text-sm font-medium text-[var(--doc-ink-2)] mb-1">내용</label>
+                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">내용</label>
                                 {/* 리치 에디터 — 굵게/색상/목록/링크/이미지/표/영상 등 서식 지원. 저장은 기존 content 컬럼(HTML)에 그대로 들어간다.
                                     본문에 넣은 이미지는 "notices" 폴더로 업로드된다(하단 첨부와 폴더 공유). */}
                                 <RichTextEditor
@@ -361,7 +361,7 @@ export default function NoticesAdminClient({
                                 />
                             </div>
                             <div>
-                                <label className="block text-sm font-medium text-[var(--doc-ink-2)] mb-2">공지 대상</label>
+                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-2">공지 대상</label>
                                 <div className="flex gap-3 mb-2">
                                     <label className="flex items-center gap-2 cursor-pointer">
                                         <input type="radio" checked={targetType === "ALL"} onChange={() => setTargetType("ALL")} />
@@ -377,11 +377,11 @@ export default function NoticesAdminClient({
                                         {classes.map(c => (
                                             <button key={c.id}
                                                 onClick={() => toggleClassId(c.id)}
-                                                className={`text-xs px-3 py-1.5 rounded-[3px] border transition ${
- selectedClassIds.includes(c.id)
- ? "bg-[var(--doc-accent)] dark:text-[var(--doc-ink)] text-white border-[var(--doc-accent)] "
- : "bg-[var(--doc-surface)] text-[var(--doc-ink-2)] border-[var(--doc-rule)] hover:border-[var(--doc-accent)] "
- }`}>
+                                                className={`text-xs px-3 py-1.5 rounded-full border transition ${
+                                                    selectedClassIds.includes(c.id)
+                                                        ? "bg-brand-orange-500 dark:bg-brand-neon-lime dark:text-brand-navy-900 text-white border-brand-orange-500 dark:border-brand-neon-lime"
+                                                        : "bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 border-gray-200 hover:border-brand-orange-300 dark:border-brand-neon-lime"
+                                                }`}>
                                                 {c.name}
                                             </button>
                                         ))}
@@ -389,25 +389,25 @@ export default function NoticesAdminClient({
                                 )}
                             </div>
                             <div>
-                                <label className="block text-sm font-medium text-[var(--doc-ink-2)] mb-1">첨부파일</label>
-                                <label className="inline-flex items-center gap-2 text-sm text-[var(--doc-ink-2)] hover:text-[var(--doc-accent)] cursor-pointer transition">
+                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">첨부파일</label>
+                                <label className="inline-flex items-center gap-2 text-sm text-gray-500 hover:text-brand-orange-500 dark:text-brand-neon-lime cursor-pointer transition">
                                     <SymbolIcon name="attach_file" size={16} /> {uploading ? "업로드 중..." : "이미지 첨부"}
                                     <input type="file" accept="image/*" className="hidden" multiple onChange={e => handleFileUpload(e.target.files)} disabled={uploading} />
                                 </label>
-                                <p className="text-xs text-[var(--doc-ink-3)] mt-1">JPG·PNG·WebP·GIF, 최대 5MB</p>
+                                <p className="text-xs text-gray-400 mt-1">JPG·PNG·WebP·GIF, 최대 5MB</p>
                                 {attachments.length > 0 && (
                                     <div className="mt-2 space-y-1">
                                         {attachments.map((a, i) => (
-                                            <div key={i} className="flex items-center justify-between gap-2 bg-[var(--doc-grid-head)] rounded-[3px] px-3 py-2">
+                                            <div key={i} className="flex items-center justify-between gap-2 bg-gray-50 dark:bg-gray-900 rounded-lg px-3 py-2">
                                                 <div className="flex items-center gap-2 min-w-0">
                                                     {isImageAttachment(a) && (
                                                         // eslint-disable-next-line @next/next/no-img-element
-                                                        <img src={a.url} alt="" className="w-9 h-9 rounded object-cover border border-[var(--doc-rule)] shrink-0" />
+                                                        <img src={a.url} alt="" className="w-9 h-9 rounded object-cover border border-gray-200 dark:border-gray-700 shrink-0" />
                                                     )}
-                                                    <span className="text-xs text-[var(--doc-ink-2)] truncate">{a.filename}</span>
+                                                    <span className="text-xs text-gray-600 dark:text-gray-300 truncate">{a.filename}</span>
                                                 </div>
                                                 <button onClick={() => setAttachments(prev => prev.filter((_, j) => j !== i))}
-                                                    className="text-[var(--doc-ink-3)] hover:text-[var(--doc-crit)] shrink-0">
+                                                    className="text-gray-400 hover:text-red-500 shrink-0">
                                                     <SymbolIcon name="close" size={14} />
                                                 </button>
                                             </div>
@@ -417,13 +417,13 @@ export default function NoticesAdminClient({
                             </div>
                             <div className="flex items-center gap-2">
                                 <input type="checkbox" id="isPinned" checked={isPinned} onChange={e => setIsPinned(e.target.checked)} className="rounded" />
-                                <label htmlFor="isPinned" className="text-sm text-[var(--doc-ink-2)]">상단 고정</label>
+                                <label htmlFor="isPinned" className="text-sm text-gray-700 dark:text-gray-200">상단 고정</label>
                             </div>
                         </div>
-                        <div className="p-6 border-t border-[var(--doc-rule)] flex justify-end gap-3">
-                            <button onClick={resetForm} className="px-4 py-2 text-sm text-[var(--doc-ink-2)] hover:bg-[var(--doc-grid-head)] rounded-[3px] transition">취소</button>
+                        <div className="p-6 border-t border-gray-100 dark:border-gray-800 flex justify-end gap-3">
+                            <button onClick={resetForm} className="px-4 py-2 text-sm text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:bg-gray-800 rounded-xl transition">취소</button>
                             <button onClick={handleSubmit} disabled={isPending || uploading || editorUploading}
-                                className="px-6 py-2 bg-[var(--doc-accent)] dark:text-[var(--doc-ink)] text-white font-bold rounded-[3px] hover:bg-[var(--doc-grid-head)] transition disabled:opacity-50">
+                                className="px-6 py-2 bg-brand-orange-500 dark:bg-brand-neon-lime dark:text-brand-navy-900 text-white font-bold rounded-xl hover:bg-orange-600 transition disabled:opacity-50">
                                 {isPending ? "저장 중..." : editorUploading ? "이미지 업로드 중..." : editId ? "수정" : "등록"}
                             </button>
                         </div>
@@ -434,8 +434,8 @@ export default function NoticesAdminClient({
 
             {/* Notices List */}
             {notices.length === 0 ? (
-                <div className="bg-[var(--doc-surface)] rounded-[6px] border border-[var(--doc-rule)] transition-colors duration-300 p-12 text-center text-[var(--doc-ink-3)]">
-                    <SymbolIcon name="notifications" className="mx-auto mb-3 text-[var(--doc-ink-3)]" size={48} />
+                <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 transition-colors duration-300 p-12 text-center text-gray-400">
+                    <SymbolIcon name="notifications" className="mx-auto mb-3 text-gray-300" size={48} />
                     <p className="font-medium">아직 공지사항이 없습니다</p>
                     <p className="text-sm mt-1">&quot;새 공지&quot; 버튼으로 공지를 작성하세요</p>
                 </div>
@@ -445,43 +445,43 @@ export default function NoticesAdminClient({
                         let atts: Attachment[] = [];
                         try { atts = n.attachmentsJSON ? JSON.parse(n.attachmentsJSON) : []; } catch {}
                         return (
-                            <div key={n.id} className="bg-[var(--doc-surface)] rounded-[6px] border border-[var(--doc-rule)] transition-colors duration-300 p-5 hover: transition">
+                            <div key={n.id} className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 transition-colors duration-300 shadow-sm p-5 hover:shadow-md transition">
                                 <div className="flex items-start justify-between gap-4">
                                     <div className="flex-1 min-w-0">
                                         <div className="flex items-center gap-2 mb-1">
-                                            {n.isPinned && <SymbolIcon name="push_pin" size={14} className="text-[var(--doc-accent)] flex-shrink-0" />}
-                                            <h3 className="font-bold text-[var(--doc-ink)] truncate">{n.title}</h3>
+                                            {n.isPinned && <SymbolIcon name="push_pin" size={14} className="text-brand-orange-500 dark:text-brand-neon-lime flex-shrink-0" />}
+                                            <h3 className="font-bold text-gray-900 dark:text-white truncate">{n.title}</h3>
                                         </div>
                                         {/* 목록 미리보기 — HTML 공지는 태그 제거 후 순수 텍스트만 노출(raw 태그 노출 방지) */}
-                                        <p className="text-sm text-[var(--doc-ink-2)] line-clamp-2 mb-2">{stripHtmlForPreview(n.content)}</p>
+                                        <p className="text-sm text-gray-500 dark:text-gray-400 line-clamp-2 mb-2">{stripHtmlForPreview(n.content)}</p>
                                         <div className="flex items-center gap-2 flex-wrap">
-                                            <span className={`text-xs px-2 py-0.5 rounded-[3px] ${
- n.targetType === "ALL" ? "bg-[var(--doc-grid-head)] text-[var(--doc-ink-2)]" : "bg-[var(--doc-grid-head)] text-[var(--doc-ink-2)]"
- }`}>
+                                            <span className={`text-xs px-2 py-0.5 rounded-full ${
+                                                n.targetType === "ALL" ? "bg-blue-50 text-blue-600" : "bg-purple-50 text-purple-600"
+                                            }`}>
                                                 {n.targetType === "ALL" ? "전체 공지" : "반별 공지"}
                                             </span>
                                             {atts.length > 0 && (
-                                                <span className="text-xs text-[var(--doc-ink-3)] flex items-center gap-1">
+                                                <span className="text-xs text-gray-400 flex items-center gap-1">
                                                     <SymbolIcon name="attach_file" size={12} /> {atts.length}개 파일
                                                 </span>
                                             )}
-                                            <span className="text-xs text-[var(--doc-ink-3)]">
+                                            <span className="text-xs text-gray-400">
                                                 {new Date(n.createdAt).toLocaleDateString("ko-KR")}
                                             </span>
                                         </div>
                                     </div>
                                     <div className="flex gap-1 flex-shrink-0">
                                         <button onClick={() => setSocialNotice(n)}
-                                            className="p-2 text-[var(--doc-ink-3)] hover:text-[var(--doc-ink-2)] hover:bg-[var(--doc-grid-head)] rounded-[3px] transition"
+                                            className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition"
                                             title="소셜 발행">
                                             <SymbolIcon name="campaign" size={16} />
                                         </button>
                                         <button onClick={() => startEdit(n)}
-                                            className="p-2 text-[var(--doc-ink-3)] hover:text-[var(--doc-accent)] hover:bg-[var(--doc-grid-head)] rounded-[3px] transition">
+                                            className="p-2 text-gray-400 hover:text-brand-orange-500 dark:text-brand-neon-lime hover:bg-orange-50 rounded-lg transition">
                                             <SymbolIcon name="edit" size={16} />
                                         </button>
                                         <button onClick={() => handleDelete(n.id)}
-                                            className="p-2 text-[var(--doc-ink-3)] hover:text-[var(--doc-crit)] hover:bg-[var(--doc-crit-soft)] rounded-[3px] transition">
+                                            className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition">
                                             <SymbolIcon name="delete" size={16} />
                                         </button>
                                     </div>
@@ -495,7 +495,7 @@ export default function NoticesAdminClient({
                                 type="button"
                                 onClick={loadMoreNotices}
                                 disabled={loadingMore}
-                                className="inline-flex items-center gap-2 rounded-[3px] border border-[var(--doc-rule)] bg-[var(--doc-surface)] px-5 py-2.5 text-sm font-bold text-[var(--doc-ink-2)] transition hover:border-[var(--doc-accent)] hover:text-[var(--doc-accent)] disabled:cursor-not-allowed disabled:opacity-60"
+                                className="inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-5 py-2.5 text-sm font-bold text-gray-700 transition hover:border-brand-orange-300 hover:text-brand-orange-600 disabled:cursor-not-allowed disabled:opacity-60 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-200 dark:hover:border-brand-neon-lime dark:hover:text-brand-neon-lime"
                             >
                                 <SymbolIcon name={loadingMore ? "progress_activity" : "expand_more"} size={18} />
                                 {loadingMore ? "불러오는 중..." : `더 보기 (${Math.max(pagination.total - notices.length, 0)}개 남음)`}

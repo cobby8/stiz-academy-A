@@ -18,9 +18,9 @@ import AdminModal from "@/components/admin/AdminModal";
 
 // ── 출석 상태 옵션 (AttendanceClient와 동일 패턴) ──
 const STATUS_OPTIONS = [
-    { value: "PRESENT", label: "출석", color: "bg-[var(--doc-accent-soft)] text-[var(--doc-accent)] border-[var(--doc-accent)]" },
-    { value: "ABSENT", label: "결석", color: "bg-[var(--doc-crit-soft)] text-[var(--doc-crit)] border-[var(--doc-crit)]" },
-    { value: "LATE", label: "지각", color: "bg-[var(--doc-grid-head)] text-[var(--doc-warn)] border-[var(--doc-warn)]" },
+    { value: "PRESENT", label: "출석", color: "bg-green-100 text-green-700 border-green-300" },
+    { value: "ABSENT", label: "결석", color: "bg-red-100 text-red-700 border-red-300" },
+    { value: "LATE", label: "지각", color: "bg-yellow-100 text-yellow-700 border-yellow-300" },
 ] as const;
 
 // 오늘 날짜를 YYYY-MM-DD 형식으로 반환
@@ -276,14 +276,14 @@ export default function SessionLogModal({
                 onClick={(e) => e.stopPropagation()}
             >
                 {/* ── 헤더 ── */}
-                <div className="p-6 border-b border-[var(--doc-rule)] flex items-center justify-between flex-shrink-0">
-                    <h2 id="session-log-title" className="text-lg font-bold text-[var(--doc-ink)]">
+                <div className="p-6 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between flex-shrink-0">
+                    <h2 id="session-log-title" className="text-lg font-bold text-gray-900 dark:text-white">
                         {isEditMode ? "수업 기록 수정" : "수업 기록 추가"}
                     </h2>
                     {/* 닫기 버튼 */}
                     <button
                         onClick={handleClose}
-                        className="p-2 hover:bg-[var(--doc-grid-head)] rounded-[3px] transition text-[var(--doc-ink-3)] hover:text-[var(--doc-ink-2)]"
+                        className="p-2 hover:bg-gray-100 dark:bg-gray-800 rounded-lg transition text-gray-400 hover:text-gray-600 dark:text-gray-300"
                     >
                         {/* X 아이콘 (인라인 SVG — lucide-react 대신) */}
                         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -300,7 +300,7 @@ export default function SessionLogModal({
                     <div className="grid grid-cols-2 gap-4">
                         {/* 수업 날짜 */}
                         <div>
-                            <label className="block text-sm font-medium text-[var(--doc-ink-2)] mb-1">
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">
                                 수업 날짜 *
                             </label>
                             <input
@@ -308,19 +308,19 @@ export default function SessionLogModal({
                                 min="2020-01-01" max="2030-12-31"
                                 value={date}
                                 onChange={(e) => setDate(e.target.value)}
-                                className="w-full border border-[var(--doc-rule)] rounded-[3px] px-3 py-2 text-sm focus:outline-none focus: focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime focus:border-transparent"
+                                className="w-full border border-gray-200 dark:border-gray-700 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime focus:border-transparent"
                             />
                         </div>
 
                         {/* 코치 선택 */}
                         <div>
-                            <label className="block text-sm font-medium text-[var(--doc-ink-2)] mb-1">
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">
                                 담당 코치
                             </label>
                             <select
                                 value={coachId}
                                 onChange={(e) => setCoachId(e.target.value)}
-                                className="w-full border border-[var(--doc-rule)] rounded-[3px] px-3 py-2 text-sm focus:outline-none focus: focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime focus:border-transparent"
+                                className="w-full border border-gray-200 dark:border-gray-700 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime focus:border-transparent"
                             >
                                 <option value="">선택 안 함</option>
                                 {coaches.map((c) => (
@@ -334,7 +334,7 @@ export default function SessionLogModal({
 
                     {/* 수업 주제 */}
                     <div>
-                        <label className="block text-sm font-medium text-[var(--doc-ink-2)] mb-1">
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">
                             수업 주제
                         </label>
                         <input
@@ -342,13 +342,13 @@ export default function SessionLogModal({
                             value={topic}
                             onChange={(e) => setTopic(e.target.value)}
                             placeholder="예: 드리블 기초, 슈팅 연습"
-                            className="w-full border border-[var(--doc-rule)] rounded-[3px] px-3 py-2 text-sm focus:outline-none focus: focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime focus:border-transparent"
+                            className="w-full border border-gray-200 dark:border-gray-700 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime focus:border-transparent"
                         />
                     </div>
 
                     {/* 수업 내용 */}
                     <div>
-                        <label className="block text-sm font-medium text-[var(--doc-ink-2)] mb-1">
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">
                             수업 내용
                         </label>
                         <textarea
@@ -356,13 +356,13 @@ export default function SessionLogModal({
                             onChange={(e) => setContent(e.target.value)}
                             placeholder="오늘 수업에서 진행한 내용을 기록해주세요"
                             rows={3}
-                            className="w-full border border-[var(--doc-rule)] rounded-[3px] px-3 py-2 text-sm focus:outline-none focus: focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime focus:border-transparent resize-none"
+                            className="w-full border border-gray-200 dark:border-gray-700 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime focus:border-transparent resize-none"
                         />
                     </div>
 
                     {/* === 섹션 2: 사진 업로드 === */}
                     <div>
-                        <label className="block text-sm font-medium text-[var(--doc-ink-2)] mb-2">
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-2">
                             수업 사진
                         </label>
 
@@ -374,13 +374,13 @@ export default function SessionLogModal({
                                         <img
                                             src={url}
                                             alt={`수업 사진 ${idx + 1}`}
-                                            className="w-full h-24 object-cover rounded-[3px] border border-[var(--doc-rule)]"
+                                            className="w-full h-24 object-cover rounded-xl border border-gray-100 dark:border-gray-800"
                                         />
                                         {/* 삭제 버튼 — 호버 시 표시 */}
                                         <button
                                             type="button"
                                             onClick={() => removePhoto(idx)}
-                                            className="absolute top-1 right-1 w-6 h-6 bg-[var(--doc-crit)] text-white rounded-[3px] flex items-center justify-center text-xs opacity-0 group-hover:opacity-100 transition"
+                                            className="absolute top-1 right-1 w-6 h-6 bg-red-500 text-white rounded-full flex items-center justify-center text-xs opacity-0 group-hover:opacity-100 transition"
                                         >
                                             {/* X 표시 */}
                                             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round">
@@ -398,7 +398,7 @@ export default function SessionLogModal({
                             type="button"
                             onClick={() => fileInputRef.current?.click()}
                             disabled={uploading}
-                            className="w-full border-2 border-dashed border-[var(--doc-rule)] rounded-[3px] p-4 text-sm text-[var(--doc-ink-2)] hover:border-[var(--doc-accent)] hover:text-[var(--doc-accent)] transition flex items-center justify-center gap-2 disabled:opacity-50"
+                            className="w-full border-2 border-dashed border-gray-200 rounded-xl p-4 text-sm text-gray-500 hover:border-brand-orange-300 dark:border-brand-neon-lime hover:text-brand-orange-500 dark:text-brand-neon-lime transition flex items-center justify-center gap-2 disabled:opacity-50"
                         >
                             {uploading ? (
                                 <>
@@ -435,7 +435,7 @@ export default function SessionLogModal({
                     {/* === 섹션 3: 출석 체크 === */}
                     <div>
                         <div className="flex items-center justify-between mb-2">
-                            <label className="block text-sm font-medium text-[var(--doc-ink-2)]">
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-200">
                                 출석 체크
                             </label>
                             {/* 전체 일괄 변경 버튼 */}
@@ -444,14 +444,14 @@ export default function SessionLogModal({
                                     <button
                                         type="button"
                                         onClick={() => markAll("PRESENT")}
-                                        className="text-xs px-2 py-1 rounded-[3px] bg-[var(--doc-accent-soft)] text-[var(--doc-accent)] hover:bg-[var(--doc-accent-soft)] transition"
+                                        className="text-xs px-2 py-1 rounded-lg bg-green-50 text-green-600 hover:bg-green-100 transition"
                                     >
                                         전체 출석
                                     </button>
                                     <button
                                         type="button"
                                         onClick={() => markAll("ABSENT")}
-                                        className="text-xs px-2 py-1 rounded-[3px] bg-[var(--doc-crit-soft)] text-[var(--doc-crit)] hover:bg-[var(--doc-crit-soft)] transition"
+                                        className="text-xs px-2 py-1 rounded-lg bg-red-50 text-red-600 hover:bg-red-100 transition"
                                     >
                                         전체 결석
                                     </button>
@@ -461,21 +461,21 @@ export default function SessionLogModal({
 
                         {students.length === 0 ? (
                             // 수강생이 없는 경우 안내 메시지
-                            <div className="bg-[var(--doc-grid-head)] rounded-[3px] p-4 text-center text-sm text-[var(--doc-ink-3)]">
+                            <div className="bg-gray-50 dark:bg-gray-900 rounded-xl p-4 text-center text-sm text-gray-400">
                                 수강생이 없습니다
                             </div>
                         ) : (
                             // 학생 목록 + 출석/결석/지각 토글 버튼
-                            <div className="border border-[var(--doc-rule)] rounded-[3px] overflow-hidden">
+                            <div className="border border-gray-100 dark:border-gray-800 rounded-xl overflow-hidden">
                                 {attendances.map((att, idx) => (
                                     <div
                                         key={att.studentId}
                                         className={`flex items-center justify-between px-4 py-3 ${
- idx < attendances.length - 1 ? "border-b border-[var(--doc-rule)]" : ""
- }`}
+                                            idx < attendances.length - 1 ? "border-b border-gray-50" : ""
+                                        }`}
                                     >
                                         {/* 학생 이름 */}
-                                        <span className="text-sm font-medium text-[var(--doc-ink)]">
+                                        <span className="text-sm font-medium text-gray-900 dark:text-white">
                                             {att.studentName}
                                         </span>
 
@@ -488,11 +488,11 @@ export default function SessionLogModal({
                                                         key={opt.value}
                                                         type="button"
                                                         onClick={() => setStatus(att.studentId, opt.value)}
-                                                        className={`text-xs px-3 py-1.5 rounded-[3px] border transition font-medium ${
- isSelected
- ? opt.color
- : "bg-[var(--doc-surface)] text-[var(--doc-ink-3)] border-[var(--doc-rule)] hover:bg-[var(--doc-grid-head)]"
- }`}
+                                                        className={`text-xs px-3 py-1.5 rounded-lg border transition font-medium ${
+                                                            isSelected
+                                                                ? opt.color
+                                                                : "bg-white dark:bg-gray-800 text-gray-400 border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:bg-gray-900"
+                                                        }`}
                                                     >
                                                         {opt.label}
                                                     </button>
@@ -507,25 +507,25 @@ export default function SessionLogModal({
 
                     {/* ── 에러 메시지 ── */}
                     {errorMsg && (
-                        <div className="bg-[var(--doc-crit-soft)] text-[var(--doc-crit)] text-sm px-4 py-3 rounded-[3px]">
+                        <div className="bg-red-50 text-red-600 text-sm px-4 py-3 rounded-xl">
                             {errorMsg}
                         </div>
                     )}
                 </div>
 
                 {/* ── 푸터: 취소 + 저장 버튼 ── */}
-                <div className="p-6 border-t border-[var(--doc-rule)] flex justify-end gap-3 flex-shrink-0">
+                <div className="p-6 border-t border-gray-100 dark:border-gray-800 flex justify-end gap-3 flex-shrink-0">
                     <button
                         onClick={handleClose}
                         disabled={saving}
-                        className="px-4 py-2 text-sm font-medium text-[var(--doc-ink-2)] bg-[var(--doc-grid-head)] rounded-[3px] hover:bg-[var(--doc-grid-head)] transition disabled:opacity-50"
+                        className="px-4 py-2 text-sm font-medium text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-800 rounded-xl hover:bg-gray-200 transition disabled:opacity-50"
                     >
                         취소
                     </button>
                     <button
                         onClick={handleSave}
                         disabled={saving || uploading}
-                        className="px-6 py-2 text-sm font-bold text-white bg-[var(--doc-accent)] dark:text-[var(--doc-ink)] rounded-[3px] hover:bg-[var(--doc-grid-head)] transition disabled:opacity-50 flex items-center gap-2"
+                        className="px-6 py-2 text-sm font-bold text-white bg-brand-orange-500 dark:bg-brand-neon-lime dark:text-brand-navy-900 rounded-xl hover:bg-orange-600 transition disabled:opacity-50 flex items-center gap-2"
                     >
                         {saving ? (
                             <>

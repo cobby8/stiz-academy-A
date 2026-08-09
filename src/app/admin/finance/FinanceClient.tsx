@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useState } from "react";
 import AdminModal from "@/components/admin/AdminModal";
-import { DocHead, DocFoot, DocStamp, issuedAt } from "@/components/doc";
 import AdminQuickActionMenu, { type AdminQuickAction } from "@/components/admin/AdminQuickActionMenu";
 import {
     createPayment,
@@ -190,11 +189,11 @@ type InvoicePreviewFilter = "ALL" | "CREATE" | "SKIP" | "ATTENTION";
 
 // 상태 라벨 + 색상 매핑
 const STATUS_LABELS: Record<string, { label: string; color: string }> = {
-    PENDING: { label: "미납", color: "bg-[var(--doc-grid-head)] text-[var(--doc-warn)]  " },
-    PAID: { label: "납부완료", color: "bg-[var(--doc-accent-soft)] text-[var(--doc-accent)]  " },
-    OVERDUE: { label: "연체", color: "bg-[var(--doc-crit-soft)] text-[var(--doc-crit)]  " },
-    REFUNDED: { label: "환불", color: "bg-[var(--doc-grid-head)]  text-[var(--doc-ink-2)] " },
-    CANCELED: { label: "취소/이월", color: "bg-[var(--doc-grid-head)]  text-[var(--doc-ink-2)] " },
+    PENDING: { label: "미납", color: "bg-yellow-100 text-yellow-700 dark:bg-yellow-950/40 dark:text-yellow-200" },
+    PAID: { label: "납부완료", color: "bg-green-100 text-green-700 dark:bg-green-950/40 dark:text-green-200" },
+    OVERDUE: { label: "연체", color: "bg-red-100 text-red-700 dark:bg-red-950/40 dark:text-red-200" },
+    REFUNDED: { label: "환불", color: "bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300" },
+    CANCELED: { label: "취소/이월", color: "bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300" },
 };
 
 // 청구 유형 라벨
@@ -275,38 +274,38 @@ function FinanceLoadingFallback({ year, month }: { year: number; month: number }
         <div className="mx-auto max-w-6xl">
             <div className="flex flex-wrap justify-between items-start gap-3 mb-6">
                 <div>
-                    <div className="h-8 w-32 rounded bg-[var(--doc-grid-head)]" />
-                    <div className="h-4 w-64 rounded bg-[var(--doc-grid-head)] mt-2" />
+                    <div className="h-8 w-32 rounded bg-gray-200 dark:bg-gray-700 animate-pulse" />
+                    <div className="h-4 w-64 rounded bg-gray-100 dark:bg-gray-800 animate-pulse mt-2" />
                 </div>
                 <div className="flex gap-2">
-                    <div className="h-10 w-28 rounded-[3px] bg-[var(--doc-grid-head)]" />
-                    <div className="h-10 w-28 rounded-[3px] bg-[var(--doc-grid-head)]" />
-                    <div className="h-10 w-32 rounded-[3px] bg-[var(--doc-grid-head)]" />
+                    <div className="h-10 w-28 rounded-lg bg-gray-100 dark:bg-gray-800 animate-pulse" />
+                    <div className="h-10 w-28 rounded-lg bg-gray-100 dark:bg-gray-800 animate-pulse" />
+                    <div className="h-10 w-32 rounded-lg bg-gray-200 dark:bg-gray-700 animate-pulse" />
                 </div>
             </div>
             <div className="flex items-center justify-center gap-4 mb-6">
-                <div className="h-10 w-10 rounded-[3px] bg-[var(--doc-grid-head)]" />
-                <div className="h-7 w-28 rounded bg-[var(--doc-grid-head)]" aria-label={`${year}년 ${month}월 수납 로딩 중`} />
-                <div className="h-10 w-10 rounded-[3px] bg-[var(--doc-grid-head)]" />
+                <div className="h-10 w-10 rounded-lg bg-gray-100 dark:bg-gray-800 animate-pulse" />
+                <div className="h-7 w-28 rounded bg-gray-200 dark:bg-gray-700 animate-pulse" aria-label={`${year}년 ${month}월 수납 로딩 중`} />
+                <div className="h-10 w-10 rounded-lg bg-gray-100 dark:bg-gray-800 animate-pulse" />
             </div>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
                 {Array.from({ length: 4 }).map((_, index) => (
                     <div
                         key={index}
-                        className="h-28 rounded-[3px] border border-[var(--doc-rule)] bg-[var(--doc-surface)]"
+                        className="h-28 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 animate-pulse"
                     />
                 ))}
             </div>
-            <div className="overflow-hidden bg-[var(--doc-surface)] rounded-[3px] border border-[var(--doc-rule)]">
-                <div className="h-12 bg-[var(--doc-grid-head)] border-b border-[var(--doc-rule)]" />
-                <div className="divide-y divide-[var(--doc-rule)]">
+            <div className="overflow-hidden bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700">
+                <div className="h-12 bg-gray-50 dark:bg-gray-900 border-b border-gray-100 dark:border-gray-700 animate-pulse" />
+                <div className="divide-y divide-gray-100 dark:divide-gray-700">
                     {Array.from({ length: 6 }).map((_, index) => (
                         <div key={index} className="grid grid-cols-5 gap-4 px-4 py-4">
-                            <div className="h-4 rounded bg-[var(--doc-grid-head)]" />
-                            <div className="h-4 rounded bg-[var(--doc-grid-head)]" />
-                            <div className="h-4 rounded bg-[var(--doc-grid-head)]" />
-                            <div className="h-4 rounded bg-[var(--doc-grid-head)]" />
-                            <div className="h-4 rounded bg-[var(--doc-grid-head)]" />
+                            <div className="h-4 rounded bg-gray-100 dark:bg-gray-700 animate-pulse" />
+                            <div className="h-4 rounded bg-gray-100 dark:bg-gray-700 animate-pulse" />
+                            <div className="h-4 rounded bg-gray-100 dark:bg-gray-700 animate-pulse" />
+                            <div className="h-4 rounded bg-gray-100 dark:bg-gray-700 animate-pulse" />
+                            <div className="h-4 rounded bg-gray-100 dark:bg-gray-700 animate-pulse" />
                         </div>
                     ))}
                 </div>
@@ -317,13 +316,13 @@ function FinanceLoadingFallback({ year, month }: { year: number; month: number }
 
 function FinanceErrorState({ onRetry }: { onRetry: () => void }) {
     return (
-        <div className="mx-auto max-w-5xl rounded-[6px] border border-[var(--doc-crit)] bg-[var(--doc-surface)] p-8 text-center">
-            <span className="material-symbols-outlined mb-3 text-4xl text-[var(--doc-crit)]">error</span>
-            <p className="font-bold text-[var(--doc-ink)]">수납 데이터를 불러오지 못했습니다.</p>
+        <div className="mx-auto max-w-5xl rounded-2xl border border-red-100 bg-white p-8 text-center shadow-sm dark:border-red-900/40 dark:bg-gray-800">
+            <span className="material-symbols-outlined mb-3 text-4xl text-red-500">error</span>
+            <p className="font-bold text-gray-900 dark:text-white">수납 데이터를 불러오지 못했습니다.</p>
             <button
                 type="button"
                 onClick={onRetry}
-                className="mt-4 rounded-[3px] bg-[var(--doc-accent)] px-4 py-2 text-sm font-bold text-white transition hover:bg-[var(--doc-grid-head)]"
+                className="mt-4 rounded-xl bg-brand-orange-500 px-4 py-2 text-sm font-bold text-white transition hover:bg-orange-600 dark:bg-brand-neon-lime dark:text-brand-navy-900"
             >
                 다시 시도
             </button>
@@ -915,7 +914,7 @@ export default function FinanceClient({
                     titleId="terminal-payment-title"
                     onClose={() => { if (!terminalSubmitting) closeTerminalModal(); }}
                     closeOnBackdrop={false}
-                    panelClassName="max-w-md border border-[var(--doc-rule)]  "
+                    panelClassName="max-w-md border border-gray-200 dark:border-gray-700 dark:bg-gray-900"
                 >
                     <form
                         onSubmit={handleTerminalSubmit}
@@ -923,13 +922,13 @@ export default function FinanceClient({
                     >
                         <div className="flex items-start justify-between gap-4">
                             <div>
-                                <p className="text-xs font-bold uppercase tracking-wide text-[var(--doc-accent)]">
+                                <p className="text-xs font-bold uppercase tracking-wide text-brand-orange-500 dark:text-brand-neon-lime">
                                     현장 단말기
                                 </p>
-                                <h2 id="terminal-payment-title" className="mt-1 text-lg font-bold text-[var(--doc-ink)]">
+                                <h2 id="terminal-payment-title" className="mt-1 text-lg font-extrabold text-gray-900 dark:text-white">
                                     현장 단말기 결제 반영
                                 </h2>
-                                <p className="mt-1 text-sm text-[var(--doc-ink-2)]">
+                                <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
                                     {terminalTarget.studentName} · {formatAmount(terminalTarget.amount)}
                                 </p>
                             </div>
@@ -937,7 +936,7 @@ export default function FinanceClient({
                                 type="button"
                                 onClick={closeTerminalModal}
                                 disabled={terminalSubmitting}
-                                className="rounded-[3px] px-2 py-1 text-sm font-bold text-[var(--doc-ink-2)] hover:bg-[var(--doc-grid-head)] disabled:opacity-50"
+                                className="rounded-lg px-2 py-1 text-sm font-bold text-gray-500 hover:bg-gray-100 disabled:opacity-50 dark:text-gray-300 dark:hover:bg-gray-800"
                             >
                                 닫기
                             </button>
@@ -945,7 +944,7 @@ export default function FinanceClient({
 
                         <div className="mt-5 space-y-4">
                             <div>
-                                <label className="block text-sm font-bold text-[var(--doc-ink-2)]">
+                                <label className="block text-sm font-bold text-gray-700 dark:text-gray-200">
                                     단말기 승인번호 *
                                 </label>
                                 <input
@@ -954,15 +953,15 @@ export default function FinanceClient({
                                     onChange={(e) => setTerminalApprovalNo(e.target.value)}
                                     required
                                     placeholder="예: 12345678"
-                                    className="mt-1 w-full rounded-[3px] border border-[var(--doc-rule)] bg-[var(--doc-surface)] p-2.5 text-sm text-[var(--doc-ink)] focus: focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime"
+                                    className="mt-1 w-full rounded-lg border border-gray-300 bg-white p-2.5 text-sm text-gray-900 focus:ring-2 focus:ring-brand-orange-500 dark:border-gray-600 dark:bg-gray-800 dark:text-white dark:focus:ring-brand-neon-lime"
                                 />
-                                <p className="mt-1 text-xs text-[var(--doc-ink-2)]">
+                                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
                                     단말기 영수증의 승인번호를 입력해 두면 나중에 거래내역과 대조하기 쉽습니다.
                                 </p>
                             </div>
 
                             <div>
-                                <label className="block text-sm font-bold text-[var(--doc-ink-2)]">
+                                <label className="block text-sm font-bold text-gray-700 dark:text-gray-200">
                                     결제일 *
                                 </label>
                                 <input
@@ -970,12 +969,12 @@ export default function FinanceClient({
                                     value={terminalReceivedAt}
                                     onChange={(e) => setTerminalReceivedAt(e.target.value)}
                                     required
-                                    className="mt-1 w-full rounded-[3px] border border-[var(--doc-rule)] bg-[var(--doc-surface)] p-2.5 text-sm text-[var(--doc-ink)] focus: focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime"
+                                    className="mt-1 w-full rounded-lg border border-gray-300 bg-white p-2.5 text-sm text-gray-900 focus:ring-2 focus:ring-brand-orange-500 dark:border-gray-600 dark:bg-gray-800 dark:text-white dark:focus:ring-brand-neon-lime"
                                 />
                             </div>
 
                             <div>
-                                <label className="block text-sm font-bold text-[var(--doc-ink-2)]">
+                                <label className="block text-sm font-bold text-gray-700 dark:text-gray-200">
                                     메모
                                 </label>
                                 <textarea
@@ -983,7 +982,7 @@ export default function FinanceClient({
                                     onChange={(e) => setTerminalMemo(e.target.value)}
                                     rows={3}
                                     placeholder="예: 현장 카드 단말기 결제"
-                                    className="mt-1 w-full rounded-[3px] border border-[var(--doc-rule)] bg-[var(--doc-surface)] p-2.5 text-sm text-[var(--doc-ink)] focus: focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime"
+                                    className="mt-1 w-full rounded-lg border border-gray-300 bg-white p-2.5 text-sm text-gray-900 focus:ring-2 focus:ring-brand-orange-500 dark:border-gray-600 dark:bg-gray-800 dark:text-white dark:focus:ring-brand-neon-lime"
                                 />
                             </div>
                         </div>
@@ -993,14 +992,14 @@ export default function FinanceClient({
                                 type="button"
                                 onClick={closeTerminalModal}
                                 disabled={terminalSubmitting}
-                                className="rounded-[3px] px-4 py-2 text-sm font-bold text-[var(--doc-ink-2)] hover:bg-[var(--doc-grid-head)] disabled:opacity-50"
+                                className="rounded-lg px-4 py-2 text-sm font-bold text-gray-600 hover:bg-gray-100 disabled:opacity-50 dark:text-gray-300 dark:hover:bg-gray-800"
                             >
                                 취소
                             </button>
                             <button
                                 type="submit"
                                 disabled={terminalSubmitting}
-                                className="rounded-[3px] bg-[var(--doc-accent)] px-4 py-2 text-sm font-bold text-white transition hover:bg-[var(--doc-grid-head)] disabled:opacity-50"
+                                className="rounded-lg bg-brand-orange-500 px-4 py-2 text-sm font-bold text-white transition hover:bg-orange-600 disabled:opacity-50 dark:bg-brand-neon-lime dark:text-brand-navy-900"
                             >
                                 {terminalSubmitting ? "반영 중..." : "납부완료 반영"}
                             </button>
@@ -1009,21 +1008,18 @@ export default function FinanceClient({
                 </AdminModal>
             )}
 
-            <DocHead
-                title="《수강료 정산 내역서》"
-                period={`${year}.${String(month).padStart(2, "0")} · 출석 기준`}
-                summary={[
-                    { label: "청구 인원", value: `${summary.totalCount}명` },
-                    { label: "청구 총액", value: formatAmount(summary.totalAmount) },
-                    { label: "수납", value: `${summary.paidCount}건` },
-                    { label: "미납", value: `${summary.unpaidCount}건`, tone: summary.unpaidCount > 0 ? "negative" as const : undefined },
-                ]}
-                right={
-                <div className="no-print inline-flex items-center gap-1 rounded-[3px] border border-[var(--doc-rule)] bg-[var(--doc-surface)] p-1 text-sm font-bold text-[var(--doc-ink)]">
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+                <div>
+                    <h1 className="text-xl font-extrabold text-gray-900 dark:text-white">수납/결제 관리</h1>
+                    <p className="mt-0.5 text-sm font-semibold text-gray-500 dark:text-gray-400">
+                        {year}년 {month}월 수납 현황
+                    </p>
+                </div>
+                <div className="inline-flex items-center gap-1 rounded-full border border-gray-200 bg-white p-1 text-sm font-extrabold text-gray-900 shadow-sm dark:border-gray-700 dark:bg-gray-900 dark:text-white">
                     <button
                         type="button"
                         onClick={prevMonth}
-                        className="inline-flex h-8 w-8 items-center justify-center rounded-[3px] text-[var(--doc-ink-2)] hover:bg-[var(--doc-grid-head)]"
+                        className="inline-flex h-8 w-8 items-center justify-center rounded-full text-gray-500 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800"
                         aria-label="이전 달"
                     >
                         <span className="material-symbols-outlined text-[18px]">chevron_left</span>
@@ -1032,44 +1028,43 @@ export default function FinanceClient({
                     <button
                         type="button"
                         onClick={nextMonth}
-                        className="inline-flex h-8 w-8 items-center justify-center rounded-[3px] text-[var(--doc-ink-2)] hover:bg-[var(--doc-grid-head)]"
+                        className="inline-flex h-8 w-8 items-center justify-center rounded-full text-gray-500 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800"
                         aria-label="다음 달"
                     >
                         <span className="material-symbols-outlined text-[18px]">chevron_right</span>
                     </button>
                 </div>
-                }
-            />
+            </div>
 
             {financeNotice && (
-                <p role="status" className="mb-4 rounded-[3px] border border-[var(--doc-accent)] bg-[var(--doc-accent-soft)] px-4 py-3 text-sm font-bold text-[var(--doc-accent)]">
+                <p role="status" className="mb-4 rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-sm font-bold text-green-800 dark:border-green-500/30 dark:bg-green-500/10 dark:text-green-100">
                     {financeNotice}
                 </p>
             )}
 
-            <section className="mb-4 rounded-[3px] border border-[var(--doc-rule)] bg-[var(--doc-surface)] p-3">
+            <section className="mb-4 rounded-xl border border-gray-200 bg-white p-3 shadow-sm dark:border-gray-700 dark:bg-gray-900">
                 <div className="flex flex-wrap items-center gap-2">
-                    <span className={`inline-flex h-9 items-center gap-1.5 rounded-[3px] px-3 text-xs font-bold ${
- paymentProvider.providerReady
- ? "bg-[var(--doc-accent-soft)] text-[var(--doc-accent)] "
- : "bg-[var(--doc-grid-head)] text-[var(--doc-warn)]  "
- }`}>
+                    <span className={`inline-flex h-9 items-center gap-1.5 rounded-full px-3 text-xs font-black ${
+                        paymentProvider.providerReady
+                            ? "bg-green-100 text-green-800 dark:bg-green-500/15 dark:text-green-100"
+                            : "bg-yellow-100 text-yellow-900 dark:bg-brand-neon-lime/15 dark:text-brand-neon-lime"
+                    }`}>
                         <span className="material-symbols-outlined text-[17px]">payments</span>
                         온라인 결제 {paymentProvider.providerReady ? "사용 가능" : "준비 필요"}
                     </span>
-                    <span className="inline-flex h-9 items-center rounded-[3px] bg-[var(--doc-grid-head)] px-3 text-xs font-bold text-[var(--doc-ink-2)]">
+                    <span className="inline-flex h-9 items-center rounded-full bg-gray-100 px-3 text-xs font-black text-gray-700 dark:bg-gray-800 dark:text-gray-100">
                         결제 모드 {paymentModeLabel}
                     </span>
-                    <span className="inline-flex h-9 items-center rounded-[3px] bg-[var(--doc-grid-head)] px-3 text-xs font-bold text-[var(--doc-ink-2)]">
+                    <span className="inline-flex h-9 items-center rounded-full bg-gray-100 px-3 text-xs font-black text-gray-700 dark:bg-gray-800 dark:text-gray-100">
                         청구 대상 {invoicePreview ? `${invoicePreview.targetStudentCount}명` : "미확인"}
                     </span>
-                    <span className="inline-flex h-9 items-center rounded-[3px] bg-[var(--doc-grid-head)] px-3 text-xs font-bold text-[var(--doc-ink-2)]">
+                    <span className="inline-flex h-9 items-center rounded-full bg-gray-100 px-3 text-xs font-black text-gray-700 dark:bg-gray-800 dark:text-gray-100">
                         생성 {invoiceCreateCount}건
                     </span>
-                    <span className="inline-flex h-9 items-center rounded-[3px] bg-[var(--doc-grid-head)] px-3 text-xs font-bold text-[var(--doc-ink-2)]">
+                    <span className="inline-flex h-9 items-center rounded-full bg-gray-100 px-3 text-xs font-black text-gray-700 dark:bg-gray-800 dark:text-gray-100">
                         발송대기 {invoiceUnsentCount}건
                     </span>
-                    <span className="inline-flex h-9 items-center rounded-[3px] bg-[var(--doc-grid-head)] px-3 text-xs font-bold text-[var(--doc-ink-2)]">
+                    <span className="inline-flex h-9 items-center rounded-full bg-gray-100 px-3 text-xs font-black text-gray-700 dark:bg-gray-800 dark:text-gray-100">
                         미납 {invoiceOpenCount}건
                     </span>
 
@@ -1078,12 +1073,12 @@ export default function FinanceClient({
                             type="button"
                             onClick={loadSheetPreview}
                             disabled={busy || sheetPreviewLoading || sheetApplying}
-                            className="inline-flex h-9 items-center gap-1 rounded-[3px] bg-[var(--doc-grid-head)] px-3 text-xs font-bold text-white transition hover:bg-[var(--doc-grid-head)] disabled:opacity-50"
+                            className="inline-flex h-9 items-center gap-1 rounded-full bg-gray-900 px-3 text-xs font-black text-white transition hover:bg-gray-800 disabled:opacity-50 dark:bg-gray-800 dark:text-white"
                         >
                             <span className="material-symbols-outlined text-[17px]">fact_check</span>
                             {sheetPreviewLoading ? "점검 중" : "시트 점검"}
                         </button>
-                        <div className="inline-flex h-9 items-center gap-2 rounded-[3px] bg-[var(--doc-grid-head)] pl-3 pr-1 text-xs font-bold text-[var(--doc-ink-2)]">
+                        <div className="inline-flex h-9 items-center gap-2 rounded-full bg-gray-100 pl-3 pr-1 text-xs font-black text-gray-700 dark:bg-gray-800 dark:text-gray-100">
                             청구 작업
                             <AdminQuickActionMenu
                                 label="청구 빠른 작업"
@@ -1143,7 +1138,7 @@ export default function FinanceClient({
                                     void loadStudents();
                                 }
                             }}
-                            className="inline-flex h-9 items-center gap-1 rounded-[3px] bg-[var(--doc-accent)] px-3 text-xs font-bold text-white transition hover:bg-[var(--doc-grid-head)]"
+                            className="inline-flex h-9 items-center gap-1 rounded-full bg-brand-orange-500 px-3 text-xs font-black text-white transition hover:bg-orange-600 dark:bg-brand-neon-lime dark:text-brand-navy-900"
                         >
                             <span className="material-symbols-outlined text-[17px]">add</span>
                             수납 추가
@@ -1151,8 +1146,8 @@ export default function FinanceClient({
                     </div>
                 </div>
 
-                <details className="mt-2 rounded-[3px] border border-[var(--doc-rule)] bg-[var(--doc-grid-head)] px-3 py-2 text-xs font-semibold text-[var(--doc-ink-2)]">
-                    <summary className="cursor-pointer font-bold text-[var(--doc-ink)]">결제 설정 보기</summary>
+                <details className="mt-2 rounded-lg border border-gray-100 bg-gray-50 px-3 py-2 text-xs font-semibold text-gray-600 dark:border-gray-800 dark:bg-gray-950 dark:text-gray-300">
+                    <summary className="cursor-pointer font-extrabold text-gray-800 dark:text-gray-100">결제 설정 보기</summary>
                     <div className="mt-2 grid gap-2 sm:grid-cols-3">
                         <p>온라인 결제 상태: {paymentProvider.providerReady ? "토스페이먼츠 온라인 결제를 사용할 수 있습니다." : `준비 필요${paymentProviderMissing.length > 0 ? `: ${paymentProviderMissing.join(", ")}` : ""}`}</p>
                         <p>복귀 주소: {paymentProvider.siteUrlValid ? "준비됨" : "확인 필요"}</p>
@@ -1167,28 +1162,28 @@ export default function FinanceClient({
             </section>
 
             {invoiceError && (
-                <p className="mb-4 rounded-[3px] bg-[var(--doc-crit-soft)] px-3 py-2 text-sm font-semibold text-[var(--doc-crit)]">
+                <p className="mb-4 rounded-lg bg-red-50 px-3 py-2 text-sm font-semibold text-red-700 dark:bg-red-950/30 dark:text-red-200">
                     {invoiceError}
                 </p>
             )}
 
             {invoicePreview && (
-                <div className="mb-4 rounded-[3px] border border-[var(--doc-rule)] bg-[var(--doc-surface)]">
+                <div className="mb-4 rounded-xl border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-900">
                     {/* 헤더 */}
-                    <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--doc-rule)] px-4 py-3">
+                    <div className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-100 px-4 py-3 dark:border-gray-800">
                         <div>
-                            <p className="text-sm font-bold text-[var(--doc-ink)]">
+                            <p className="text-sm font-extrabold text-gray-900 dark:text-white">
                                 {year}년 {month}월 청구 검수
                             </p>
-                            <p className="mt-0.5 text-xs text-[var(--doc-ink-2)]">
+                            <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
                                 대상 {invoicePreview.targetStudentCount}명 · 발행 예정 {invoicePreview.createCount}건 · 기존 유지 {invoicePreview.skipCount}건
-                                {invoiceAttentionCount > 0 && <span className="ml-1 font-bold text-[var(--doc-warn)]">· 확인 필요 {invoiceAttentionCount}건</span>}
-                                {excludedStudentIds.size > 0 && <span className="ml-1 font-bold text-[var(--doc-crit)]">· {excludedStudentIds.size}명 제외</span>}
+                                {invoiceAttentionCount > 0 && <span className="ml-1 font-bold text-amber-600 dark:text-amber-300">· 확인 필요 {invoiceAttentionCount}건</span>}
+                                {excludedStudentIds.size > 0 && <span className="ml-1 font-bold text-red-500">· {excludedStudentIds.size}명 제외</span>}
                             </p>
                         </div>
                         <div className="flex flex-wrap items-center gap-2">
                             {excludedStudentIds.size > 0 && (
-                                <button type="button" onClick={() => setExcludedStudentIds(new Set())} className="rounded-[3px] border border-[var(--doc-rule)] px-3 py-1.5 text-xs font-bold text-[var(--doc-ink-2)] hover:border-[var(--doc-rule)]">
+                                <button type="button" onClick={() => setExcludedStudentIds(new Set())} className="rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-bold text-gray-600 hover:border-gray-400 dark:border-gray-700 dark:text-gray-300">
                                     전체 선택 복원
                                 </button>
                             )}
@@ -1196,7 +1191,7 @@ export default function FinanceClient({
                                 type="button"
                                 disabled={invoiceGenerating || invoicePreview.createCount === 0}
                                 onClick={() => void handleGenerateInvoices()}
-                                className="rounded-[3px] bg-[var(--doc-accent)] px-4 py-1.5 text-xs font-bold text-white disabled:opacity-40"
+                                className="rounded-lg bg-brand-orange-500 px-4 py-1.5 text-xs font-extrabold text-white disabled:opacity-40 dark:bg-brand-neon-lime dark:text-brand-navy-900"
                             >
                                 {invoiceGenerating ? "발행 중…" : excludedStudentIds.size > 0 ? `선택 ${invoicePreview.createCount - excludedStudentIds.size}건 발행` : `전체 ${invoicePreview.createCount}건 발행`}
                             </button>
@@ -1204,23 +1199,23 @@ export default function FinanceClient({
                     </div>
 
                     {invoicePreview.activeTemplateCount === 0 && (
-                        <p className="px-4 py-3 text-sm font-semibold text-[var(--doc-warn)]">
+                        <p className="px-4 py-3 text-sm font-semibold text-amber-700 dark:text-amber-300">
                             활성 청구 템플릿이 없습니다. 청구 템플릿을 먼저 등록해야 월별 청구서를 발행할 수 있습니다.
                         </p>
                     )}
 
                     {/* 필터 탭 */}
                     {invoiceItems.length > 0 && (
-                        <div className="flex flex-wrap gap-2 border-b border-[var(--doc-rule)] px-4 py-2">
+                        <div className="flex flex-wrap gap-2 border-b border-gray-100 px-4 py-2 dark:border-gray-800">
                             {invoiceFilterOptions.map((option) => (
                                 <button
                                     key={option.value}
                                     type="button"
                                     onClick={() => setInvoiceFilter(option.value)}
-                                    className={`rounded-[3px] px-3 py-1 text-xs font-bold transition ${invoiceFilter === option.value
- ? "bg-[var(--doc-accent)] text-white "
- : "bg-[var(--doc-grid-head)] text-[var(--doc-ink-2)] hover:bg-[var(--doc-grid-head)] "
- }`}
+                                    className={`rounded-full px-3 py-1 text-xs font-bold transition ${invoiceFilter === option.value
+                                        ? "bg-brand-orange-500 text-white dark:bg-brand-neon-lime dark:text-brand-navy-900"
+                                        : "bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
+                                        }`}
                                 >
                                     {option.label} {option.count}
                                 </button>
@@ -1230,7 +1225,7 @@ export default function FinanceClient({
 
                     {/* 반별 그룹 목록 */}
                     {filteredInvoiceItems.length === 0 ? (
-                        <p className="px-4 py-8 text-center text-sm font-semibold text-[var(--doc-ink-2)]">
+                        <p className="px-4 py-8 text-center text-sm font-semibold text-gray-500 dark:text-gray-400">
                             선택한 조건에 해당하는 청구 대상이 없습니다.
                         </p>
                     ) : (() => {
@@ -1245,7 +1240,7 @@ export default function FinanceClient({
                         const sortedClasses = Array.from(classMap.entries()).sort(([a], [b]) => a.localeCompare(b, "ko"));
 
                         return (
-                            <div className="divide-y divide-[var(--doc-rule)] dark:divide-[var(--doc-rule)]">
+                            <div className="divide-y divide-gray-100 dark:divide-gray-800">
                                 {sortedClasses.map(([className, classItems]) => {
                                     const studentMap = new Map<string, MonthlyInvoicePreviewItem[]>();
                                     for (const item of classItems) {
@@ -1276,7 +1271,7 @@ export default function FinanceClient({
                                     return (
                                         <div key={className}>
                                             {/* 반 헤더 */}
-                                            <div className="flex flex-wrap items-center justify-between gap-2 bg-[var(--doc-grid-head)] px-4 py-2">
+                                            <div className="flex flex-wrap items-center justify-between gap-2 bg-gray-50 px-4 py-2 dark:bg-gray-800/60">
                                                 <div className="flex items-center gap-3">
                                                     {classCreateStudents.length > 0 && (
                                                         <input
@@ -1288,8 +1283,8 @@ export default function FinanceClient({
                                                         />
                                                     )}
                                                     <div>
-                                                        <span className="text-sm font-bold text-[var(--doc-ink)]">{className}</span>
-                                                        <span className="ml-2 text-xs text-[var(--doc-ink-2)]">{students.length}명 · {formatAmount(classTotalAmount)}</span>
+                                                        <span className="text-sm font-extrabold text-gray-900 dark:text-white">{className}</span>
+                                                        <span className="ml-2 text-xs text-gray-500 dark:text-gray-400">{students.length}명 · {formatAmount(classTotalAmount)}</span>
                                                     </div>
                                                 </div>
                                                 {classCreateStudents.length > 0 && (
@@ -1301,7 +1296,7 @@ export default function FinanceClient({
                                                             const nonClassExcluded = Array.from(excludedStudentIds).filter((id) => !allStudentIds.includes(id));
                                                             void handleGenerateInvoices(nonClassExcluded);
                                                         }}
-                                                        className="rounded-[3px] border border-[var(--doc-accent)] px-3 py-1 text-xs font-bold text-[var(--doc-accent)] hover:bg-[var(--doc-accent)] disabled:opacity-40"
+                                                        className="rounded-lg border border-brand-orange-200 px-3 py-1 text-xs font-bold text-brand-orange-600 hover:bg-brand-orange-50 disabled:opacity-40 dark:border-brand-neon-lime/30 dark:text-brand-neon-lime dark:hover:bg-brand-neon-lime/10"
                                                     >
                                                         이 반 발행
                                                     </button>
@@ -1309,7 +1304,7 @@ export default function FinanceClient({
                                             </div>
 
                                             {/* 학생 행 */}
-                                            <div className="divide-y divide-[var(--doc-rule)] dark:divide-[var(--doc-rule)]/50">
+                                            <div className="divide-y divide-gray-50 dark:divide-gray-800/50">
                                                 {students.map(([studentId, studentItems]) => {
                                                     const first = studentItems[0];
                                                     const hasCreate = studentItems.some((i) => i.action === "CREATE");
@@ -1347,8 +1342,8 @@ export default function FinanceClient({
 
                                                             {/* 학생 정보 */}
                                                             <div className="min-w-[100px] flex-1">
-                                                                <p className="font-bold text-[var(--doc-ink)]">{first.studentName}</p>
-                                                                <p className="mt-0.5 text-xs text-[var(--doc-ink-2)]">
+                                                                <p className="font-bold text-gray-900 dark:text-white">{first.studentName}</p>
+                                                                <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
                                                                     {first.parentName ?? "학부모 미지정"} · {first.parentPhone || first.parentEmail || "연락처 확인 필요"}
                                                                 </p>
                                                             </div>
@@ -1357,46 +1352,46 @@ export default function FinanceClient({
                                                             <div className="min-w-[180px] flex-1">
                                                                 {studentItems.map((item, idx) => (
                                                                     <div key={idx} className="flex items-center justify-between gap-2 text-sm">
-                                                                        <span className="text-[var(--doc-ink-2)]">
+                                                                        <span className="text-gray-600 dark:text-gray-300">
                                                                             {TYPE_LABELS[item.type] ?? item.type}
                                                                         </span>
-                                                                        <span className="font-mono font-semibold text-[var(--doc-ink)]">
+                                                                        <span className="font-mono font-semibold text-gray-800 dark:text-gray-100">
                                                                             {formatAmount(item.amount)}
                                                                         </span>
                                                                     </div>
                                                                 ))}
                                                                 {studentItems.length > 1 && (
-                                                                    <div className="mt-1 flex items-center justify-between gap-2 border-t border-[var(--doc-rule)] pt-1 text-sm">
-                                                                        <span className="font-bold text-[var(--doc-ink-2)]">합계</span>
-                                                                        <span className="font-mono font-bold text-[var(--doc-ink)]">{formatAmount(totalAmount)}</span>
+                                                                    <div className="mt-1 flex items-center justify-between gap-2 border-t border-gray-200 pt-1 text-sm dark:border-gray-700">
+                                                                        <span className="font-bold text-gray-700 dark:text-gray-200">합계</span>
+                                                                        <span className="font-mono font-extrabold text-gray-900 dark:text-white">{formatAmount(totalAmount)}</span>
                                                                     </div>
                                                                 )}
-                                                                <p className="mt-1 text-xs text-[var(--doc-ink-3)]">납부기한 {first.dueDate}</p>
+                                                                <p className="mt-1 text-xs text-gray-400 dark:text-gray-500">납부기한 {first.dueDate}</p>
                                                             </div>
 
                                                             {/* 상태 배지 */}
                                                             <div className="flex shrink-0 flex-wrap items-center gap-1">
                                                                 {hasCreate ? (
-                                                                    <span className="rounded-[3px] bg-[var(--doc-accent-soft)] px-2 py-0.5 text-xs font-bold text-[var(--doc-accent)]">
+                                                                    <span className="rounded-full bg-green-100 px-2 py-0.5 text-xs font-bold text-green-700 dark:bg-green-950/40 dark:text-green-200">
                                                                         발행 예정
                                                                     </span>
                                                                 ) : (
-                                                                    <span className="rounded-[3px] bg-[var(--doc-grid-head)] px-2 py-0.5 text-xs font-bold text-[var(--doc-ink-2)]">
+                                                                    <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs font-bold text-gray-600 dark:bg-gray-800 dark:text-gray-300">
                                                                         기존 유지
                                                                     </span>
                                                                 )}
                                                                 {existingStatus && (
-                                                                    <span className={`rounded-[3px] px-2 py-0.5 text-xs font-bold ${existingStatus.color}`}>
+                                                                    <span className={`rounded-full px-2 py-0.5 text-xs font-bold ${existingStatus.color}`}>
                                                                         {existingStatus.label}
                                                                     </span>
                                                                 )}
                                                                 {hasAttention && (
-                                                                    <span className="rounded-[3px] bg-[var(--doc-grid-head)] px-2 py-0.5 text-xs font-bold text-[var(--doc-warn)]">
+                                                                    <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-bold text-amber-700 dark:bg-amber-950/40 dark:text-amber-200">
                                                                         확인 필요
                                                                     </span>
                                                                 )}
                                                                 {studentItems.some((i) => i.issueReason) && (
-                                                                    <p className="w-full text-xs text-[var(--doc-warn)]">
+                                                                    <p className="w-full text-xs text-amber-600 dark:text-amber-300">
                                                                         {studentItems.find((i) => i.issueReason)?.issueReason}
                                                                     </p>
                                                                 )}
@@ -1415,17 +1410,17 @@ export default function FinanceClient({
             )}
 
             {(sheetError || sheetPreview) && (
-                <div className="mb-6 rounded-[3px] border border-[var(--doc-rule)] bg-[var(--doc-surface)] p-4">
+                <div className="mb-6 rounded-xl border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-800">
                     <div className="flex flex-wrap items-start justify-between gap-3">
                         <div>
-                            <h2 className="text-base font-bold text-[var(--doc-ink)]">시트 원장 기준 수납 점검</h2>
+                            <h2 className="text-base font-extrabold text-gray-900 dark:text-white">시트 원장 기준 수납 점검</h2>
                             {sheetPreview?.batch ? (
-                                <p className="mt-1 text-xs text-[var(--doc-ink-2)]">
+                                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
                                     마지막 가져오기: {toDateStr(sheetPreview.batch.completedAt ?? sheetPreview.batch.createdAt)}
                                     {sheetPreview.batch.spreadsheetTitle ? ` · ${sheetPreview.batch.spreadsheetTitle}` : ""}
                                 </p>
                             ) : (
-                                <p className="mt-1 text-xs text-[var(--doc-ink-2)]">가져오기 기록 없음</p>
+                                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">가져오기 기록 없음</p>
                             )}
                         </div>
 
@@ -1434,7 +1429,7 @@ export default function FinanceClient({
                                 type="button"
                                 onClick={applySheetPreview}
                                 disabled={sheetApplying || sheetApplyCount === 0}
-                                className="rounded-[3px] bg-[var(--doc-accent)] px-4 py-2 text-sm font-bold text-white transition hover:bg-[var(--doc-grid-head)] disabled:cursor-not-allowed disabled:opacity-50"
+                                className="rounded-lg bg-brand-orange-500 px-4 py-2 text-sm font-bold text-white transition hover:bg-orange-600 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-brand-neon-lime dark:text-brand-navy-900"
                             >
                                 {sheetApplying ? "적용 중..." : sheetApplyCount === 0 ? "적용할 변경 없음" : "변경 적용"}
                             </button>
@@ -1442,7 +1437,7 @@ export default function FinanceClient({
                     </div>
 
                     {sheetError && (
-                        <p className="mt-3 rounded-[3px] bg-[var(--doc-crit-soft)] px-3 py-2 text-sm font-semibold text-[var(--doc-crit)]">
+                        <p className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-sm font-semibold text-red-700 dark:bg-red-950/30 dark:text-red-200">
                             {sheetError}
                         </p>
                     )}
@@ -1450,51 +1445,51 @@ export default function FinanceClient({
                     {sheetPreview && (
                         <>
                             <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
-                                <div className="rounded-[3px] bg-[var(--doc-accent-soft)] p-3">
-                                    <p className="text-xs font-bold text-[var(--doc-accent)]">생성</p>
-                                    <p className="mt-1 text-xl font-bold text-[var(--doc-accent)]">{sheetPreview.summary.create}건</p>
-                                    <p className="text-xs text-[var(--doc-accent)]">{formatAmount(sheetPreview.summary.createAmount)}</p>
+                                <div className="rounded-lg bg-green-50 p-3 dark:bg-green-950/30">
+                                    <p className="text-xs font-bold text-green-700 dark:text-green-200">생성</p>
+                                    <p className="mt-1 text-xl font-extrabold text-green-800 dark:text-green-100">{sheetPreview.summary.create}건</p>
+                                    <p className="text-xs text-green-600 dark:text-green-300">{formatAmount(sheetPreview.summary.createAmount)}</p>
                                 </div>
-                                <div className="rounded-[3px] bg-[var(--doc-grid-head)] p-3">
-                                    <p className="text-xs font-bold text-[var(--doc-ink-2)]">수정</p>
-                                    <p className="mt-1 text-xl font-bold text-[var(--doc-ink-2)]">{sheetPreview.summary.update}건</p>
-                                    <p className="text-xs text-[var(--doc-ink-2)]">{formatAmount(sheetPreview.summary.updateAmount)}</p>
+                                <div className="rounded-lg bg-blue-50 p-3 dark:bg-blue-950/30">
+                                    <p className="text-xs font-bold text-blue-700 dark:text-blue-200">수정</p>
+                                    <p className="mt-1 text-xl font-extrabold text-blue-800 dark:text-blue-100">{sheetPreview.summary.update}건</p>
+                                    <p className="text-xs text-blue-600 dark:text-blue-300">{formatAmount(sheetPreview.summary.updateAmount)}</p>
                                 </div>
-                                <div className="rounded-[3px] bg-[var(--doc-grid-head)] p-3">
-                                    <p className="text-xs font-bold text-[var(--doc-warn)]">확인 필요</p>
-                                    <p className="mt-1 text-xl font-bold text-[var(--doc-warn)]">{sheetPreview.summary.review}건</p>
-                                    <p className="text-xs text-[var(--doc-warn)]">자동 변경 제외</p>
+                                <div className="rounded-lg bg-amber-50 p-3 dark:bg-amber-950/30">
+                                    <p className="text-xs font-bold text-amber-700 dark:text-amber-200">확인 필요</p>
+                                    <p className="mt-1 text-xl font-extrabold text-amber-800 dark:text-amber-100">{sheetPreview.summary.review}건</p>
+                                    <p className="text-xs text-amber-600 dark:text-amber-300">자동 변경 제외</p>
                                 </div>
-                                <div className="rounded-[3px] bg-[var(--doc-grid-head)] p-3">
-                                    <p className="text-xs font-bold text-[var(--doc-ink-2)]">동일</p>
-                                    <p className="mt-1 text-xl font-bold text-[var(--doc-ink)]">{sheetPreview.summary.unchanged}건</p>
-                                    <p className="text-xs text-[var(--doc-ink-2)]">변경 없음</p>
+                                <div className="rounded-lg bg-gray-50 p-3 dark:bg-gray-900">
+                                    <p className="text-xs font-bold text-gray-600 dark:text-gray-300">동일</p>
+                                    <p className="mt-1 text-xl font-extrabold text-gray-900 dark:text-white">{sheetPreview.summary.unchanged}건</p>
+                                    <p className="text-xs text-gray-500 dark:text-gray-400">변경 없음</p>
                                 </div>
                             </div>
 
-                            <p className="mt-3 text-xs text-[var(--doc-ink-2)]">
+                            <p className="mt-3 text-xs text-gray-500 dark:text-gray-400">
                                 휴원, 퇴원, 추가수강, 이월처럼 자동 판단이 위험한 건은 확인 필요로 남깁니다.
                             </p>
 
                             {sheetPreview.samples.length > 0 && (
-                                <div className="mt-3 overflow-hidden rounded-[3px] border border-[var(--doc-rule)]">
+                                <div className="mt-3 overflow-hidden rounded-lg border border-gray-100 dark:border-gray-700">
                                     {sheetPreview.samples.map((sample) => (
-                                        <div key={`${sample.action}-${sample.studentId}`} className="flex flex-wrap items-center justify-between gap-2 border-b border-[var(--doc-rule)] px-3 py-2 text-sm last:border-b-0">
+                                        <div key={`${sample.action}-${sample.studentId}`} className="flex flex-wrap items-center justify-between gap-2 border-b border-gray-100 px-3 py-2 text-sm last:border-b-0 dark:border-gray-700">
                                             <div>
-                                                <span className="font-bold text-[var(--doc-ink)]">{sample.studentName}</span>
-                                                <span className="ml-2 text-xs text-[var(--doc-ink-2)]">
+                                                <span className="font-bold text-gray-900 dark:text-white">{sample.studentName}</span>
+                                                <span className="ml-2 text-xs text-gray-500 dark:text-gray-400">
                                                     {sample.paymentMethods?.join(", ") || "-"} · {sample.rowCount}행
                                                 </span>
                                                 {sample.reviewReason && (
-                                                    <p className="mt-0.5 text-xs text-[var(--doc-warn)]">{sample.reviewReason}</p>
+                                                    <p className="mt-0.5 text-xs text-amber-700 dark:text-amber-200">{sample.reviewReason}</p>
                                                 )}
                                             </div>
                                             <div className="text-right">
-                                                <span className="rounded-[3px] bg-[var(--doc-grid-head)] px-2 py-1 text-xs font-bold text-[var(--doc-ink-2)]">
+                                                <span className="rounded-full bg-gray-100 px-2 py-1 text-xs font-bold text-gray-700 dark:bg-gray-900 dark:text-gray-200">
                                                     {SHEET_RECONCILE_ACTION_LABELS[sample.action] ?? sample.action}
                                                 </span>
                                                 {sample.targetAmount != null && (
-                                                    <p className="mt-1 text-xs text-[var(--doc-ink-2)]">
+                                                    <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
                                                         {sample.existingAmount != null ? `${formatAmount(sample.existingAmount)} → ` : ""}
                                                         {formatAmount(sample.targetAmount)}
                                                     </p>
@@ -1509,34 +1504,34 @@ export default function FinanceClient({
                 </div>
             )}
 
-            <section className="mb-4 flex flex-wrap items-center gap-2 rounded-[3px] border border-[var(--doc-rule)] bg-[var(--doc-surface)] p-3 text-xs font-bold">
-                <span className="inline-flex h-8 items-center rounded-[3px] bg-[var(--doc-grid-head)] px-3 text-[var(--doc-ink)]">
+            <section className="mb-4 flex flex-wrap items-center gap-2 rounded-xl border border-gray-200 bg-white p-3 text-xs font-black shadow-sm dark:border-gray-700 dark:bg-gray-900">
+                <span className="inline-flex h-8 items-center rounded-full bg-gray-100 px-3 text-gray-800 dark:bg-gray-800 dark:text-gray-100">
                     총 청구 {formatAmount(summary.totalAmount)} · {summary.totalCount}건
                 </span>
-                <span className="inline-flex h-8 items-center rounded-[3px] bg-[var(--doc-accent-soft)] px-3 text-[var(--doc-accent)]">
+                <span className="inline-flex h-8 items-center rounded-full bg-green-100 px-3 text-green-800 dark:bg-green-500/15 dark:text-green-100">
                     납부완료 {formatAmount(summary.paidAmount)} · {summary.paidCount}건
                 </span>
-                <span className="inline-flex h-8 items-center rounded-[3px] bg-[var(--doc-grid-head)] px-3 text-[var(--doc-warn)]">
+                <span className="inline-flex h-8 items-center rounded-full bg-yellow-100 px-3 text-yellow-900 dark:bg-yellow-500/15 dark:text-yellow-100">
                     미납/연체 {formatAmount(summary.unpaidAmount)} · {summary.unpaidCount}건
                 </span>
-                <span className="inline-flex h-8 items-center gap-2 rounded-[3px] bg-[var(--doc-grid-head)] px-3 text-[var(--doc-ink-2)]">
+                <span className="inline-flex h-8 items-center gap-2 rounded-full bg-blue-100 px-3 text-blue-800 dark:bg-blue-500/15 dark:text-blue-100">
                     수납률 {payRate}%
-                    <span className="h-1.5 w-16 overflow-hidden rounded-[3px] bg-[var(--doc-surface)]/70">
-                        <span className="block h-full rounded-[3px] bg-[var(--doc-grid-head)] transition-all" style={{ width: `${payRate}%` }} />
+                    <span className="h-1.5 w-16 overflow-hidden rounded-full bg-white/70 dark:bg-gray-950">
+                        <span className="block h-full rounded-full bg-blue-500 transition-all" style={{ width: `${payRate}%` }} />
                     </span>
                 </span>
             </section>
 
             {/* 일괄 처리 바 — 선택된 항목이 있을 때만 표시 */}
             {canManageCriticalFinance && selectedIds.size > 0 && (
-                <div className="bg-[var(--doc-grid-head)] border border-[var(--doc-rule)] rounded-[3px] p-3 mb-4 flex items-center justify-between">
-                    <span className="text-sm font-medium text-[var(--doc-ink-2)]">
+                <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 mb-4 flex items-center justify-between">
+                    <span className="text-sm font-medium text-blue-700">
                         {selectedIds.size}건 선택됨
                     </span>
                     <button
                         onClick={handleBulkPaid}
                         disabled={busy}
-                        className="bg-[var(--doc-accent)] text-white px-4 py-1.5 rounded-[3px] text-sm font-bold hover:bg-[var(--doc-accent)] transition disabled:opacity-50"
+                        className="bg-green-600 text-white px-4 py-1.5 rounded-lg text-sm font-bold hover:bg-green-700 transition disabled:opacity-50"
                     >
                         선택 항목 납부 처리
                     </button>
@@ -1545,17 +1540,17 @@ export default function FinanceClient({
 
             {/* 수동 생성 폼 */}
             {showForm && (
-                <form onSubmit={handleCreate} className="bg-[var(--doc-surface)] border border-[var(--doc-rule)] rounded-[3px] p-6 mb-6 space-y-4">
-                    <h3 className="font-bold text-lg text-[var(--doc-ink)]">새 수납 기록</h3>
+                <form onSubmit={handleCreate} className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-6 mb-6 shadow-sm space-y-4">
+                    <h3 className="font-bold text-lg text-gray-900 dark:text-white">새 수납 기록</h3>
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                         <div>
-                            <label className="block text-sm font-bold text-[var(--doc-ink-2)] mb-1">원생 *</label>
+                            <label className="block text-sm font-bold text-gray-700 dark:text-gray-200 mb-1">원생 *</label>
                             <select
                                 value={studentId}
                                 onChange={(e) => setStudentId(e.target.value)}
                                 disabled={studentsLoading || Boolean(studentsError)}
                                 required
-                                className="w-full border border-[var(--doc-rule)] rounded-[3px] p-2.5 text-sm focus: focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime bg-[var(--doc-surface)]"
+                                className="w-full border border-gray-300 dark:border-gray-600 dark:text-white rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime bg-white dark:bg-gray-800"
                             >
                                 <option value="">
                                     {studentsLoading ? "학생 목록 로딩 중..." : "선택하세요"}
@@ -1565,51 +1560,51 @@ export default function FinanceClient({
                                 ))}
                             </select>
                             {studentsError && (
-                                <div className="mt-2 flex items-center justify-between gap-3 rounded-[3px] bg-[var(--doc-crit-soft)] px-3 py-2 text-sm text-[var(--doc-crit)]">
+                                <div className="mt-2 flex items-center justify-between gap-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-950/30 dark:text-red-200">
                                     <span>{studentsError}</span>
                                     <button
                                         type="button"
                                         onClick={() => void loadStudents()}
-                                        className="shrink-0 rounded-[3px] border border-[var(--doc-crit)] px-2 py-1 text-xs font-medium text-[var(--doc-crit)] hover:bg-[var(--doc-crit-soft)]"
+                                        className="shrink-0 rounded-md border border-red-200 px-2 py-1 text-xs font-medium text-red-700 hover:bg-red-100 dark:border-red-800 dark:text-red-200 dark:hover:bg-red-900/40"
                                     >
                                         다시 시도
                                     </button>
                                 </div>
                             )}
                             {!studentsLoading && !studentsError && students.length === 0 && (
-                                <p className="mt-2 text-sm text-[var(--doc-ink-2)]">
+                                <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
                                     등록된 학생이 없습니다.
                                 </p>
                             )}
                         </div>
                         <div>
-                            <label className="block text-sm font-bold text-[var(--doc-ink-2)] mb-1">금액 (원) *</label>
+                            <label className="block text-sm font-bold text-gray-700 dark:text-gray-200 mb-1">금액 (원) *</label>
                             <input
                                 type="number"
                                 value={amount || ""}
                                 onChange={(e) => setAmount(parseInt(e.target.value) || 0)}
                                 required
                                 placeholder="100000"
-                                className="w-full border border-[var(--doc-rule)] rounded-[3px] p-2.5 text-sm focus: focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime"
+                                className="w-full border border-gray-300 dark:border-gray-600 dark:text-white dark:bg-gray-800 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime"
                             />
                         </div>
                         <div>
-                            <label className="block text-sm font-bold text-[var(--doc-ink-2)] mb-1">납부 기한 *</label>
+                            <label className="block text-sm font-bold text-gray-700 dark:text-gray-200 mb-1">납부 기한 *</label>
                             <input
                                 type="date"
                                 min="2020-01-01" max="2030-12-31"
                                 value={dueDate}
                                 onChange={(e) => setDueDate(e.target.value)}
                                 required
-                                className="w-full border border-[var(--doc-rule)] rounded-[3px] p-2.5 text-sm focus: focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime"
+                                className="w-full border border-gray-300 dark:border-gray-600 dark:text-white dark:bg-gray-800 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime"
                             />
                         </div>
                         <div>
-                            <label className="block text-sm font-bold text-[var(--doc-ink-2)] mb-1">유형</label>
+                            <label className="block text-sm font-bold text-gray-700 dark:text-gray-200 mb-1">유형</label>
                             <select
                                 value={paymentType}
                                 onChange={(e) => setPaymentType(e.target.value)}
-                                className="w-full border border-[var(--doc-rule)] rounded-[3px] p-2.5 text-sm focus: focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime bg-[var(--doc-surface)]"
+                                className="w-full border border-gray-300 dark:border-gray-600 dark:text-white rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime bg-white dark:bg-gray-800"
                             >
                                 <option value="MONTHLY">월 수강료</option>
                                 <option value="SHUTTLE">셔틀</option>
@@ -1619,11 +1614,11 @@ export default function FinanceClient({
                         </div>
                         {canManageCriticalFinance ? (
                             <div>
-                                <label className="block text-sm font-bold text-[var(--doc-ink-2)] mb-1">상태</label>
+                                <label className="block text-sm font-bold text-gray-700 dark:text-gray-200 mb-1">상태</label>
                                 <select
                                     value={status}
                                     onChange={(e) => setStatus(e.target.value)}
-                                    className="w-full border border-[var(--doc-rule)] rounded-[3px] p-2.5 text-sm focus: focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime bg-[var(--doc-surface)]"
+                                    className="w-full border border-gray-300 dark:border-gray-600 dark:text-white rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime bg-white dark:bg-gray-800"
                                 >
                                     <option value="PENDING">미납</option>
                                     <option value="PAID">납부완료</option>
@@ -1631,24 +1626,24 @@ export default function FinanceClient({
                                 </select>
                             </div>
                         ) : (
-                            <div className="rounded-[3px] bg-[var(--doc-grid-head)] p-3 text-sm font-bold text-[var(--doc-ink-2)]">
+                            <div className="rounded-lg bg-gray-50 p-3 text-sm font-bold text-gray-600 dark:bg-gray-900 dark:text-gray-300">
                                 신규 수납은 미납 상태로 등록됩니다.
                             </div>
                         )}
                         <div>
-                            <label className="block text-sm font-bold text-[var(--doc-ink-2)] mb-1">설명 (선택)</label>
+                            <label className="block text-sm font-bold text-gray-700 dark:text-gray-200 mb-1">설명 (선택)</label>
                             <input
                                 type="text"
                                 value={description}
                                 onChange={(e) => setDescription(e.target.value)}
                                 placeholder="예: 4월 수강료"
-                                className="w-full border border-[var(--doc-rule)] rounded-[3px] p-2.5 text-sm focus: focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime"
+                                className="w-full border border-gray-300 dark:border-gray-600 dark:text-white dark:bg-gray-800 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime"
                             />
                         </div>
                     </div>
                     <div className="flex gap-2 justify-end">
-                        <button type="button" onClick={() => setShowForm(false)} className="px-4 py-2 text-sm text-[var(--doc-ink-2)]">취소</button>
-                        <button type="submit" disabled={busy} className="bg-[var(--doc-accent)] text-white px-6 py-2 rounded-[3px] font-bold hover:bg-[var(--doc-grid-head)] transition disabled:opacity-50">
+                        <button type="button" onClick={() => setShowForm(false)} className="px-4 py-2 text-sm text-gray-600 dark:text-gray-300">취소</button>
+                        <button type="submit" disabled={busy} className="bg-brand-orange-500 dark:bg-brand-neon-lime dark:text-brand-navy-900 text-white px-6 py-2 rounded-lg font-bold hover:bg-orange-600 transition disabled:opacity-50">
                             {busy ? "저장 중..." : "추가"}
                         </button>
                     </div>
@@ -1657,14 +1652,14 @@ export default function FinanceClient({
 
             {/* 수납 목록 테이블 */}
             {payments.length === 0 ? (
-                <div className="bg-[var(--doc-surface)] rounded-[3px] border border-[var(--doc-rule)] p-12 text-center text-[var(--doc-ink-3)]">
+                <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-12 text-center text-gray-400">
                     {year}년 {month}월 수납 기록이 없습니다.
                 </div>
             ) : (
-                <div className="bg-[var(--doc-surface)] rounded-[3px] border border-[var(--doc-rule)] overflow-hidden">
+                <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden shadow-sm">
                     <div className="overflow-x-auto">
-                        <table className="min-w-full divide-y divide-[var(--doc-rule)]">
-                            <thead className="bg-[var(--doc-grid-head)]">
+                        <table className="min-w-full divide-y divide-gray-200">
+                            <thead className="bg-gray-50 dark:bg-gray-900">
                                 <tr>
                                     {canManageCriticalFinance && (
                                         <th className="px-3 py-3 text-center">
@@ -1672,20 +1667,20 @@ export default function FinanceClient({
                                                 type="checkbox"
                                                 checked={selectedIds.size === payments.length && payments.length > 0}
                                                 onChange={toggleSelectAll}
-                                                className="rounded border-[var(--doc-rule)]"
+                                                className="rounded border-gray-300"
                                             />
                                         </th>
                                     )}
-                                    <th className="px-4 py-3 text-left text-xs font-medium text-[var(--doc-ink-2)] uppercase">원생</th>
-                                    <th className="px-4 py-3 text-left text-xs font-medium text-[var(--doc-ink-2)] uppercase">유형</th>
-                                    <th className="px-4 py-3 text-left text-xs font-medium text-[var(--doc-ink-2)] uppercase">금액</th>
-                                    <th className="px-4 py-3 text-left text-xs font-medium text-[var(--doc-ink-2)] uppercase">납부기한</th>
-                                    <th className="px-4 py-3 text-left text-xs font-medium text-[var(--doc-ink-2)] uppercase">납부일</th>
-                                    <th className="px-4 py-3 text-left text-xs font-medium text-[var(--doc-ink-2)] uppercase">상태</th>
-                                    <th className="px-4 py-3 text-right text-xs font-medium text-[var(--doc-ink-2)] uppercase">관리</th>
+                                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">원생</th>
+                                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">유형</th>
+                                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">금액</th>
+                                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">납부기한</th>
+                                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">납부일</th>
+                                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">상태</th>
+                                    <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">관리</th>
                                 </tr>
                             </thead>
-                            <tbody className="divide-y divide-[var(--doc-rule)]">
+                            <tbody className="divide-y divide-gray-100">
                                 {payments.map((p) => {
                                     const statusInfo = STATUS_LABELS[p.status] || STATUS_LABELS.PENDING;
                                     const invoiceHref = getInvoiceHref(p);
@@ -1766,29 +1761,29 @@ export default function FinanceClient({
                                     ];
 
                                     return (
-                                        <tr key={p.id} className={`hover:bg-[var(--doc-grid-head)] transition-colors ${selectedIds.has(p.id) ? "bg-[var(--doc-grid-head)]" : ""}`}>
+                                        <tr key={p.id} className={`hover:bg-gray-50 dark:bg-gray-900 transition-colors ${selectedIds.has(p.id) ? "bg-blue-50" : ""}`}>
                                             {canManageCriticalFinance && (
                                                 <td className="px-3 py-3.5 text-center">
                                                     <input
                                                         type="checkbox"
                                                         checked={selectedIds.has(p.id)}
                                                         onChange={() => toggleSelect(p.id)}
-                                                        className="rounded border-[var(--doc-rule)]"
+                                                        className="rounded border-gray-300"
                                                     />
                                                 </td>
                                             )}
                                             <td className="px-4 py-3.5">
-                                                <span className="font-medium text-[var(--doc-ink)]">{p.studentName}</span>
+                                                <span className="font-medium text-gray-900 dark:text-white">{p.studentName}</span>
                                             </td>
-                                            <td className="px-4 py-3.5 text-sm text-[var(--doc-ink-2)]">
+                                            <td className="px-4 py-3.5 text-sm text-gray-600 dark:text-gray-300">
                                                 {TYPE_LABELS[p.type] || p.type}
                                                 {(p.method || p.paidProvider) && (
-                                                    <p className="mt-1 text-[11px] text-[var(--doc-ink-3)]">
+                                                    <p className="mt-1 text-[11px] text-gray-400">
                                                         {[p.method ? (METHOD_LABELS[p.method] ?? p.method) : null, p.paidProvider ? (PROVIDER_LABELS[p.paidProvider] ?? null) : null].filter(Boolean).join(" · ")}
                                                     </p>
                                                 )}
                                                 {p.providerOrderId && (
-                                                    <p className="mt-1 text-[11px] font-bold text-[var(--doc-ink-2)]">
+                                                    <p className="mt-1 text-[11px] font-bold text-gray-500 dark:text-gray-300">
                                                         승인번호 {p.providerOrderId}
                                                     </p>
                                                 )}
@@ -1797,26 +1792,26 @@ export default function FinanceClient({
                                                         href={p.receiptUrl}
                                                         target="_blank"
                                                         rel="noreferrer"
-                                                        className="mt-1 inline-flex text-[11px] font-bold text-[var(--doc-ink-2)] hover:text-[var(--doc-ink-2)]"
+                                                        className="mt-1 inline-flex text-[11px] font-bold text-blue-600 hover:text-blue-800 dark:text-brand-neon-lime"
                                                     >
                                                         영수증
                                                     </a>
                                                 )}
                                             </td>
-                                            <td className="px-4 py-3.5 text-sm text-[var(--doc-ink-2)] font-mono">{formatAmount(p.amount)}</td>
-                                            <td className="px-4 py-3.5 text-sm text-[var(--doc-ink-2)]">{toDateStr(p.dueDate)}</td>
-                                            <td className="px-4 py-3.5 text-sm text-[var(--doc-ink-2)]">{toDateStr(p.paidDate)}</td>
+                                            <td className="px-4 py-3.5 text-sm text-gray-700 dark:text-gray-200 font-mono">{formatAmount(p.amount)}</td>
+                                            <td className="px-4 py-3.5 text-sm text-gray-600 dark:text-gray-300">{toDateStr(p.dueDate)}</td>
+                                            <td className="px-4 py-3.5 text-sm text-gray-600 dark:text-gray-300">{toDateStr(p.paidDate)}</td>
                                             <td className="px-4 py-3.5">
-                                                <span className={`text-xs font-bold px-2 py-1 rounded-[3px] ${statusInfo.color}`}>
+                                                <span className={`text-xs font-bold px-2 py-1 rounded-full ${statusInfo.color}`}>
                                                     {statusInfo.label}
                                                 </span>
                                                 {p.notifiedAt && (
-                                                    <span className="text-[10px] text-[var(--doc-ink-3)] block mt-0.5">
+                                                    <span className="text-[10px] text-gray-400 block mt-0.5">
                                                         알림 {toDateStr(p.notifiedAt)}
                                                     </span>
                                                 )}
                                                 {Boolean(p.reminderCount) && (
-                                                    <span className="text-[10px] text-[var(--doc-ink-3)] block mt-0.5">
+                                                    <span className="text-[10px] text-gray-400 block mt-0.5">
                                                         알림 {p.reminderCount}회
                                                     </span>
                                                 )}
@@ -1828,7 +1823,7 @@ export default function FinanceClient({
                                                         actions={rowActions}
                                                     />
                                                 ) : (
-                                                    <span className="text-xs font-bold text-[var(--doc-ink-3)]">-</span>
+                                                    <span className="text-xs font-bold text-gray-400">-</span>
                                                 )}
                                             </td>
                                         </tr>
@@ -1839,16 +1834,6 @@ export default function FinanceClient({
                     </div>
                 </div>
             )}
-
-            <DocStamp
-                notes={[
-                    `대상 기간 · ${year}.${String(month).padStart(2, "0")}`,
-                    summary.unpaidCount > 0
-                        ? `미납 ${summary.unpaidCount}건 · ${formatAmount(summary.unpaidAmount)} 남아 있습니다.`
-                        : "미납 없이 전액 수납되었습니다.",
-                ]}
-            />
-            <DocFoot issued={issuedAt()} />
         </div>
     );
 }

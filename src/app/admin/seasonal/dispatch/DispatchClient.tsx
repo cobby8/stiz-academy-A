@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import RouteSection from "@/components/seasonal/RouteSection";
-import { DocHead, DocButton, DocNotice, DocFoot, issuedAt } from "@/components/doc";
 import { firstDateOfSameWeekday, weekdayOptions } from "@/lib/seasonal/weekday";
 import type { DispatchSuggestion } from "@/lib/seasonal/shuttle-optimize";
 
@@ -39,51 +38,41 @@ export default function DispatchClient({ initialPickup, initialDropoff }: { init
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-4">
-      <DocHead
-        title="《방학특강 셔틀 배차 명세》"
-        period={activeWeekdayLabel ? `${activeWeekdayLabel} 노선` : ""}
-      />
-      <div className="mt-4">
+      <div className="rounded-2xl border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-800">
+        <h3 className="text-base font-black text-gray-900 dark:text-white">셔틀 배차 · 하루 타임라인</h3>
         {/* 조작 설명(요일 탭·드래그·기사 링크)은 화면에서 바로 보이므로 뺐다.
             "요일당 한 번만" 문장은 데이터 모델 설명(요일 단위 저장)이라 반드시 남긴다. */}
-        <p className="m-0 text-[12.5px]" style={{ color: "var(--doc-ink-2)" }}>
+        <p className="mt-0.5 text-[12.5px] text-gray-500 dark:text-gray-400">
           같은 요일은 같은 학생이 오므로 <b>요일당 한 번만</b> 짜서 저장하면 모든 같은 요일에 적용됩니다.
         </p>
 
         {/* 요일 탭 — 노선 관리 단위 */}
-        <div className="no-print mt-3 flex flex-wrap items-center gap-5" style={{ borderBottom: "1px solid var(--doc-rule)" }}>
-          {weekdays.length === 0 && <span className="py-2.5 text-[12.5px]" style={{ color: "var(--doc-ink-3)" }}>운행 요일이 없습니다.</span>}
-          {weekdays.map((w) => {
-            const on = date === w.canonicalDate;
-            return (
-              <button key={w.weekday} onClick={() => setDate(w.canonicalDate)}
-                className="py-2.5 text-[12.5px] transition-colors"
-                style={{
-                  fontWeight: on ? 600 : 500,
-                  color: on ? "var(--doc-accent)" : "var(--doc-ink-3)",
-                  borderBottom: `2px solid ${on ? "var(--doc-accent)" : "transparent"}`,
-                }}>
-                {w.label}
-              </button>
-            );
-          })}
+        <div className="mt-3 flex flex-wrap items-center gap-1 rounded-xl bg-gray-100 p-1 dark:bg-gray-900">
+          {weekdays.length === 0 && <span className="px-2 py-1 text-sm font-bold text-gray-400">운행 요일이 없습니다.</span>}
+          {weekdays.map((w) => (
+            <button key={w.weekday} onClick={() => setDate(w.canonicalDate)}
+              className={`min-h-9 rounded-lg px-4 text-sm font-black ${date === w.canonicalDate ? "bg-white text-brand-navy-900 shadow dark:bg-gray-700 dark:text-white" : "text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"}`}>
+              {w.label}
+            </button>
+          ))}
         </div>
 
         {/* 기사님 링크 — 하나만 전달하면 매일 '오늘 운행'이 자동으로 뜬다(날짜별 생성 불필요). */}
-        <div className="no-print mt-3 flex flex-wrap items-center gap-2">
+        <div className="mt-2 flex flex-wrap items-center gap-2">
           {/* 링크 설명문 제거 — 버튼 라벨과 복사 성공 토스트("매일 열면 오늘 운행")로 이미 두 번 안내된다 */}
-          <DocButton onClick={copyRollingLink}>기사 운행 링크 복사</DocButton>
+          <button onClick={copyRollingLink} className="rounded-xl bg-brand-navy-900 px-4 py-2.5 text-sm font-black text-white dark:bg-brand-neon-lime dark:text-brand-navy-900">🚌 기사님 운행 링크 복사</button>
         </div>
 
-        {err && <div className="mt-3"><DocNotice tone="error">{err}</DocNotice></div>}
-        {msg && <div className="mt-2"><DocNotice tone="ok">{msg}</DocNotice></div>}
+        {err && <p className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-xs font-bold text-red-600">⚠ {err}</p>}
+        {msg && <p className="mt-2 rounded-lg bg-green-50 px-3 py-2 text-xs font-bold text-green-700 dark:bg-green-900/30 dark:text-green-200">✓ {msg}</p>}
+
+        <p className="mt-3 text-[12.5px] font-black text-gray-700 dark:text-gray-200">📅 {activeWeekdayLabel || "-"} 노선</p>
 
         {/* 하루 타임라인: 등원 → 하원 */}
         <div className="mt-2 space-y-3">
           <RouteSection initial={initialPickup} date={date} refreshKey={refreshKey} />
           <RouteSection initial={initialDropoff} date={date} refreshKey={refreshKey} />
         </div>
-        <DocFoot issued={issuedAt()} />
       </div>
     </div>
   );

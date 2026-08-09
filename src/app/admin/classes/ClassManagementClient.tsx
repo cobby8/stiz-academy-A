@@ -47,17 +47,17 @@ function ClassesLoadingFallback() {
         <div className="space-y-8">
             <div className="flex items-center justify-between">
                 <div className="space-y-2">
-                    <div className="h-8 w-40 rounded bg-[var(--doc-grid-head)]" />
-                    <div className="h-4 w-80 rounded bg-[var(--doc-grid-head)]" />
+                    <div className="h-8 w-40 rounded bg-gray-200 dark:bg-gray-700 animate-pulse" />
+                    <div className="h-4 w-80 rounded bg-gray-100 dark:bg-gray-800 animate-pulse" />
                 </div>
-                <div className="h-10 w-24 rounded-[3px] bg-[var(--doc-grid-head)]" />
+                <div className="h-10 w-24 rounded-lg bg-gray-200 dark:bg-gray-700 animate-pulse" />
             </div>
-            <div className="overflow-hidden rounded-[3px] border border-[var(--doc-rule)] bg-[var(--doc-surface)]">
-                <div className="h-16 border-b border-[var(--doc-rule)] bg-[var(--doc-grid-head)]" />
+            <div className="overflow-hidden rounded-xl border border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-800">
+                <div className="h-16 border-b border-gray-100 bg-gray-50 dark:border-gray-800 dark:bg-gray-900/50 animate-pulse" />
                 {Array.from({ length: 7 }).map((_, index) => (
                     <div
                         key={index}
-                        className="h-16 border-b border-[var(--doc-rule)] bg-[var(--doc-surface)] last:border-b-0"
+                        className="h-16 border-b border-gray-100 bg-white last:border-b-0 dark:border-gray-700 dark:bg-gray-800 animate-pulse"
                     />
                 ))}
             </div>
@@ -67,13 +67,13 @@ function ClassesLoadingFallback() {
 
 function ClassesErrorState({ onRetry }: { onRetry: () => void }) {
     return (
-        <div className="rounded-[6px] border border-[var(--doc-crit)] bg-[var(--doc-surface)] p-8 text-center">
-            <span className="material-symbols-outlined mb-3 text-4xl text-[var(--doc-crit)]">error</span>
-            <p className="font-bold text-[var(--doc-ink)]">반 목록을 불러오지 못했습니다.</p>
+        <div className="rounded-2xl border border-red-100 bg-white p-8 text-center shadow-sm dark:border-red-900/40 dark:bg-gray-800">
+            <span className="material-symbols-outlined mb-3 text-4xl text-red-500">error</span>
+            <p className="font-bold text-gray-900 dark:text-white">반 목록을 불러오지 못했습니다.</p>
             <button
                 type="button"
                 onClick={onRetry}
-                className="mt-4 rounded-[3px] bg-[var(--doc-accent)] px-4 py-2 text-sm font-bold text-white transition hover:bg-[var(--doc-grid-head)] dark:text-[var(--doc-ink)]"
+                className="mt-4 rounded-xl bg-brand-orange-500 px-4 py-2 text-sm font-bold text-white transition hover:bg-orange-600 dark:bg-brand-neon-lime dark:text-brand-navy-900"
             >
                 다시 시도
             </button>
@@ -157,18 +157,18 @@ export default function ClassManagementClient({
         <div className="space-y-8">
             <div className="flex justify-between items-center">
                 <div>
-                    <h1 className="text-2xl font-bold text-[var(--doc-ink)]">클래스(반) 관리</h1>
+                    <h1 className="text-2xl font-bold text-gray-900 dark:text-white">클래스(반) 관리</h1>
                 </div>
                 <button
                     onClick={() => { setEditingClass(null); setShowForm(true); }}
-                    className="bg-[var(--doc-accent)] dark:text-[var(--doc-ink)] text-white px-4 py-2 rounded-[3px] font-bold hover:bg-[var(--doc-grid-head)] transition"
+                    className="bg-brand-orange-500 dark:bg-brand-neon-lime dark:text-brand-navy-900 text-white px-4 py-2 rounded-lg font-bold hover:bg-orange-600 transition"
                 >
                     + 반 개설
                 </button>
             </div>
 
             {programs.length === 0 && (
-                <div className="text-[var(--doc-warn)] bg-[var(--doc-grid-head)] p-4 rounded-[3px]">
+                <div className="text-amber-600 bg-amber-50 p-4 rounded-md">
                     먼저 [프로그램 관리] 메뉴에서 프로그램을 하나 이상 등록해야 반을 개설할 수 있습니다.
                 </div>
             )}
@@ -187,49 +187,49 @@ export default function ClassManagementClient({
             )}
 
             {/* Class List */}
-            <div className="bg-[var(--doc-surface)] rounded-[3px] border border-[var(--doc-rule)] overflow-hidden">
-                <h2 className="text-lg font-bold text-[var(--doc-ink)] p-6 border-b border-[var(--doc-rule)] bg-[var(--doc-grid-head)]">
+            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
+                <h2 className="text-lg font-bold text-gray-900 dark:text-white p-6 border-b border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-900/50">
                     개설된 전체 시간표 ({classes.length}개)
                 </h2>
                 <div className="overflow-x-auto">
-                    <table className="min-w-full divide-y divide-[var(--doc-rule)]">
-                        <thead className="bg-[var(--doc-grid-head)]">
+                    <table className="min-w-full divide-y divide-gray-200">
+                        <thead className="bg-gray-50 dark:bg-gray-900">
                             <tr>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-[var(--doc-ink-2)] uppercase tracking-wider">요일/시간</th>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-[var(--doc-ink-2)] uppercase tracking-wider">반 이름</th>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-[var(--doc-ink-2)] uppercase tracking-wider">참조 프로그램</th>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-[var(--doc-ink-2)] uppercase tracking-wider">장소/정원</th>
-                                <th className="px-6 py-3 text-right text-xs font-medium text-[var(--doc-ink-2)] uppercase tracking-wider">관리</th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">요일/시간</th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">반 이름</th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">참조 프로그램</th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">장소/정원</th>
+                                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">관리</th>
                             </tr>
                         </thead>
-                        <tbody className="bg-[var(--doc-surface)] divide-y divide-[var(--doc-rule)]">
+                        <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200">
                             {classes.length === 0 && (
                                 <tr>
-                                    <td colSpan={5} className="px-6 py-8 text-center text-[var(--doc-ink-2)]">개설된 반이 없습니다.</td>
+                                    <td colSpan={5} className="px-6 py-8 text-center text-gray-500 dark:text-gray-400">개설된 반이 없습니다.</td>
                                 </tr>
                             )}
                             {classes.map((cls) => (
-                                <tr key={cls.id} className="hover:bg-[var(--doc-grid-head)] transition">
+                                <tr key={cls.id} className="hover:bg-gray-50 dark:bg-gray-900 transition">
                                     <td className="px-6 py-4 whitespace-nowrap">
-                                        <div className="text-sm font-bold text-[var(--doc-accent)]">
+                                        <div className="text-sm font-bold text-brand-orange-500 dark:text-brand-neon-lime">
                                             {DAYS.find(d => d.value === cls.dayOfWeek)?.label || cls.dayOfWeek}
                                         </div>
-                                        <div className="text-sm text-[var(--doc-ink-2)]">{cls.startTime || "-"} ~ {cls.endTime || "-"}</div>
+                                        <div className="text-sm text-gray-500 dark:text-gray-400">{cls.startTime || "-"} ~ {cls.endTime || "-"}</div>
                                     </td>
                                     <td className="px-6 py-4 whitespace-nowrap">
                                         {/* 반 이름 클릭 시 클래스 상세 페이지로 이동 */}
                                         <Link
                                             href={`/admin/classes/${cls.id}`}
                                             prefetch={false}
-                                            className="text-sm font-medium text-[var(--doc-ink-2)] hover:text-[var(--doc-ink-2)] hover:underline"
+                                            className="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline"
                                         >
                                             {cls.name}
                                         </Link>
                                     </td>
                                     <td className="px-6 py-4 whitespace-nowrap">
-                                        <div className="text-sm text-[var(--doc-ink-2)]">{cls.program?.name || "-"}</div>
+                                        <div className="text-sm text-gray-500 dark:text-gray-400">{cls.program?.name || "-"}</div>
                                     </td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-[var(--doc-ink-2)]">
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
                                         <div>{cls.location || "미지정"}</div>
                                         <div>정원: {cls.capacity}명</div>
                                     </td>

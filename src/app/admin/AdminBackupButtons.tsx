@@ -114,24 +114,24 @@ export default function AdminBackupButtons() {
                 type="button"
                 onClick={handleSyncSchedule}
                 disabled={busy}
-                className={`flex w-full items-center gap-3 rounded-[3px] px-4 py-3 text-left transition-colors ${
- busy ? "opacity-50" : "text-[var(--doc-ink-3)] hover:bg-[var(--doc-surface)]/10 hover:text-white"
- }`}
+                className={`flex w-full items-center gap-3 rounded-lg px-4 py-3 text-left transition-colors ${
+                    busy ? "opacity-50" : "text-gray-300 hover:bg-white/10 hover:text-white"
+                }`}
             >
                 <span className="text-xl">🔄</span>
                 <span>시트 동기화</span>
             </button>
             <a
                 href="/api/admin/backup"
-                className="flex w-full items-center gap-3 rounded-[3px] px-4 py-3 text-[var(--doc-ink-3)] transition-colors hover:bg-[var(--doc-surface)]/10 hover:text-white"
+                className="flex w-full items-center gap-3 rounded-lg px-4 py-3 text-gray-300 transition-colors hover:bg-white/10 hover:text-white"
             >
                 <span className="text-xl">💾</span>
                 <span>백업 다운로드</span>
             </a>
             <label
-                className={`flex w-full cursor-pointer items-center gap-3 rounded-[3px] px-4 py-3 transition-colors ${
- busy ? "opacity-50" : "text-[var(--doc-ink-3)] hover:bg-[var(--doc-surface)]/10 hover:text-white"
- }`}
+                className={`flex w-full cursor-pointer items-center gap-3 rounded-lg px-4 py-3 transition-colors ${
+                    busy ? "opacity-50" : "text-gray-300 hover:bg-white/10 hover:text-white"
+                }`}
             >
                 <span className="text-xl">📂</span>
                 <span>{busy ? "처리 중..." : "파일로 복원"}</span>
@@ -141,9 +141,9 @@ export default function AdminBackupButtons() {
                 type="button"
                 onClick={handleCloudRestore}
                 disabled={busy}
-                className={`flex w-full items-center gap-3 rounded-[3px] px-4 py-3 text-left transition-colors ${
- busy ? "opacity-50" : "text-[var(--doc-ink-3)] hover:bg-[var(--doc-surface)]/10 hover:text-white"
- }`}
+                className={`flex w-full items-center gap-3 rounded-lg px-4 py-3 text-left transition-colors ${
+                    busy ? "opacity-50" : "text-gray-300 hover:bg-white/10 hover:text-white"
+                }`}
             >
                 <span className="text-xl">☁️</span>
                 <span>최신 자동백업 복원</span>
@@ -152,9 +152,9 @@ export default function AdminBackupButtons() {
                 type="button"
                 onClick={handleBackupNow}
                 disabled={busy}
-                className={`flex w-full items-center gap-3 rounded-[3px] px-4 py-3 text-left transition-colors ${
- busy ? "opacity-50" : "text-[var(--doc-ink-3)] hover:bg-[var(--doc-surface)]/10 hover:text-white"
- }`}
+                className={`flex w-full items-center gap-3 rounded-lg px-4 py-3 text-left transition-colors ${
+                    busy ? "opacity-50" : "text-gray-300 hover:bg-white/10 hover:text-white"
+                }`}
             >
                 <span className="text-xl">☁️</span>
                 <span>지금 클라우드에 저장</span>
@@ -162,12 +162,12 @@ export default function AdminBackupButtons() {
             <a
                 href="/api/admin/export-seed"
                 download="seed-data.ts"
-                className="flex w-full items-center gap-3 rounded-[3px] px-4 py-3 text-[var(--doc-ink-3)] transition-colors hover:bg-[var(--doc-surface)]/10 hover:text-white"
+                className="flex w-full items-center gap-3 rounded-lg px-4 py-3 text-gray-300 transition-colors hover:bg-white/10 hover:text-white"
             >
                 <span className="text-xl">📦</span>
                 <span>seed 내보내기</span>
             </a>
-            {msg && <p className={`break-all px-4 py-1 text-xs ${ok ? "text-[var(--doc-accent)]" : "text-[var(--doc-warn)]"}`}>{msg}</p>}
+            {msg && <p className={`break-all px-4 py-1 text-xs ${ok ? "text-green-400" : "text-yellow-400"}`}>{msg}</p>}
         </div>
     );
 }

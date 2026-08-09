@@ -72,9 +72,9 @@ const TABS: Array<{ id: CenterTab; label: string; icon: string }> = [
 ];
 
 const AUDIENCE_META: Record<Audience, { label: string; icon: string; className: string }> = {
-    INTERNAL: { label: "학원 내부", icon: "badge", className: "bg-[var(--doc-grid-head)] text-[var(--doc-ink-2)]  " },
-    EXTERNAL: { label: "학원 외부", icon: "family_restroom", className: "bg-[var(--doc-grid-head)] text-[var(--doc-warn)]  " },
-    SECURITY: { label: "인증·보안", icon: "shield_lock", className: "bg-[var(--doc-crit-soft)] text-[var(--doc-crit)]  " },
+    INTERNAL: { label: "학원 내부", icon: "badge", className: "bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-200" },
+    EXTERNAL: { label: "학원 외부", icon: "family_restroom", className: "bg-orange-50 text-orange-700 dark:bg-orange-950/40 dark:text-orange-200" },
+    SECURITY: { label: "인증·보안", icon: "shield_lock", className: "bg-red-50 text-red-700 dark:bg-red-950/40 dark:text-red-200" },
 };
 
 const CHANNEL_LABELS: Record<Channel, string> = {
@@ -100,23 +100,23 @@ export default function SmsClient({ coaches: initialCoaches }: { coaches?: Coach
             <header className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
                 <div>
                     {/* 영문 장식문구·설명문구 제거: 아래 4개 탭이 그대로 설명 역할 */}
-                    <h1 className="text-2xl font-bold text-[var(--doc-ink)]">메시지 관리</h1>
+                    <h1 className="text-2xl font-extrabold text-gray-900 dark:text-white">메시지 관리</h1>
                 </div>
                 <ChannelReadiness />
             </header>
 
-            <nav className="grid grid-cols-2 gap-2 rounded-[6px] border border-[var(--doc-rule)] bg-[var(--doc-surface)] p-2 sm:grid-cols-4" aria-label="메시지 관리 메뉴">
+            <nav className="grid grid-cols-2 gap-2 rounded-2xl border border-gray-200 bg-white p-2 shadow-sm dark:border-gray-700 dark:bg-gray-800 sm:grid-cols-4" aria-label="메시지 관리 메뉴">
                 {TABS.map(tab => (
                     <button
                         key={tab.id}
                         type="button"
                         onClick={() => setActiveTab(tab.id)}
                         aria-current={activeTab === tab.id ? "page" : undefined}
-                        className={`flex min-h-11 items-center justify-center gap-2 rounded-[3px] px-3 text-sm font-bold transition ${
- activeTab === tab.id
- ? "bg-[var(--doc-ink)] text-white "
- : "text-[var(--doc-ink-2)] hover:bg-[var(--doc-grid-head)] "
- }`}
+                        className={`flex min-h-11 items-center justify-center gap-2 rounded-xl px-3 text-sm font-bold transition ${
+                            activeTab === tab.id
+                                ? "bg-brand-navy-900 text-white shadow-sm"
+                                : "text-gray-600 hover:bg-gray-50 dark:text-gray-300 dark:hover:bg-gray-700"
+                        }`}
                     >
                         <span className="material-symbols-outlined text-[19px]">{tab.icon}</span>
                         {tab.label}
@@ -151,12 +151,12 @@ function ChannelReadiness() {
     }, []);
 
     const badge = (label: string, ready: boolean) => (
-        <span className={`inline-flex items-center gap-1.5 rounded-[3px] px-3 py-1.5 ${
- ready
- ? "bg-[var(--doc-accent-soft)] text-[var(--doc-accent)] "
- : "bg-[var(--doc-grid-head)] text-[var(--doc-ink-2)] "
- }`}>
-            <span className={`size-2 rounded-[3px] ${ready ? "bg-[var(--doc-accent)]" : "bg-[var(--doc-grid-head)]"}`} />
+        <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 ${
+            ready
+                ? "bg-green-50 text-green-700 dark:bg-green-950/40 dark:text-green-200"
+                : "bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-300"
+        }`}>
+            <span className={`size-2 rounded-full ${ready ? "bg-green-500" : "bg-gray-400"}`} />
             {label} {ready ? "연결됨" : "준비 필요"}
         </span>
     );
@@ -243,29 +243,29 @@ function AutomationPanel() {
                             key={audience}
                             type="button"
                             onClick={() => setFilter(audience)}
-                            className={`rounded-[6px] border p-4 text-left transition ${
- filter === audience
- ? "border-[var(--doc-accent)] bg-[var(--doc-surface)] "
- : "border-[var(--doc-rule)] bg-[var(--doc-surface)] hover:border-[var(--doc-rule)] "
- }`}
+                            className={`rounded-2xl border p-4 text-left transition ${
+                                filter === audience
+                                    ? "border-brand-orange-500 bg-white shadow-sm dark:border-brand-neon-lime dark:bg-gray-800"
+                                    : "border-gray-200 bg-white hover:border-gray-300 dark:border-gray-700 dark:bg-gray-800"
+                            }`}
                         >
-                            <span className={`material-symbols-outlined rounded-[3px] p-2 ${meta.className}`}>{meta.icon}</span>
-                            <strong className="mt-3 block text-[var(--doc-ink)]">{meta.label}</strong>
-                            <span className="text-xs text-[var(--doc-ink-2)]">자동 발송 {count}개</span>
+                            <span className={`material-symbols-outlined rounded-xl p-2 ${meta.className}`}>{meta.icon}</span>
+                            <strong className="mt-3 block text-gray-900 dark:text-white">{meta.label}</strong>
+                            <span className="text-xs text-gray-500 dark:text-gray-400">자동 발송 {count}개</span>
                         </button>
                     );
                 })}
             </div>
 
-            {notice && <p className="rounded-[3px] border border-[var(--doc-rule)] bg-[var(--doc-grid-head)] p-3 text-sm text-[var(--doc-ink-2)]">{notice}</p>}
+            {notice && <p className="rounded-xl border border-blue-200 bg-blue-50 p-3 text-sm text-blue-700 dark:border-blue-900 dark:bg-blue-950/30 dark:text-blue-200">{notice}</p>}
 
             <div className="space-y-3">
-                {loading && <p className="rounded-[6px] border border-[var(--doc-rule)] bg-[var(--doc-surface)] p-8 text-center text-sm text-[var(--doc-ink-2)]">자동 발송 설정을 불러오는 중입니다.</p>}
+                {loading && <p className="rounded-2xl border border-gray-200 bg-white p-8 text-center text-sm text-gray-500 dark:border-gray-700 dark:bg-gray-800">자동 발송 설정을 불러오는 중입니다.</p>}
                 {!loading && loadFailed && (
-                    <div className="rounded-[6px] border border-[var(--doc-crit)] bg-[var(--doc-crit-soft)] p-5 text-center">
-                        <span className="material-symbols-outlined text-3xl text-[var(--doc-crit)]">error</span>
-                        <p className="mt-2 text-sm font-bold text-[var(--doc-crit)]">실제 설정을 확인할 수 없습니다.</p>
-                        <button type="button" onClick={loadRules} className="mt-3 min-h-11 rounded-[3px] bg-[var(--doc-ink)] px-5 text-sm font-bold text-white">
+                    <div className="rounded-2xl border border-red-200 bg-red-50 p-5 text-center dark:border-red-900 dark:bg-red-950/30">
+                        <span className="material-symbols-outlined text-3xl text-red-500">error</span>
+                        <p className="mt-2 text-sm font-bold text-red-700 dark:text-red-200">실제 설정을 확인할 수 없습니다.</p>
+                        <button type="button" onClick={loadRules} className="mt-3 min-h-11 rounded-xl bg-brand-navy-900 px-5 text-sm font-bold text-white">
                             다시 불러오기
                         </button>
                     </div>
@@ -281,26 +281,26 @@ function AutomationPanel() {
 function AutomationCard({ rule, disabled, onUpdate }: { rule: AutomationRule; disabled: boolean; onUpdate: (patch: Partial<AutomationRule>) => void }) {
     const meta = AUDIENCE_META[rule.audience];
     return (
-        <article className="rounded-[6px] border border-[var(--doc-rule)] bg-[var(--doc-surface)] p-5">
+        <article className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-700 dark:bg-gray-800">
             <div className="flex flex-col gap-4 xl:flex-row xl:items-center">
                 <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
-                        <span className={`rounded-[3px] px-2.5 py-1 text-xs font-bold ${meta.className}`}>{meta.label}</span>
-                        {rule.locked && <span className="inline-flex items-center gap-1 rounded-[3px] bg-[var(--doc-grid-head)] px-2.5 py-1 text-xs font-bold text-[var(--doc-ink-2)]"><span className="material-symbols-outlined text-[14px]">lock</span>필수 발송</span>}
-                        {!rule.configured && <span className="rounded-[3px] bg-[var(--doc-grid-head)] px-2.5 py-1 text-xs font-bold text-[var(--doc-warn)]">채널 연결 필요</span>}
+                        <span className={`rounded-full px-2.5 py-1 text-xs font-bold ${meta.className}`}>{meta.label}</span>
+                        {rule.locked && <span className="inline-flex items-center gap-1 rounded-full bg-gray-100 px-2.5 py-1 text-xs font-bold text-gray-600 dark:bg-gray-700 dark:text-gray-200"><span className="material-symbols-outlined text-[14px]">lock</span>필수 발송</span>}
+                        {!rule.configured && <span className="rounded-full bg-amber-50 px-2.5 py-1 text-xs font-bold text-amber-700 dark:bg-amber-950/30 dark:text-amber-200">채널 연결 필요</span>}
                     </div>
-                    <h2 className="mt-2 font-bold text-[var(--doc-ink)]">{rule.name}</h2>
-                    <p className="mt-1 text-sm text-[var(--doc-ink-2)]">{rule.description}</p>
+                    <h2 className="mt-2 font-extrabold text-gray-900 dark:text-white">{rule.name}</h2>
+                    <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">{rule.description}</p>
                 </div>
 
                 <div className="grid gap-3 sm:grid-cols-3 xl:w-[520px]">
-                    <label className="text-xs font-bold text-[var(--doc-ink-2)]">
+                    <label className="text-xs font-bold text-gray-500 dark:text-gray-400">
                         우선 채널
                         <select
                             value={rule.primaryChannel}
                             disabled={disabled || rule.locked}
                             onChange={event => onUpdate({ primaryChannel: event.target.value as Channel })}
-                            className="mt-1 block min-h-11 w-full rounded-[3px] border border-[var(--doc-rule)] bg-[var(--doc-surface)] px-3 text-sm font-semibold text-[var(--doc-ink)] disabled:opacity-60"
+                            className="mt-1 block min-h-11 w-full rounded-xl border border-gray-200 bg-white px-3 text-sm font-semibold text-gray-800 disabled:opacity-60 dark:border-gray-600 dark:bg-gray-900 dark:text-white"
                         >
                             <option value="ALIMTALK">카카오 알림톡 · 13원</option>
                             <option value="SMS">SMS · 18원</option>
@@ -308,13 +308,13 @@ function AutomationCard({ rule, disabled, onUpdate }: { rule: AutomationRule; di
                             <option value="RCS">RCS · 13원~</option>
                         </select>
                     </label>
-                    <label className="text-xs font-bold text-[var(--doc-ink-2)]">
+                    <label className="text-xs font-bold text-gray-500 dark:text-gray-400">
                         실패 시 대체
                         <select
                             value={rule.fallbackChannel}
                             disabled={disabled || rule.locked}
                             onChange={event => onUpdate({ fallbackChannel: event.target.value as AutomationRule["fallbackChannel"] })}
-                            className="mt-1 block min-h-11 w-full rounded-[3px] border border-[var(--doc-rule)] bg-[var(--doc-surface)] px-3 text-sm font-semibold text-[var(--doc-ink)] disabled:opacity-60"
+                            className="mt-1 block min-h-11 w-full rounded-xl border border-gray-200 bg-white px-3 text-sm font-semibold text-gray-800 disabled:opacity-60 dark:border-gray-600 dark:bg-gray-900 dark:text-white"
                         >
                             <option value="NONE">대체 안 함</option>
                             <option value="SMS">SMS</option>
@@ -323,8 +323,8 @@ function AutomationCard({ rule, disabled, onUpdate }: { rule: AutomationRule; di
                     </label>
                     <div className="flex items-end justify-between gap-3">
                         <div className="pb-1">
-                            <span className="block text-xs font-bold text-[var(--doc-ink-2)]">예상 단가</span>
-                            <strong className="text-base text-[var(--doc-ink)]">{rule.estimatedUnitCost}원~/건</strong>
+                            <span className="block text-xs font-bold text-gray-500 dark:text-gray-400">예상 단가</span>
+                            <strong className="text-base text-gray-900 dark:text-white">{rule.estimatedUnitCost}원~/건</strong>
                         </div>
                         <button
                             type="button"
@@ -334,9 +334,9 @@ function AutomationCard({ rule, disabled, onUpdate }: { rule: AutomationRule; di
                             title={rule.locked ? "인증·보안 알림은 끌 수 없습니다." : undefined}
                             disabled={disabled || rule.locked}
                             onClick={() => onUpdate({ isActive: !rule.isActive })}
-                            className={`relative mb-1 h-7 w-12 rounded-[3px] transition disabled:cursor-not-allowed disabled:opacity-70 ${rule.isActive ? "bg-[var(--doc-accent)] " : "bg-[var(--doc-grid-head)] "}`}
+                            className={`relative mb-1 h-7 w-12 rounded-full transition disabled:cursor-not-allowed disabled:opacity-70 ${rule.isActive ? "bg-brand-orange-500 dark:bg-brand-neon-lime" : "bg-gray-300 dark:bg-gray-600"}`}
                         >
-                            <span className={`absolute top-1 size-5 rounded-[3px] bg-[var(--doc-surface)] transition ${rule.isActive ? "left-6" : "left-1"}`} />
+                            <span className={`absolute top-1 size-5 rounded-full bg-white shadow transition ${rule.isActive ? "left-6" : "left-1"}`} />
                         </button>
                     </div>
                 </div>
@@ -365,52 +365,52 @@ function HistoryPanel() {
     }, []);
 
     return (
-        <section className="overflow-hidden rounded-[6px] border border-[var(--doc-rule)] bg-[var(--doc-surface)]">
-            <div className="border-b border-[var(--doc-rule)] p-5">
-                <h2 className="font-bold text-[var(--doc-ink)]">최근 발송 이력</h2>
-                <p className="mt-1 text-sm text-[var(--doc-ink-2)]">전화번호는 개인정보 보호를 위해 일부만 표시합니다.</p>
+        <section className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800">
+            <div className="border-b border-gray-200 p-5 dark:border-gray-700">
+                <h2 className="font-extrabold text-gray-900 dark:text-white">최근 발송 이력</h2>
+                <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">전화번호는 개인정보 보호를 위해 일부만 표시합니다.</p>
             </div>
             {!loaded && !loading ? (
                 <div className="p-12 text-center">
-                    <span className="material-symbols-outlined text-4xl text-[var(--doc-ink-3)]">history</span>
-                    <p className="mt-2 font-bold text-[var(--doc-ink-2)]">발송 이력은 필요할 때만 불러옵니다.</p>
-                    <button type="button" onClick={loadHistory} className="mt-4 min-h-11 rounded-[3px] bg-[var(--doc-ink)] px-5 text-sm font-bold text-white">
+                    <span className="material-symbols-outlined text-4xl text-gray-300">history</span>
+                    <p className="mt-2 font-bold text-gray-700 dark:text-gray-200">발송 이력은 필요할 때만 불러옵니다.</p>
+                    <button type="button" onClick={loadHistory} className="mt-4 min-h-11 rounded-xl bg-brand-navy-900 px-5 text-sm font-bold text-white">
                         최근 50건 불러오기
                     </button>
                 </div>
             ) : loading ? (
-                <p className="p-10 text-center text-sm text-[var(--doc-ink-2)]">발송 이력을 불러오는 중입니다.</p>
+                <p className="p-10 text-center text-sm text-gray-500">발송 이력을 불러오는 중입니다.</p>
             ) : items.length === 0 ? (
                 <div className="p-12 text-center">
-                    <span className="material-symbols-outlined text-4xl text-[var(--doc-ink-3)]">history</span>
-                    <p className="mt-2 font-bold text-[var(--doc-ink-2)]">표시할 발송 이력이 없습니다.</p>
+                    <span className="material-symbols-outlined text-4xl text-gray-300">history</span>
+                    <p className="mt-2 font-bold text-gray-700 dark:text-gray-200">표시할 발송 이력이 없습니다.</p>
                     {/* 실제로는 조회가 정상 동작하고 단순히 0건인 상태이므로 사실에 맞게 표기 */}
-                    <p className="mt-1 text-sm text-[var(--doc-ink-2)]">문자를 발송하면 성공·실패 결과가 여기에 표시됩니다.</p>
+                    <p className="mt-1 text-sm text-gray-500">문자를 발송하면 성공·실패 결과가 여기에 표시됩니다.</p>
                 </div>
             ) : (
                 <div className="overflow-x-auto">
                     <table className="w-full min-w-[980px] text-left text-sm">
-                        <thead className="bg-[var(--doc-grid-head)] text-xs text-[var(--doc-ink-2)]">
+                        <thead className="bg-gray-50 text-xs text-gray-500 dark:bg-gray-900 dark:text-gray-400">
                             <tr><th className="px-5 py-3">발송 시각</th><th className="px-5 py-3">알림</th><th className="px-5 py-3">출처</th><th className="px-5 py-3">구분</th><th className="px-5 py-3">실제 채널</th><th className="px-5 py-3">수신자</th><th className="px-5 py-3">결과·사유</th></tr>
                         </thead>
-                        <tbody className="divide-y divide-[var(--doc-rule)]">
+                        <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
                             {items.map(item => (
                                 <tr key={item.id}>
-                                    <td className="px-5 py-4 text-[var(--doc-ink-2)]">{item.sentAt}</td>
-                                    <td className="px-5 py-4 font-bold text-[var(--doc-ink)]">{item.name}</td>
+                                    <td className="px-5 py-4 text-gray-500">{item.sentAt}</td>
+                                    <td className="px-5 py-4 font-bold text-gray-900 dark:text-white">{item.name}</td>
                                     <td className="px-5 py-4">{item.source === "MANUAL" ? "수동" : item.source === "SECURITY" ? "보안" : "자동"}</td>
                                     <td className="px-5 py-4">{AUDIENCE_META[item.audience]?.label ?? item.audience}</td>
                                     <td className="px-5 py-4">
                                         <span>{CHANNEL_LABELS[item.channel] ?? item.channel}</span>
                                         {item.requestedChannel && item.requestedChannel !== item.channel && (
-                                            <span className="mt-1 block text-xs text-[var(--doc-ink-3)]">
+                                            <span className="mt-1 block text-xs text-gray-400">
                                                 요청 {CHANNEL_LABELS[item.requestedChannel] ?? item.requestedChannel}
                                             </span>
                                         )}
-                                        {item.fallbackUsed && <span className="ml-1 rounded bg-[var(--doc-grid-head)] px-1.5 py-0.5 text-[11px] font-bold text-[var(--doc-warn)]">대체 발송</span>}
-                                        {item.provider && <span className="mt-1 block text-xs text-[var(--doc-ink-3)]">{item.provider}</span>}
+                                        {item.fallbackUsed && <span className="ml-1 rounded bg-amber-50 px-1.5 py-0.5 text-[11px] font-bold text-amber-700">대체 발송</span>}
+                                        {item.provider && <span className="mt-1 block text-xs text-gray-400">{item.provider}</span>}
                                         {item.unitCost !== null && item.unitCost !== undefined && (
-                                            <span className="mt-1 block text-xs text-[var(--doc-ink-3)]">
+                                            <span className="mt-1 block text-xs text-gray-400">
                                                 {item.unitCost.toLocaleString("ko-KR")} {item.currency === "KRW" ? "원" : item.currency}
                                             </span>
                                         )}
@@ -418,7 +418,7 @@ function HistoryPanel() {
                                     <td className="px-5 py-4">{item.recipient}</td>
                                     <td className="px-5 py-4">
                                         <DeliveryBadge status={item.status} />
-                                        {item.errorCode && <span className="mt-1 block text-xs text-[var(--doc-crit)]">{SMS_ERROR_LABEL[item.errorCode] ?? "발송 오류 — 솔라피 이력 확인 필요"}</span>}
+                                        {item.errorCode && <span className="mt-1 block text-xs text-red-600">{SMS_ERROR_LABEL[item.errorCode] ?? "발송 오류 — 솔라피 이력 확인 필요"}</span>}
                                     </td>
                                 </tr>
                             ))}
@@ -433,14 +433,14 @@ function HistoryPanel() {
 function DeliveryBadge({ status }: { status: DeliveryHistory["status"] }) {
     const labels = { SENT: "접수 완료", FAILED: "실패", PENDING: "대기", SENDING: "확인 중", UNCERTAIN: "확인 필요", SKIPPED: "미발송" };
     const colors = {
-        SENT: "bg-[var(--doc-accent-soft)] text-[var(--doc-accent)]",
-        FAILED: "bg-[var(--doc-crit-soft)] text-[var(--doc-crit)]",
-        PENDING: "bg-[var(--doc-grid-head)] text-[var(--doc-ink-2)]",
-        SENDING: "bg-[var(--doc-grid-head)] text-[var(--doc-warn)]",
-        UNCERTAIN: "bg-[var(--doc-grid-head)] text-[var(--doc-warn)]",
-        SKIPPED: "bg-[var(--doc-grid-head)] text-[var(--doc-ink-2)]",
+        SENT: "bg-green-50 text-green-700",
+        FAILED: "bg-red-50 text-red-700",
+        PENDING: "bg-blue-50 text-blue-700",
+        SENDING: "bg-amber-50 text-amber-700",
+        UNCERTAIN: "bg-amber-50 text-amber-700",
+        SKIPPED: "bg-gray-100 text-gray-600",
     };
-    return <span className={`rounded-[3px] px-2.5 py-1 text-xs font-bold ${colors[status]}`}>{labels[status]}</span>;
+    return <span className={`rounded-full px-2.5 py-1 text-xs font-bold ${colors[status]}`}>{labels[status]}</span>;
 }
 
 function ManualSendPanel({ initialCoaches }: { initialCoaches?: CoachPhone[] }) {
@@ -510,22 +510,22 @@ function ManualSendPanel({ initialCoaches }: { initialCoaches?: CoachPhone[] }) 
 
     return (
         <section className="grid gap-5 lg:grid-cols-[1fr_1.15fr]">
-            <div className="rounded-[6px] border border-[var(--doc-rule)] bg-[var(--doc-surface)] p-5">
-                <h2 className="font-bold text-[var(--doc-ink)]">수신자 선택</h2>
+            <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-700 dark:bg-gray-800">
+                <h2 className="font-extrabold text-gray-900 dark:text-white">수신자 선택</h2>
                 <div className="mt-4 grid grid-cols-3 gap-2">
                     {[
                         { id: "all" as const, label: "전체 직원" },
                         { id: "select" as const, label: "직원 선택" },
                         { id: "manual" as const, label: "직접 입력" },
                     ].map(option => (
-                        <button key={option.id} type="button" onClick={() => { setMode(option.id); resetRequest(); }} className={`min-h-11 rounded-[3px] px-2 text-sm font-bold ${mode === option.id ? "bg-[var(--doc-ink)] text-white" : "bg-[var(--doc-grid-head)] text-[var(--doc-ink-2)] "}`}>{option.label}</button>
+                        <button key={option.id} type="button" onClick={() => { setMode(option.id); resetRequest(); }} className={`min-h-11 rounded-xl px-2 text-sm font-bold ${mode === option.id ? "bg-brand-navy-900 text-white" : "bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-200"}`}>{option.label}</button>
                     ))}
                 </div>
-                {mode === "all" && <p className="mt-4 rounded-[3px] bg-[var(--doc-grid-head)] p-4 text-sm text-[var(--doc-ink-2)]">연락처가 등록된 직원 <strong>{coaches.length}명</strong>에게 발송합니다.</p>}
+                {mode === "all" && <p className="mt-4 rounded-xl bg-blue-50 p-4 text-sm text-blue-700 dark:bg-blue-950/30 dark:text-blue-200">연락처가 등록된 직원 <strong>{coaches.length}명</strong>에게 발송합니다.</p>}
                 {mode === "select" && (
                     <div className="mt-4 max-h-72 space-y-1 overflow-auto">
                         {coaches.map(coach => (
-                            <label key={coach.id} className="flex min-h-11 cursor-pointer items-center gap-3 rounded-[3px] px-3 hover:bg-[var(--doc-grid-head)]">
+                            <label key={coach.id} className="flex min-h-11 cursor-pointer items-center gap-3 rounded-xl px-3 hover:bg-gray-50 dark:hover:bg-gray-700">
                                 <input
                                     type="checkbox"
                                     checked={selectedIds.has(coach.id)}
@@ -537,40 +537,40 @@ function ManualSendPanel({ initialCoaches }: { initialCoaches?: CoachPhone[] }) 
                                     })}
                                     className="size-4"
                                 />
-                                <span className="font-bold text-[var(--doc-ink)]">{coach.name}</span>
-                                <span className="ml-auto text-xs text-[var(--doc-ink-2)]">{coach.role}</span>
+                                <span className="font-bold text-gray-800 dark:text-gray-100">{coach.name}</span>
+                                <span className="ml-auto text-xs text-gray-500">{coach.role}</span>
                             </label>
                         ))}
                     </div>
                 )}
-                {mode === "manual" && <textarea value={manualNumbers} onChange={event => { setManualNumbers(event.target.value); resetRequest(); }} rows={7} placeholder={"010-1234-5678\n010-9876-5432"} className="mt-4 w-full resize-none rounded-[3px] border border-[var(--doc-rule)] bg-[var(--doc-grid-head)] p-3 text-sm" />}
+                {mode === "manual" && <textarea value={manualNumbers} onChange={event => { setManualNumbers(event.target.value); resetRequest(); }} rows={7} placeholder={"010-1234-5678\n010-9876-5432"} className="mt-4 w-full resize-none rounded-xl border border-gray-200 bg-gray-50 p-3 text-sm dark:border-gray-600 dark:bg-gray-900 dark:text-white" />}
             </div>
 
-            <div className="rounded-[6px] border border-[var(--doc-rule)] bg-[var(--doc-surface)] p-5">
-                <h2 className="font-bold text-[var(--doc-ink)]">메시지 작성</h2>
-                <textarea value={message} onChange={event => { setMessage(event.target.value); resetRequest(); }} rows={9} maxLength={1000} placeholder="보낼 메시지를 입력하세요." className="mt-4 w-full resize-none rounded-[3px] border border-[var(--doc-rule)] bg-[var(--doc-grid-head)] p-3 text-sm" />
-                <div className="mt-2 flex justify-between text-xs text-[var(--doc-ink-2)]">
+            <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-700 dark:bg-gray-800">
+                <h2 className="font-extrabold text-gray-900 dark:text-white">메시지 작성</h2>
+                <textarea value={message} onChange={event => { setMessage(event.target.value); resetRequest(); }} rows={9} maxLength={1000} placeholder="보낼 메시지를 입력하세요." className="mt-4 w-full resize-none rounded-xl border border-gray-200 bg-gray-50 p-3 text-sm dark:border-gray-600 dark:bg-gray-900 dark:text-white" />
+                <div className="mt-2 flex justify-between text-xs text-gray-500">
                     <span>발송할 때 [STIZ]가 자동으로 붙습니다.</span>
                     <strong>{bytes}바이트 · {bytes > 90 ? "LMS" : "SMS"}</strong>
                 </div>
                 {result && (
                     <div className="mt-4 space-y-3">
-                        <p className="rounded-[3px] bg-[var(--doc-accent-soft)] p-3 text-sm font-bold text-[var(--doc-accent)]">
+                        <p className="rounded-xl bg-green-50 p-3 text-sm font-bold text-green-700 dark:bg-green-950/30 dark:text-green-200">
                             전체 {result.total}건 · 성공 {result.success}건 · 실패 {result.failed}건 · 확인 필요 {result.uncertain}건
                             {(result.duplicateCount > 0 || result.invalidCount > 0) && <span className="mt-1 block text-xs font-medium">중복 제외 {result.duplicateCount}건 · 잘못된 번호 제외 {result.invalidCount}건</span>}
                         </p>
                         {result.uncertain > 0 && (
-                            <p role="alert" className="flex gap-2 rounded-[3px] border border-[var(--doc-warn)] bg-[var(--doc-grid-head)] p-3 text-sm font-bold text-[var(--doc-warn)]">
+                            <p role="alert" className="flex gap-2 rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm font-bold text-amber-800 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-200">
                                 <span className="material-symbols-outlined text-[19px]">warning</span>
                                 발송 여부를 확인할 수 없는 {result.uncertain}건은 재발송하면 안 됩니다. 발송 이력에서 먼저 확인해 주세요.
                             </p>
                         )}
                         {result.results.length > 0 && (
-                            <ul className="max-h-40 space-y-1 overflow-auto rounded-[3px] border border-[var(--doc-rule)] p-2 text-xs">
+                            <ul className="max-h-40 space-y-1 overflow-auto rounded-xl border border-gray-200 p-2 text-xs dark:border-gray-700">
                                 {result.results.map((item, index) => (
-                                    <li key={`${item.last4}-${index}`} className="flex items-center justify-between gap-3 rounded-[3px] px-2 py-1.5">
-                                        <span className="text-[var(--doc-ink-2)]">휴대폰 끝자리 {item.last4}</span>
-                                        <strong className={item.status === "FAILED" ? "text-[var(--doc-crit)]" : item.status === "UNCERTAIN" ? "text-[var(--doc-warn)] " : "text-[var(--doc-accent)] "}>
+                                    <li key={`${item.last4}-${index}`} className="flex items-center justify-between gap-3 rounded-lg px-2 py-1.5">
+                                        <span className="text-gray-600 dark:text-gray-300">휴대폰 끝자리 {item.last4}</span>
+                                        <strong className={item.status === "FAILED" ? "text-red-600" : item.status === "UNCERTAIN" ? "text-amber-700 dark:text-amber-300" : "text-green-700 dark:text-green-300"}>
                                             {item.status === "SENT" ? "성공" : item.status === "FAILED" ? "실패" : item.status === "UNCERTAIN" ? "확인 필요" : "이미 처리됨"}
                                         </strong>
                                     </li>
@@ -578,15 +578,15 @@ function ManualSendPanel({ initialCoaches }: { initialCoaches?: CoachPhone[] }) 
                             </ul>
                         )}
                         {result.retryRecipients.length > 0 && (
-                            <button type="button" onClick={() => send(result.retryRecipients, true)} disabled={pending} className="flex min-h-11 w-full items-center justify-center gap-2 rounded-[3px] border border-[var(--doc-crit)] bg-[var(--doc-crit-soft)] font-bold text-[var(--doc-crit)] disabled:opacity-40">
+                            <button type="button" onClick={() => send(result.retryRecipients, true)} disabled={pending} className="flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-red-300 bg-red-50 font-bold text-red-700 disabled:opacity-40 dark:border-red-800 dark:bg-red-950/30 dark:text-red-200">
                                 <span className="material-symbols-outlined text-[19px]">refresh</span>
                                 실패 {result.retryRecipients.length}건만 다시 발송
                             </button>
                         )}
                     </div>
                 )}
-                {error && <p className="mt-4 rounded-[3px] bg-[var(--doc-crit-soft)] p-3 text-sm font-bold text-[var(--doc-crit)]">{error}</p>}
-                <button type="button" onClick={() => send()} disabled={pending || !recipients.length || !message.trim() || Boolean(result?.uncertain)} className="mt-5 flex min-h-11 w-full items-center justify-center gap-2 rounded-[3px] bg-[var(--doc-ink)] font-bold text-white disabled:opacity-40">
+                {error && <p className="mt-4 rounded-xl bg-red-50 p-3 text-sm font-bold text-red-700">{error}</p>}
+                <button type="button" onClick={() => send()} disabled={pending || !recipients.length || !message.trim() || Boolean(result?.uncertain)} className="mt-5 flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-brand-navy-900 font-bold text-white disabled:opacity-40">
                     <span className="material-symbols-outlined text-[19px]">send</span>
                     {pending ? "발송 중..." : result?.uncertain ? "발송 이력 확인 후 새로 작성" : `${recipients.length}명에게 발송`}
                 </button>

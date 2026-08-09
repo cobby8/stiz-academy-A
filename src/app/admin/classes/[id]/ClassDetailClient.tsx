@@ -109,10 +109,10 @@ function ClassDetailLoadingSkeleton() {
     return (
         <div className="max-w-5xl mx-auto space-y-6">
             <div className="flex items-center gap-4">
-                <div className="h-10 w-10 rounded-[3px] bg-[var(--doc-grid-head)]" />
+                <div className="h-10 w-10 rounded-lg bg-gray-200 dark:bg-gray-700 animate-pulse" />
                 <div className="flex-1">
-                    <div className="h-8 w-48 rounded bg-[var(--doc-grid-head)]" />
-                    <div className="mt-2 h-4 w-72 max-w-full rounded bg-[var(--doc-grid-head)]" />
+                    <div className="h-8 w-48 rounded bg-gray-200 dark:bg-gray-700 animate-pulse" />
+                    <div className="mt-2 h-4 w-72 max-w-full rounded bg-gray-100 dark:bg-gray-800 animate-pulse" />
                 </div>
             </div>
 
@@ -120,21 +120,21 @@ function ClassDetailLoadingSkeleton() {
                 {Array.from({ length: 3 }).map((_, index) => (
                     <div
                         key={index}
-                        className="rounded-[6px] border border-[var(--doc-rule)] bg-[var(--doc-surface)] p-4"
+                        className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm dark:border-gray-800 dark:bg-gray-800"
                     >
-                        <div className="h-4 w-16 rounded bg-[var(--doc-grid-head)]" />
-                        <div className="mt-3 h-8 w-12 rounded bg-[var(--doc-grid-head)]" />
+                        <div className="h-4 w-16 rounded bg-gray-100 dark:bg-gray-700 animate-pulse" />
+                        <div className="mt-3 h-8 w-12 rounded bg-gray-200 dark:bg-gray-700 animate-pulse" />
                     </div>
                 ))}
             </div>
 
-            <div className="rounded-[6px] border border-[var(--doc-rule)] bg-[var(--doc-surface)]">
+            <div className="rounded-2xl border border-gray-100 bg-white shadow-sm dark:border-gray-800 dark:bg-gray-800">
                 {Array.from({ length: 5 }).map((_, index) => (
-                    <div key={index} className="flex items-center gap-4 border-b border-[var(--doc-rule)] p-4 last:border-b-0">
-                        <div className="h-10 w-10 rounded-[3px] bg-[var(--doc-grid-head)]" />
+                    <div key={index} className="flex items-center gap-4 border-b border-gray-50 p-4 last:border-b-0 dark:border-gray-800">
+                        <div className="h-10 w-10 rounded-full bg-gray-100 dark:bg-gray-700 animate-pulse" />
                         <div className="min-w-0 flex-1">
-                            <div className="h-4 w-32 rounded bg-[var(--doc-grid-head)]" />
-                            <div className="mt-2 h-3 w-48 max-w-full rounded bg-[var(--doc-grid-head)]" />
+                            <div className="h-4 w-32 rounded bg-gray-200 dark:bg-gray-700 animate-pulse" />
+                            <div className="mt-2 h-3 w-48 max-w-full rounded bg-gray-100 dark:bg-gray-700 animate-pulse" />
                         </div>
                     </div>
                 ))}
@@ -145,13 +145,13 @@ function ClassDetailLoadingSkeleton() {
 
 function ClassDetailErrorState({ message, onRetry }: { message: string; onRetry: () => void }) {
     return (
-        <div className="max-w-5xl mx-auto rounded-[6px] border border-[var(--doc-crit)] bg-[var(--doc-surface)] p-8 text-center">
-            <SymbolIcon name="error" size={36} className="mx-auto mb-3 text-[var(--doc-crit)]" />
-            <p className="font-bold text-[var(--doc-ink)]">{message}</p>
+        <div className="max-w-5xl mx-auto rounded-2xl border border-red-100 bg-white p-8 text-center shadow-sm dark:border-red-900/40 dark:bg-gray-800">
+            <SymbolIcon name="error" size={36} className="mx-auto mb-3 text-red-500" />
+            <p className="font-bold text-gray-900 dark:text-white">{message}</p>
             <button
                 type="button"
                 onClick={onRetry}
-                className="mt-4 rounded-[3px] bg-[var(--doc-accent)] px-4 py-2 text-sm font-bold text-white transition hover:bg-[var(--doc-grid-head)] dark:text-[var(--doc-ink)]"
+                className="mt-4 rounded-xl bg-brand-orange-500 px-4 py-2 text-sm font-bold text-white transition hover:bg-orange-600 dark:bg-brand-neon-lime dark:text-brand-navy-900"
             >
                 다시 시도
             </button>
@@ -262,20 +262,20 @@ export default function ClassDetailClient({
         <div className="max-w-5xl mx-auto space-y-6">
             {/* ── 상단 헤더: 뒤로가기 + 반 정보 ── */}
             <div className="flex items-center gap-4">
-                <Link href="/admin/classes" prefetch={false} className="p-2 hover:bg-[var(--doc-grid-head)] rounded-[3px] transition">
-                    <SymbolIcon name="arrow_back" size={20} className="text-[var(--doc-ink-2)]" />
+                <Link href="/admin/classes" prefetch={false} className="p-2 hover:bg-gray-100 dark:bg-gray-800 rounded-lg transition">
+                    <SymbolIcon name="arrow_back" size={20} className="text-gray-500 dark:text-gray-400" />
                 </Link>
                 <div className="flex-1">
-                    <h1 className="text-2xl font-bold text-[var(--doc-ink)]">
+                    <h1 className="text-2xl font-extrabold text-gray-900 dark:text-white">
                         {classData.name}
                     </h1>
-                    <p className="text-sm text-[var(--doc-ink-2)]">
+                    <p className="text-sm text-gray-500 dark:text-gray-400">
                         {/* 프로그램명 + 요일/시간 + 수강생 수/정원 */}
                         {classData.programName && <span>{classData.programName} · </span>}
                         {DAY_LABELS[classData.dayOfWeek] || classData.dayOfWeek}요일{" "}
                         {classData.startTime}~{classData.endTime}
                         {" · "}
-                        <span className="font-medium text-[var(--doc-ink-2)]">
+                        <span className="font-medium text-gray-700 dark:text-gray-200">
                             {classData.students.length}/{classData.capacity}명
                         </span>
                     </p>
@@ -285,22 +285,22 @@ export default function ClassDetailClient({
             {/* ── 요약 카드 3개 ── */}
             <div className="grid grid-cols-3 gap-4">
                 {/* 수강생 수 */}
-                <div className="bg-[var(--doc-surface)] p-4 rounded-[6px] border border-[var(--doc-rule)]">
-                    <p className="text-xs text-[var(--doc-ink-2)] mb-1">수강생</p>
-                    <p className="text-2xl font-bold text-[var(--doc-ink)]">
+                <div className="bg-white dark:bg-gray-800 p-4 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800">
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">수강생</p>
+                    <p className="text-2xl font-extrabold text-gray-900 dark:text-white">
                         {classData.students.length}
-                        <span className="text-sm font-normal text-[var(--doc-ink-3)]">/{classData.capacity}</span>
+                        <span className="text-sm font-normal text-gray-400">/{classData.capacity}</span>
                     </p>
                 </div>
                 {/* 수업 횟수 */}
-                <div className="bg-[var(--doc-surface)] p-4 rounded-[6px] border border-[var(--doc-rule)]">
-                    <p className="text-xs text-[var(--doc-ink-2)] mb-1">수업 기록</p>
-                    <p className="text-2xl font-bold text-[var(--doc-ink)]">{sessions.length}회</p>
+                <div className="bg-white dark:bg-gray-800 p-4 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800">
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">수업 기록</p>
+                    <p className="text-2xl font-extrabold text-gray-900 dark:text-white">{sessions.length}회</p>
                 </div>
                 {/* 평균 출석률 */}
-                <div className="bg-[var(--doc-surface)] p-4 rounded-[6px] border border-[var(--doc-rule)]">
-                    <p className="text-xs text-[var(--doc-ink-2)] mb-1">평균 출석률</p>
-                    <p className="text-2xl font-bold text-[var(--doc-ink)]">
+                <div className="bg-white dark:bg-gray-800 p-4 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800">
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">평균 출석률</p>
+                    <p className="text-2xl font-extrabold text-gray-900 dark:text-white">
                         {/* 전체 세션의 출석률 평균 계산 */}
                         {sessions.length > 0
                             ? Math.round(
@@ -314,7 +314,7 @@ export default function ClassDetailClient({
             </div>
 
             {/* ── 탭 네비게이션 ── */}
-            <div className="border-b border-[var(--doc-rule)]">
+            <div className="border-b border-gray-200 dark:border-gray-700">
                 <nav className="flex gap-6">
                     {tabs.map((tab) => {
                         const isActive = activeTab === tab.key;
@@ -323,18 +323,18 @@ export default function ClassDetailClient({
                                 key={tab.key}
                                 onClick={() => setActiveTab(tab.key)}
                                 className={`flex items-center gap-2 pb-3 px-1 text-sm font-medium border-b-2 transition ${
- isActive
- ? "border-[var(--doc-accent)] text-[var(--doc-accent)] "
- : "border-transparent text-[var(--doc-ink-2)] hover:text-[var(--doc-ink-2)] "
- }`}
+                                    isActive
+                                        ? "border-brand-orange-500 dark:border-brand-neon-lime text-brand-orange-500 dark:text-brand-neon-lime"
+                                        : "border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-200"
+                                }`}
                             >
                                 <SymbolIcon name={tab.iconName} size={16} />
                                 {tab.label}
                                 {/* 카운트 뱃지 */}
                                 {tab.count !== undefined && (
-                                    <span className={`text-xs px-1.5 py-0.5 rounded-[3px] ${
- isActive ? "bg-[var(--doc-grid-head)] text-[var(--doc-warn)]" : "bg-[var(--doc-grid-head)] text-[var(--doc-ink-2)] "
- }`}>
+                                    <span className={`text-xs px-1.5 py-0.5 rounded-full ${
+                                        isActive ? "bg-orange-100 text-orange-700" : "bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400"
+                                    }`}>
                                         {tab.count}
                                     </span>
                                 )}
@@ -387,45 +387,45 @@ export default function ClassDetailClient({
 function StudentsTab({ students }: { students: ClassData["students"] }) {
     if (students.length === 0) {
         return (
-            <div className="bg-[var(--doc-surface)] p-8 rounded-[6px] border border-[var(--doc-rule)] text-center">
-                <SymbolIcon name="groups" size={40} className="mx-auto mb-3 text-[var(--doc-ink-3)]" />
-                <p className="text-[var(--doc-ink-2)]">등록된 수강생이 없습니다</p>
+            <div className="bg-white dark:bg-gray-800 p-8 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800 text-center">
+                <SymbolIcon name="groups" size={40} className="mx-auto mb-3 text-gray-300" />
+                <p className="text-gray-500 dark:text-gray-400">등록된 수강생이 없습니다</p>
             </div>
         );
     }
 
     return (
-        <div className="bg-[var(--doc-surface)] rounded-[6px] border border-[var(--doc-rule)] overflow-hidden">
+        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800 overflow-hidden">
             <div className="overflow-x-auto">
                 <table className="min-w-full text-sm">
                     <thead>
-                        <tr className="border-b border-[var(--doc-rule)] bg-[var(--doc-grid-head)]">
-                            <th className="text-left py-3 px-4 text-xs text-[var(--doc-ink-2)] font-medium">이름</th>
-                            <th className="text-left py-3 px-4 text-xs text-[var(--doc-ink-2)] font-medium">성별</th>
-                            <th className="text-left py-3 px-4 text-xs text-[var(--doc-ink-2)] font-medium">학교</th>
-                            <th className="text-left py-3 px-4 text-xs text-[var(--doc-ink-2)] font-medium">학년</th>
-                            <th className="text-left py-3 px-4 text-xs text-[var(--doc-ink-2)] font-medium">연락처</th>
-                            <th className="text-left py-3 px-4 text-xs text-[var(--doc-ink-2)] font-medium">등록일</th>
+                        <tr className="border-b border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-900">
+                            <th className="text-left py-3 px-4 text-xs text-gray-500 dark:text-gray-400 font-medium">이름</th>
+                            <th className="text-left py-3 px-4 text-xs text-gray-500 dark:text-gray-400 font-medium">성별</th>
+                            <th className="text-left py-3 px-4 text-xs text-gray-500 dark:text-gray-400 font-medium">학교</th>
+                            <th className="text-left py-3 px-4 text-xs text-gray-500 dark:text-gray-400 font-medium">학년</th>
+                            <th className="text-left py-3 px-4 text-xs text-gray-500 dark:text-gray-400 font-medium">연락처</th>
+                            <th className="text-left py-3 px-4 text-xs text-gray-500 dark:text-gray-400 font-medium">등록일</th>
                         </tr>
                     </thead>
                     <tbody>
                         {students.map((s) => (
-                            <tr key={s.enrollmentId} className="border-b border-[var(--doc-rule)] hover:bg-[var(--doc-grid-head)] transition">
+                            <tr key={s.enrollmentId} className="border-b border-gray-50 hover:bg-gray-50 dark:bg-gray-900 transition">
                                 {/* 학생 이름 — 클릭하면 학생 상세 페이지로 이동 */}
                                 <td className="py-3 px-4">
                                     <Link
                                         href={`/admin/students/${s.studentId}`}
                                         prefetch={false}
-                                        className="font-medium text-[var(--doc-ink)] hover:text-[var(--doc-accent)] transition"
+                                        className="font-medium text-gray-900 hover:text-brand-orange-500 dark:text-brand-neon-lime transition"
                                     >
                                         {s.studentName}
                                     </Link>
                                 </td>
-                                <td className="py-3 px-4 text-[var(--doc-ink-2)]">{s.gender || "-"}</td>
-                                <td className="py-3 px-4 text-[var(--doc-ink-2)]">{s.school || "-"}</td>
-                                <td className="py-3 px-4 text-[var(--doc-ink-2)]">{s.grade || "-"}</td>
-                                <td className="py-3 px-4 text-[var(--doc-ink-2)]">{s.phone || "-"}</td>
-                                <td className="py-3 px-4 text-[var(--doc-ink-2)]">{toDateStr(s.enrolledAt)}</td>
+                                <td className="py-3 px-4 text-gray-600 dark:text-gray-300">{s.gender || "-"}</td>
+                                <td className="py-3 px-4 text-gray-600 dark:text-gray-300">{s.school || "-"}</td>
+                                <td className="py-3 px-4 text-gray-600 dark:text-gray-300">{s.grade || "-"}</td>
+                                <td className="py-3 px-4 text-gray-600 dark:text-gray-300">{s.phone || "-"}</td>
+                                <td className="py-3 px-4 text-gray-500 dark:text-gray-400">{toDateStr(s.enrolledAt)}</td>
                             </tr>
                         ))}
                     </tbody>
@@ -450,7 +450,7 @@ function SessionsTab({ sessions, onAddSession, onEditSession, loadingSession }: 
             <div className="flex justify-end">
                 <button
                     onClick={onAddSession}
-                    className="flex items-center gap-2 bg-[var(--doc-accent)] dark:text-[var(--doc-ink)] text-white px-4 py-2 rounded-[3px] font-bold text-sm hover:bg-[var(--doc-grid-head)] transition"
+                    className="flex items-center gap-2 bg-brand-orange-500 dark:bg-brand-neon-lime dark:text-brand-navy-900 text-white px-4 py-2 rounded-xl font-bold text-sm hover:bg-orange-600 transition"
                 >
                     <SymbolIcon name="add" size={16} />
                     수업 기록 추가
@@ -458,9 +458,9 @@ function SessionsTab({ sessions, onAddSession, onEditSession, loadingSession }: 
             </div>
 
             {sessions.length === 0 ? (
-                <div className="bg-[var(--doc-surface)] p-8 rounded-[6px] border border-[var(--doc-rule)] text-center">
-                    <SymbolIcon name="menu_book" size={40} className="mx-auto mb-3 text-[var(--doc-ink-3)]" />
-                    <p className="text-[var(--doc-ink-2)]">수업 기록이 없습니다</p>
+                <div className="bg-white dark:bg-gray-800 p-8 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800 text-center">
+                    <SymbolIcon name="menu_book" size={40} className="mx-auto mb-3 text-gray-300" />
+                    <p className="text-gray-500 dark:text-gray-400">수업 기록이 없습니다</p>
                 </div>
             ) : (
                 <div className="grid gap-3">
@@ -488,13 +488,13 @@ function SessionsTab({ sessions, onAddSession, onEditSession, loadingSession }: 
                             <div
                                 key={s.id}
                                 onClick={() => onEditSession(s.id)}
-                                className={`bg-[var(--doc-surface)] rounded-[6px] border border-[var(--doc-rule)] p-4 flex gap-4 hover: transition cursor-pointer ${
- loadingSession ? "opacity-50 pointer-events-none" : ""
- }`}
+                                className={`bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800 p-4 flex gap-4 hover:shadow-md transition cursor-pointer ${
+                                    loadingSession ? "opacity-50 pointer-events-none" : ""
+                                }`}
                             >
                                 {/* 사진 썸네일 — 사진이 있을 때만 표시 */}
                                 {firstPhotoUrl && (
-                                    <div className="w-20 h-20 rounded-[3px] overflow-hidden bg-[var(--doc-grid-head)] flex-shrink-0">
+                                    <div className="w-20 h-20 rounded-xl overflow-hidden bg-gray-100 dark:bg-gray-800 flex-shrink-0">
                                         <img
                                             src={firstPhotoUrl}
                                             alt="수업 사진"
@@ -504,34 +504,34 @@ function SessionsTab({ sessions, onAddSession, onEditSession, loadingSession }: 
                                 )}
                                 {/* 사진 없을 때 아이콘 placeholder */}
                                 {!firstPhotoUrl && (
-                                    <div className="w-20 h-20 rounded-[3px] bg-[var(--doc-grid-head)] flex-shrink-0 flex items-center justify-center">
-                                        <SymbolIcon name="photo_camera" size={24} className="text-[var(--doc-ink-3)]" />
+                                    <div className="w-20 h-20 rounded-xl bg-gray-50 dark:bg-gray-900 flex-shrink-0 flex items-center justify-center">
+                                        <SymbolIcon name="photo_camera" size={24} className="text-gray-300" />
                                     </div>
                                 )}
 
                                 {/* 수업 기록 텍스트 정보 */}
                                 <div className="flex-1 min-w-0">
                                     <div className="flex items-center gap-2 mb-1">
-                                        <span className="font-bold text-[var(--doc-ink)]">{toDateStr(s.date)}</span>
+                                        <span className="font-bold text-gray-900 dark:text-white">{toDateStr(s.date)}</span>
                                         {s.coachName && (
-                                            <span className="text-xs bg-[var(--doc-grid-head)] text-[var(--doc-ink-2)] px-2 py-0.5 rounded-[3px]">
+                                            <span className="text-xs bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 px-2 py-0.5 rounded-full">
                                                 {s.coachName} 코치
                                             </span>
                                         )}
                                     </div>
                                     {/* 수업 주제 */}
                                     {s.topic && (
-                                        <p className="text-sm text-[var(--doc-ink-2)] font-medium truncate">{s.topic}</p>
+                                        <p className="text-sm text-gray-700 dark:text-gray-200 font-medium truncate">{s.topic}</p>
                                     )}
                                     {/* 출석률 바 */}
                                     <div className="flex items-center gap-2 mt-2">
-                                        <div className="flex-1 bg-[var(--doc-grid-head)] rounded-[3px] h-1.5 max-w-[120px]">
+                                        <div className="flex-1 bg-gray-100 dark:bg-gray-800 rounded-full h-1.5 max-w-[120px]">
                                             <div
-                                                className="bg-[var(--doc-accent)] rounded-[3px] h-1.5 transition-all"
+                                                className="bg-green-500 rounded-full h-1.5 transition-all"
                                                 style={{ width: `${rate}%` }}
                                             />
                                         </div>
-                                        <span className="text-xs text-[var(--doc-ink-2)]">
+                                        <span className="text-xs text-gray-500 dark:text-gray-400">
                                             출석 {s.presentCount}/{s.attendanceCount}명 ({rate}%)
                                         </span>
                                     </div>
@@ -551,24 +551,24 @@ function SessionsTab({ sessions, onAddSession, onEditSession, loadingSession }: 
 function AttendanceTab({ sessions }: { sessions: SessionRow[] }) {
     if (sessions.length === 0) {
         return (
-            <div className="bg-[var(--doc-surface)] p-8 rounded-[6px] border border-[var(--doc-rule)] text-center">
-                <SymbolIcon name="event_available" size={40} className="mx-auto mb-3 text-[var(--doc-ink-3)]" />
-                <p className="text-[var(--doc-ink-2)]">출석 기록이 없습니다</p>
+            <div className="bg-white dark:bg-gray-800 p-8 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800 text-center">
+                <SymbolIcon name="event_available" size={40} className="mx-auto mb-3 text-gray-300" />
+                <p className="text-gray-500 dark:text-gray-400">출석 기록이 없습니다</p>
             </div>
         );
     }
 
     return (
-        <div className="bg-[var(--doc-surface)] rounded-[6px] border border-[var(--doc-rule)] overflow-hidden">
+        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800 overflow-hidden">
             <div className="overflow-x-auto">
                 <table className="min-w-full text-sm">
                     <thead>
-                        <tr className="border-b border-[var(--doc-rule)] bg-[var(--doc-grid-head)]">
-                            <th className="text-left py-3 px-4 text-xs text-[var(--doc-ink-2)] font-medium">날짜</th>
-                            <th className="text-left py-3 px-4 text-xs text-[var(--doc-ink-2)] font-medium">코치</th>
-                            <th className="text-left py-3 px-4 text-xs text-[var(--doc-ink-2)] font-medium">출석</th>
-                            <th className="text-left py-3 px-4 text-xs text-[var(--doc-ink-2)] font-medium">결석/지각</th>
-                            <th className="text-left py-3 px-4 text-xs text-[var(--doc-ink-2)] font-medium">출석률</th>
+                        <tr className="border-b border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-900">
+                            <th className="text-left py-3 px-4 text-xs text-gray-500 dark:text-gray-400 font-medium">날짜</th>
+                            <th className="text-left py-3 px-4 text-xs text-gray-500 dark:text-gray-400 font-medium">코치</th>
+                            <th className="text-left py-3 px-4 text-xs text-gray-500 dark:text-gray-400 font-medium">출석</th>
+                            <th className="text-left py-3 px-4 text-xs text-gray-500 dark:text-gray-400 font-medium">결석/지각</th>
+                            <th className="text-left py-3 px-4 text-xs text-gray-500 dark:text-gray-400 font-medium">출석률</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -581,26 +581,26 @@ function AttendanceTab({ sessions }: { sessions: SessionRow[] }) {
                             const absentOrLate = s.attendanceCount - s.presentCount;
 
                             return (
-                                <tr key={s.id} className="border-b border-[var(--doc-rule)] hover:bg-[var(--doc-grid-head)] transition">
-                                    <td className="py-3 px-4 font-medium text-[var(--doc-ink)]">{toDateStr(s.date)}</td>
-                                    <td className="py-3 px-4 text-[var(--doc-ink-2)]">{s.coachName || "-"}</td>
+                                <tr key={s.id} className="border-b border-gray-50 hover:bg-gray-50 dark:bg-gray-900 transition">
+                                    <td className="py-3 px-4 font-medium text-gray-900 dark:text-white">{toDateStr(s.date)}</td>
+                                    <td className="py-3 px-4 text-gray-600 dark:text-gray-300">{s.coachName || "-"}</td>
                                     <td className="py-3 px-4">
-                                        <span className="text-[var(--doc-accent)] font-medium">{s.presentCount}명</span>
+                                        <span className="text-green-700 font-medium">{s.presentCount}명</span>
                                     </td>
                                     <td className="py-3 px-4">
-                                        <span className={absentOrLate > 0 ? "text-[var(--doc-crit)] font-medium" : "text-[var(--doc-ink-3)]"}>
+                                        <span className={absentOrLate > 0 ? "text-red-600 font-medium" : "text-gray-400"}>
                                             {absentOrLate}명
                                         </span>
                                     </td>
                                     <td className="py-3 px-4">
                                         {/* 출석률에 따라 색상 변경 */}
-                                        <span className={`text-xs font-bold px-2 py-0.5 rounded-[3px] ${
- rate >= 80
- ? "bg-[var(--doc-accent-soft)] text-[var(--doc-accent)]"
- : rate >= 50
- ? "bg-[var(--doc-grid-head)] text-[var(--doc-warn)]"
- : "bg-[var(--doc-crit-soft)] text-[var(--doc-crit)]"
- }`}>
+                                        <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${
+                                            rate >= 80
+                                                ? "bg-green-100 text-green-700"
+                                                : rate >= 50
+                                                    ? "bg-yellow-100 text-yellow-700"
+                                                    : "bg-red-100 text-red-700"
+                                        }`}>
                                             {rate}%
                                         </span>
                                     </td>

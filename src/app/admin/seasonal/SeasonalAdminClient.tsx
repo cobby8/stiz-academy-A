@@ -360,13 +360,13 @@ function toAbsoluteHref(href: string) {
 
 function badge(status?: string | null) {
   const tone = status === "CONFIRMED" || status === "PAID" || status === "OPEN" || status === "ASSIGNED"
-      || status === "APPROVED" || status === "PUBLISHED" ? "bg-[var(--doc-accent-soft)] text-[var(--doc-accent)]  "
+      || status === "APPROVED" || status === "PUBLISHED" ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300"
     : status === "WAITLISTED" || status === "PAYMENT_PENDING" || status === "UNPAID" || status === "UNASSIGNED"
-      ? "bg-[var(--doc-grid-head)] text-[var(--doc-warn)]  "
+      ? "bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300"
       : status === "REJECTED" || status === "CANCELLED"
-        ? "bg-[var(--doc-crit-soft)] text-[var(--doc-crit)]  "
-        : "bg-[var(--doc-grid-head)] text-[var(--doc-ink-2)]  ";
-  return `inline-flex min-h-7 items-center rounded-[3px] px-2.5 text-xs font-bold ${tone}`;
+        ? "bg-red-50 text-red-700 dark:bg-red-950/40 dark:text-red-300"
+        : "bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-200";
+  return `inline-flex min-h-7 items-center rounded-full px-2.5 text-xs font-bold ${tone}`;
 }
 
 function stringList(value: unknown) {
@@ -684,32 +684,32 @@ function ColHeader({
   return (
     <div className="relative inline-flex items-center gap-1">
       <span className="font-bold">{title}</span>
-      {sortDir && <span className="text-[10px] text-[var(--doc-accent)]">{sortDir === "asc" ? "▲" : "▼"}</span>}
+      {sortDir && <span className="text-[10px] text-[var(--brand-accent)]">{sortDir === "asc" ? "▲" : "▼"}</span>}
       <button type="button" aria-label={`${title} 필터`} onClick={onToggleOpen}
-        className={`grid h-5 w-5 place-items-center rounded ${active ? "bg-[var(--doc-accent-soft)] text-[var(--doc-accent)]" : "text-[var(--doc-ink-3)] hover:bg-[var(--doc-grid-head)] "}`}>
+        className={`grid h-5 w-5 place-items-center rounded ${active ? "bg-[var(--brand-accent-soft)] text-[var(--brand-accent)]" : "text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700"}`}>
         <span className="material-symbols-outlined text-[16px]">filter_list</span>
       </button>
       {open && (
         <>
           <button type="button" aria-hidden className="fixed inset-0 z-40 cursor-default" onClick={onToggleOpen} />
-          <div className={`absolute top-full z-50 mt-1 w-52 rounded-[3px] border border-[var(--doc-rule)] bg-[var(--doc-surface)] p-2 text-[var(--doc-ink-2)] ${alignRight ? "right-0" : "left-0"}`} onClick={(e) => e.stopPropagation()}>
+          <div className={`absolute top-full z-50 mt-1 w-52 rounded-xl border border-gray-200 bg-white p-2 text-gray-700 shadow-xl dark:border-gray-700 dark:bg-gray-900 dark:text-gray-200 ${alignRight ? "right-0" : "left-0"}`} onClick={(e) => e.stopPropagation()}>
             {onSort && (
               <div className="mb-1 flex gap-1">
-                <button type="button" onClick={() => onSort("asc")} className={`flex-1 rounded-[3px] px-2 py-1.5 text-[12px] font-bold ${sortDir === "asc" ? "bg-[var(--doc-accent-soft)] text-[var(--doc-accent)]" : "hover:bg-[var(--doc-grid-head)] "}`}>▲ 오름차순</button>
-                <button type="button" onClick={() => onSort("desc")} className={`flex-1 rounded-[3px] px-2 py-1.5 text-[12px] font-bold ${sortDir === "desc" ? "bg-[var(--doc-accent-soft)] text-[var(--doc-accent)]" : "hover:bg-[var(--doc-grid-head)] "}`}>▼ 내림차순</button>
+                <button type="button" onClick={() => onSort("asc")} className={`flex-1 rounded-lg px-2 py-1.5 text-[12px] font-bold ${sortDir === "asc" ? "bg-[var(--brand-accent-soft)] text-[var(--brand-accent)]" : "hover:bg-gray-100 dark:hover:bg-gray-800"}`}>▲ 오름차순</button>
+                <button type="button" onClick={() => onSort("desc")} className={`flex-1 rounded-lg px-2 py-1.5 text-[12px] font-bold ${sortDir === "desc" ? "bg-[var(--brand-accent-soft)] text-[var(--brand-accent)]" : "hover:bg-gray-100 dark:hover:bg-gray-800"}`}>▼ 내림차순</button>
               </div>
             )}
             {options && excluded && (
               <div>
-                <div className="mb-1 flex items-center justify-between text-[11px] font-bold text-[var(--doc-ink-3)]">
-                  <button type="button" onClick={onAll} className="hover:text-[var(--doc-accent)]">모두 선택</button>
-                  <button type="button" onClick={onNone} className="hover:text-[var(--doc-accent)]">모두 해제</button>
+                <div className="mb-1 flex items-center justify-between text-[11px] font-bold text-gray-400">
+                  <button type="button" onClick={onAll} className="hover:text-[var(--brand-accent)]">모두 선택</button>
+                  <button type="button" onClick={onNone} className="hover:text-[var(--brand-accent)]">모두 해제</button>
                 </div>
                 <div className="max-h-56 space-y-0.5 overflow-auto">
-                  {options.length === 0 && <p className="px-1 py-2 text-[12px] text-[var(--doc-ink-3)]">값 없음</p>}
+                  {options.length === 0 && <p className="px-1 py-2 text-[12px] text-gray-400">값 없음</p>}
                   {options.map((o) => (
-                    <label key={o} className="flex cursor-pointer items-center gap-2 rounded-[3px] px-1.5 py-1 text-[12.5px] font-semibold hover:bg-[var(--doc-grid-head)]">
-                      <input type="checkbox" checked={!excluded.has(o)} onChange={() => onToggleValue?.(o)} className="h-4 w-4 rounded border-[var(--doc-rule)] accent-[var(--doc-accent)]" />
+                    <label key={o} className="flex cursor-pointer items-center gap-2 rounded-lg px-1.5 py-1 text-[12.5px] font-semibold hover:bg-gray-50 dark:hover:bg-gray-800">
+                      <input type="checkbox" checked={!excluded.has(o)} onChange={() => onToggleValue?.(o)} className="h-4 w-4 rounded border-gray-300 accent-[var(--brand-accent)]" />
                       {o}
                     </label>
                   ))}
@@ -1386,18 +1386,18 @@ export default function SeasonalAdminClient({ initialData }: SeasonalAdminClient
     <main className="mx-auto min-w-0 max-w-7xl space-y-6 overflow-x-clip pb-20">
       {/* 공통 헤더로 교체. "새 시즌 만들기" 버튼은 action 슬롯으로 옮겼고 onClick 동작은 그대로다. */}
       <SeasonalHeader
-        action={<button type="button" onClick={() => { setEditingSeason(null); setModal("season"); }} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-[3px] bg-[var(--doc-accent)] px-4 font-bold text-[var(--doc-on-accent)]"><Icon name="add" />새 시즌 만들기</button>}
+        action={<button type="button" onClick={() => { setEditingSeason(null); setModal("season"); }} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-[var(--brand-accent)] px-4 font-black text-[var(--brand-accent-contrast)]"><Icon name="add" />새 시즌 만들기</button>}
       />
 
-      <nav className="flex gap-1 overflow-x-auto rounded-[6px] border border-[var(--doc-rule)] bg-[var(--doc-surface)] p-1.5" aria-label="방학특강 관리 메뉴">
-        {TABS.map((item) => <button key={item.key} type="button" onClick={() => setTab(item.key)} className={`flex min-h-11 shrink-0 items-center gap-2 rounded-[3px] px-4 text-sm font-bold ${tab === item.key ? "bg-[var(--doc-accent-soft)] text-[var(--doc-accent)]" : "text-[var(--doc-ink-2)] hover:bg-[var(--doc-grid-head)] "}`}><Icon name={item.icon} className="text-xl" />{item.label}</button>)}
-        <a href="/admin/seasonal/attendance" className="flex min-h-11 shrink-0 items-center gap-2 rounded-[3px] px-4 text-sm font-bold text-[var(--doc-ink-2)] hover:bg-[var(--doc-grid-head)]"><Icon name="fact_check" className="text-xl" />출석 관리</a>
-        <a href="/admin/seasonal/attendance?view=makeup" className="flex min-h-11 shrink-0 items-center gap-2 rounded-[3px] px-4 text-sm font-bold text-[var(--doc-ink-2)] hover:bg-[var(--doc-grid-head)]"><Icon name="cached" className="text-xl" />보강 관리</a>
-        <a href="/admin/shuttle" className="flex min-h-11 shrink-0 items-center gap-2 rounded-[3px] px-4 text-sm font-bold text-[var(--doc-ink-2)] hover:bg-[var(--doc-grid-head)]"><Icon name="directions_bus" className="text-xl" />셔틀 관리</a>
+      <nav className="flex gap-1 overflow-x-auto rounded-2xl border border-gray-200 bg-white p-1.5 dark:border-gray-700 dark:bg-gray-900" aria-label="방학특강 관리 메뉴">
+        {TABS.map((item) => <button key={item.key} type="button" onClick={() => setTab(item.key)} className={`flex min-h-11 shrink-0 items-center gap-2 rounded-xl px-4 text-sm font-bold ${tab === item.key ? "bg-[var(--brand-accent-soft)] text-[var(--brand-accent)]" : "text-gray-500 hover:bg-gray-50 dark:hover:bg-gray-800"}`}><Icon name={item.icon} className="text-xl" />{item.label}</button>)}
+        <a href="/admin/seasonal/attendance" className="flex min-h-11 shrink-0 items-center gap-2 rounded-xl px-4 text-sm font-bold text-gray-500 hover:bg-gray-50 dark:hover:bg-gray-800"><Icon name="fact_check" className="text-xl" />출석 관리</a>
+        <a href="/admin/seasonal/attendance?view=makeup" className="flex min-h-11 shrink-0 items-center gap-2 rounded-xl px-4 text-sm font-bold text-gray-500 hover:bg-gray-50 dark:hover:bg-gray-800"><Icon name="cached" className="text-xl" />보강 관리</a>
+        <a href="/admin/shuttle" className="flex min-h-11 shrink-0 items-center gap-2 rounded-xl px-4 text-sm font-bold text-gray-500 hover:bg-gray-50 dark:hover:bg-gray-800"><Icon name="directions_bus" className="text-xl" />셔틀 관리</a>
       </nav>
 
-      {notice && <div role="status" className="flex items-center gap-2 rounded-[3px] border border-[var(--doc-accent)] bg-[var(--doc-accent-soft)] p-4 text-sm font-bold text-[var(--doc-accent)]"><Icon name="check_circle" />{notice}</div>}
-      {error && <div role="alert" className="flex items-start justify-between gap-3 rounded-[3px] border border-[var(--doc-crit)] bg-[var(--doc-crit-soft)] p-4 text-sm font-bold text-[var(--doc-crit)]"><span>{error}</span><button type="button" onClick={() => void load()} className="underline">다시 시도</button></div>}
+      {notice && <div role="status" className="flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm font-bold text-emerald-800"><Icon name="check_circle" />{notice}</div>}
+      {error && <div role="alert" className="flex items-start justify-between gap-3 rounded-xl border border-red-200 bg-red-50 p-4 text-sm font-bold text-red-800"><span>{error}</span><button type="button" onClick={() => void load()} className="underline">다시 시도</button></div>}
       {loading ? <Loading /> : tab === "overview" ? <Overview stats={calculatedStats} seasons={data.seasons} applications={data.applications} onNavigate={setTab} /> : tab === "seasons" ? (
         <SeasonsView seasons={data.seasons} selected={selectedSeason} coaches={coachOptions} assigningInstructorClassId={assigningInstructorClassId} onSelect={setSelectedSeasonId} onAddClass={() => { setEditingClass(null); setModal("class"); }} onEditSeason={(season) => { setEditingSeason(season); setModal("season"); }} onEditClass={(klass) => { setEditingClass(klass); setModal("class"); }} onOpenRoster={(klass, weekday) => openRosterForClass(klass, { weekday })} onOpenTodayRoster={(klass) => openRosterForClass(klass, { date: todayDateInputValue() })} onAssignInstructor={assignClassInstructor} onStatus={async (id, status) => { try { await mutate("PATCH", { resource: "season", id, data: { status } }, "시즌 상태를 변경했습니다."); } catch (caught) { setError(caught instanceof Error ? caught.message : "시즌 상태를 변경하지 못했습니다."); } }} />
       ) : <ApplicationsView applications={filteredApplications} allApplications={data.applications} seasons={data.seasons} search={search} status={statusFilter} pagination={applicationsPagination} selectedItemIdSet={selectedItemIdSet} selectedItemCount={selectedItemIds.length} selectedApplicationCount={selectedApplicationCount} allVisibleSelected={allVisibleSelected} bulkProcessingStatus={bulkProcessingStatus} bulkConverting={bulkConverting} mode={applicationsMode} appTab={appTab} onAppTab={setAppTab} roster={roster} rosterFilters={rosterFilters} rosterLoading={rosterLoading} rosterError={rosterError} onMode={setApplicationsMode} onRosterFilters={setRosterFilters} onSearch={setSearch} onStatus={setStatusFilter} onPage={(page) => { setSelectedItemIds([]); void load({ includeApplications: true, page }); }} onSelect={setSelectedApplication} onToggleApplication={toggleApplicationSelection} onToggleAll={toggleAllVisibleApplications} onBulkStatus={handleBulkItemStatus} onBulkConversion={handleBulkConversion} />}
@@ -1417,14 +1417,14 @@ function Overview({ stats, seasons, applications, onNavigate }: { stats: Record<
   ] as const;
   return <div className="space-y-6"><section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">{cards.map(([label, count, icon, helper, clickable]) => {
     // 카드 내용은 클릭 가능 여부와 무관하게 동일하다 (숫자 표시는 그대로 유지)
-    const body = <><div className="flex items-center justify-between"><Icon name={icon} className="text-2xl text-[var(--doc-accent)]" /><span className="text-xs font-bold text-[var(--doc-ink-3)]">{helper}</span></div><p className="mt-4 text-3xl font-bold">{count}</p><p className="mt-1 text-sm font-bold text-[var(--doc-ink-2)]">{label}</p></>;
+    const body = <><div className="flex items-center justify-between"><Icon name={icon} className="text-2xl text-[var(--brand-accent)]" /><span className="text-xs font-bold text-gray-400">{helper}</span></div><p className="mt-4 text-3xl font-black">{count}</p><p className="mt-1 text-sm font-bold text-gray-600 dark:text-gray-300">{label}</p></>;
     // 이동 대상이 없는 카드에서는 hover 들썩임(transition hover:-translate-y-0.5)을 빼서 눌리는 것처럼 보이지 않게 한다
     return clickable
-      ? <button type="button" key={label} onClick={() => onNavigate("applications")} className="rounded-[6px] border border-[var(--doc-rule)] bg-[var(--doc-surface)] p-5 text-left transition hover:-translate-y-0.5">{body}</button>
-      : <div key={label} className="rounded-[6px] border border-[var(--doc-rule)] bg-[var(--doc-surface)] p-5 text-left">{body}</div>;
+      ? <button type="button" key={label} onClick={() => onNavigate("applications")} className="rounded-2xl border border-gray-200 bg-white p-5 text-left shadow-sm transition hover:-translate-y-0.5 dark:border-gray-700 dark:bg-gray-900">{body}</button>
+      : <div key={label} className="rounded-2xl border border-gray-200 bg-white p-5 text-left shadow-sm dark:border-gray-700 dark:bg-gray-900">{body}</div>;
   })}</section>
-    <section className="grid gap-4 lg:grid-cols-2"><Panel title="운영 중인 시즌" icon="calendar_month">{seasons.length ? seasons.slice(0, 4).map((season) => <div key={season.id} className="flex items-center justify-between border-b border-[var(--doc-rule)] py-3 last:border-0"><div><p className="font-bold">{season.name}</p><p className="text-xs text-[var(--doc-ink-2)]">{formatDate(season.startsAt)} ~ {formatDate(season.endsAt)} · {season.classes.length}개 반</p></div><span className={badge(season.status)}>{STATUS_LABEL[season.status] ?? season.status}</span></div>) : <Empty text="아직 개설된 시즌이 없습니다." />}</Panel>
-    <Panel title="최근 신청" icon="person_add">{applications.length ? applications.slice(0, 5).map((application) => <div key={application.id} className="flex items-center justify-between border-b border-[var(--doc-rule)] py-3 last:border-0"><div><p className="font-bold">{application.childName} <span className="text-xs text-[var(--doc-ink-3)]">{application.childGrade}</span></p><p className="text-xs text-[var(--doc-ink-2)]">{application.parentName} · {application.items.length}개 반</p></div><span className={badge(application.items[0]?.status)}>{STATUS_LABEL[application.items[0]?.status] ?? "접수"}</span></div>) : <Empty text="접수된 신청이 없습니다." />}</Panel></section></div>;
+    <section className="grid gap-4 lg:grid-cols-2"><Panel title="운영 중인 시즌" icon="calendar_month">{seasons.length ? seasons.slice(0, 4).map((season) => <div key={season.id} className="flex items-center justify-between border-b border-gray-100 py-3 last:border-0 dark:border-gray-800"><div><p className="font-bold">{season.name}</p><p className="text-xs text-gray-500">{formatDate(season.startsAt)} ~ {formatDate(season.endsAt)} · {season.classes.length}개 반</p></div><span className={badge(season.status)}>{STATUS_LABEL[season.status] ?? season.status}</span></div>) : <Empty text="아직 개설된 시즌이 없습니다." />}</Panel>
+    <Panel title="최근 신청" icon="person_add">{applications.length ? applications.slice(0, 5).map((application) => <div key={application.id} className="flex items-center justify-between border-b border-gray-100 py-3 last:border-0 dark:border-gray-800"><div><p className="font-bold">{application.childName} <span className="text-xs text-gray-400">{application.childGrade}</span></p><p className="text-xs text-gray-500">{application.parentName} · {application.items.length}개 반</p></div><span className={badge(application.items[0]?.status)}>{STATUS_LABEL[application.items[0]?.status] ?? "접수"}</span></div>) : <Empty text="접수된 신청이 없습니다." />}</Panel></section></div>;
 }
 
 function SeasonsView({
@@ -1471,10 +1471,10 @@ function SeasonsView({
                 type="button"
                 key={season.id}
                 onClick={() => onSelect(season.id)}
-                className={`w-full rounded-[3px] border p-3 text-left ${selected?.id === season.id ? "border-[var(--doc-accent)] bg-[var(--doc-accent-soft)]" : "border-[var(--doc-rule)] "}`}
+                className={`w-full rounded-xl border p-3 text-left ${selected?.id === season.id ? "border-[var(--brand-accent)] bg-[var(--brand-accent-soft)]" : "border-gray-200 dark:border-gray-700"}`}
               >
                 <p className="font-bold">{season.name}</p>
-                <p className="mt-1 text-xs text-[var(--doc-ink-2)]">{STATUS_LABEL[season.status]} · 운영반 {groupCount}개</p>
+                <p className="mt-1 text-xs text-gray-500">{STATUS_LABEL[season.status]} · 운영반 {groupCount}개</p>
               </button>
             );
           })}
@@ -1487,26 +1487,26 @@ function SeasonsView({
         icon="view_week"
         action={selected && (
           <div className="flex flex-wrap gap-2">
-            <button type="button" onClick={() => onEditSeason(selected)} className="min-h-10 rounded-[3px] border border-[var(--doc-rule)] px-3 text-sm font-bold">시즌 수정</button>
-            <select aria-label="시즌 상태" value={selected.status} onChange={(event) => void onStatus(selected.id, event.target.value as SeasonStatus)} className="min-h-10 rounded-[3px] border border-[var(--doc-rule)] bg-[var(--doc-surface)] px-2 text-sm">
+            <button type="button" onClick={() => onEditSeason(selected)} className="min-h-10 rounded-lg border border-gray-200 px-3 text-sm font-bold dark:border-gray-700">시즌 수정</button>
+            <select aria-label="시즌 상태" value={selected.status} onChange={(event) => void onStatus(selected.id, event.target.value as SeasonStatus)} className="min-h-10 rounded-lg border border-gray-200 bg-white px-2 text-sm dark:border-gray-700 dark:bg-gray-800">
               {["DRAFT", "PUBLISHED", "CLOSED", "ARCHIVED"].map((value) => <option key={value} value={value}>{STATUS_LABEL[value]}</option>)}
             </select>
-            <button type="button" onClick={onAddClass} className="min-h-10 rounded-[3px] bg-[var(--doc-accent)] px-3 text-sm font-bold text-[var(--doc-on-accent)]">운영반/요금 추가</button>
+            <button type="button" onClick={onAddClass} className="min-h-10 rounded-lg bg-[var(--brand-accent)] px-3 text-sm font-black text-[var(--brand-accent-contrast)]">운영반/요금 추가</button>
           </div>
         )}
       >
         {selected ? (
           <>
-            <div className="mb-4 grid gap-3 rounded-[3px] bg-[var(--doc-grid-head)] p-4 text-sm sm:grid-cols-3">
-              <p><span className="block text-xs text-[var(--doc-ink-2)]">모집 기간</span>{formatDate(selected.enrollmentStartsAt)} ~ {formatDate(selected.enrollmentEndsAt)}</p>
-              <p><span className="block text-xs text-[var(--doc-ink-2)]">운영 기간</span>{formatDate(selected.startsAt)} ~ {formatDate(selected.endsAt)}</p>
-              <p><span className="block text-xs text-[var(--doc-ink-2)]">지점</span>{selected.branch || "전체"}</p>
+            <div className="mb-4 grid gap-3 rounded-xl bg-gray-50 p-4 text-sm sm:grid-cols-3 dark:bg-gray-800">
+              <p><span className="block text-xs text-gray-500">모집 기간</span>{formatDate(selected.enrollmentStartsAt)} ~ {formatDate(selected.enrollmentEndsAt)}</p>
+              <p><span className="block text-xs text-gray-500">운영 기간</span>{formatDate(selected.startsAt)} ~ {formatDate(selected.endsAt)}</p>
+              <p><span className="block text-xs text-gray-500">지점</span>{selected.branch || "전체"}</p>
             </div>
             <div className="space-y-3">
               {inactiveGroups.length > 0 && (
-                <div className="flex items-center justify-between rounded-[3px] border border-[var(--doc-rule)] bg-[var(--doc-grid-head)] px-4 py-3 text-sm">
+                <div className="flex items-center justify-between rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm dark:border-gray-700 dark:bg-gray-800">
                   <span className="font-bold">취소된 운영 반 {inactiveGroups.length}개{showInactive ? "를 함께 표시합니다." : "를 숨겼습니다."}</span>
-                  <button type="button" onClick={() => setShowInactive((current) => !current)} className="min-h-9 rounded-[3px] border border-[var(--doc-rule)] bg-[var(--doc-surface)] px-3 text-xs font-bold">
+                  <button type="button" onClick={() => setShowInactive((current) => !current)} className="min-h-9 rounded-lg border border-gray-300 bg-white px-3 text-xs font-black dark:border-gray-600 dark:bg-gray-900">
                     {showInactive ? "운영 반만 보기" : "취소 반 보기"}
                   </button>
                 </div>
@@ -1524,61 +1524,61 @@ function SeasonsView({
                     ].filter((item): item is string => Boolean(item))
                   : [];
                 return (
-                  <article key={group.key} className="rounded-[3px] border border-[var(--doc-rule)] p-4">
+                  <article key={group.key} className="rounded-xl border border-gray-200 p-4 dark:border-gray-700">
                     <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
                       <div className="min-w-0 flex-1">
                         <div className="flex flex-wrap items-center gap-2">
-                          <h3 className="text-lg font-bold">{group.name}</h3>
-                          {group.baseClass.shuttleAvailable && <span className="rounded-[3px] bg-[var(--doc-grid-head)] px-2 py-1 text-xs font-bold text-[var(--doc-ink-2)]">셔틀</span>}
+                          <h3 className="text-lg font-black">{group.name}</h3>
+                          {group.baseClass.shuttleAvailable && <span className="rounded-full bg-blue-50 px-2 py-1 text-xs font-bold text-blue-700 dark:bg-blue-950/40 dark:text-blue-300">셔틀</span>}
                           <span className={badge(classStatus)}>{classStatusLabel}</span>
                         </div>
-                        <p className="mt-1 text-sm text-[var(--doc-ink-2)]">
+                        <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
                           {group.baseClass.targetGrade || "전체 학년"} · {group.baseClass.location || selected.branch || "장소 미정"} · 운영 요일 {activeSlots || "미등록"}개
                         </p>
-                        <p className="mt-2 text-xs font-bold text-[var(--doc-ink-2)]">
+                        <p className="mt-2 text-xs font-bold text-gray-500 dark:text-gray-400">
                           주 n회 정보는 수강료 계산용입니다. 실제 반은 이 운영반 하나로 관리합니다.
                         </p>
                       </div>
                       <div className="grid gap-2 sm:grid-cols-[120px_auto] xl:min-w-[440px]">
-                        <div className="rounded-[3px] bg-[var(--doc-grid-head)] px-3 py-2 text-right">
-                          <p className="font-bold">확정 {group.confirmedTotal}명</p>
-                          <p className="text-xs text-[var(--doc-ink-2)]">요일 정원 {group.capacity || "미정"}명 · 대기 {group.waitlistedTotal}명</p>
+                        <div className="rounded-lg bg-gray-50 px-3 py-2 text-right dark:bg-gray-800">
+                          <p className="font-black">확정 {group.confirmedTotal}명</p>
+                          <p className="text-xs text-gray-500">요일 정원 {group.capacity || "미정"}명 · 대기 {group.waitlistedTotal}명</p>
                         </div>
                         <div className="flex flex-wrap gap-2 xl:justify-end">
-                          <button type="button" onClick={() => onOpenRoster(group.baseClass)} className="inline-flex min-h-10 items-center gap-1 rounded-[3px] border border-[var(--doc-rule)] px-3 text-sm font-bold"><Icon name="groups" className="text-lg" />전체 명단</button>
-                          <button type="button" onClick={() => onOpenTodayRoster(group.baseClass)} className="inline-flex min-h-10 items-center gap-1 rounded-[3px] border border-[var(--doc-rule)] px-3 text-sm font-bold"><Icon name="fact_check" className="text-lg" />오늘 출석</button>
-                          <button type="button" onClick={() => onEditClass(group.baseClass)} className="inline-flex min-h-10 items-center gap-1 rounded-[3px] border border-[var(--doc-rule)] px-3 text-sm font-bold"><Icon name="edit" className="text-lg" />기본정보</button>
+                          <button type="button" onClick={() => onOpenRoster(group.baseClass)} className="inline-flex min-h-10 items-center gap-1 rounded-lg border border-gray-200 px-3 text-sm font-bold dark:border-gray-700"><Icon name="groups" className="text-lg" />전체 명단</button>
+                          <button type="button" onClick={() => onOpenTodayRoster(group.baseClass)} className="inline-flex min-h-10 items-center gap-1 rounded-lg border border-gray-200 px-3 text-sm font-bold dark:border-gray-700"><Icon name="fact_check" className="text-lg" />오늘 출석</button>
+                          <button type="button" onClick={() => onEditClass(group.baseClass)} className="inline-flex min-h-10 items-center gap-1 rounded-lg border border-gray-200 px-3 text-sm font-bold dark:border-gray-700"><Icon name="edit" className="text-lg" />기본정보</button>
                         </div>
                       </div>
                     </div>
                     <div className="mt-4 grid gap-3 xl:grid-cols-[minmax(0,1fr)_260px]">
-                      <div className="rounded-[3px] bg-[var(--doc-grid-head)] p-3">
+                      <div className="rounded-xl bg-gray-50 p-3 dark:bg-gray-800/80">
                         <div className="mb-2 flex items-center justify-between gap-2">
-                          <h4 className="text-sm font-bold">요일별 운영</h4>
-                          <span className="text-xs font-bold text-[var(--doc-ink-2)]">학생별 신청 요일 기준</span>
+                          <h4 className="text-sm font-black">요일별 운영</h4>
+                          <span className="text-xs font-bold text-gray-500">학생별 신청 요일 기준</span>
                         </div>
                         <div className="grid gap-2 md:grid-cols-2">
                           {group.slots.map((slot) => {
                             const assigningKey = `${group.baseClass.id}:${slot.key}`;
                             const currentCoachMissingFromOptions = Boolean(slot.instructorId && !coaches.some((coach) => coach.id === slot.instructorId));
                             return (
-                              <div key={slot.key} className="rounded-[3px] border border-[var(--doc-rule)] bg-[var(--doc-surface)] p-3">
+                              <div key={slot.key} className="rounded-lg border border-gray-200 bg-white p-3 dark:border-gray-700 dark:bg-gray-900">
                                 <div className="flex items-start justify-between gap-2">
                                   <div>
-                                    <p className="font-bold">{slot.label}요일</p>
-                                    <p className="text-xs font-bold text-[var(--doc-ink-2)]">{slot.startTime}~{slot.endTime} · {slot.dateCount}회차</p>
-                                    <p className="text-xs text-[var(--doc-ink-2)]">{slot.location || "장소 미정"}</p>
+                                    <p className="font-black">{slot.label}요일</p>
+                                    <p className="text-xs font-bold text-gray-500">{slot.startTime}~{slot.endTime} · {slot.dateCount}회차</p>
+                                    <p className="text-xs text-gray-500">{slot.location || "장소 미정"}</p>
                                   </div>
-                                  <button type="button" onClick={() => onOpenRoster(group.baseClass, slot.weekdayKey)} className="min-h-8 rounded-[3px] border border-[var(--doc-rule)] px-2 text-xs font-bold">명단 {slot.confirmed}</button>
+                                  <button type="button" onClick={() => onOpenRoster(group.baseClass, slot.weekdayKey)} className="min-h-8 rounded-lg border border-gray-200 px-2 text-xs font-black dark:border-gray-700">명단 {slot.confirmed}</button>
                                 </div>
-                                <label className="mt-3 block text-xs font-bold text-[var(--doc-ink-2)]">
+                                <label className="mt-3 block text-xs font-black text-gray-500 dark:text-gray-400">
                                   담당 선생님
                                   <select
                                     aria-label={`${group.name} ${slot.label}요일 담당 선생님`}
                                     value={slot.instructorId}
                                     disabled={assigningInstructorClassId === assigningKey}
                                     onChange={(event) => void onAssignInstructor(group.baseClass, slot, event.target.value)}
-                                    className="mt-1 min-h-10 w-full rounded-[3px] border border-[var(--doc-rule)] bg-[var(--doc-surface)] px-3 text-sm font-bold text-gray-950 disabled:cursor-wait disabled:opacity-60"
+                                    className="mt-1 min-h-10 w-full rounded-lg border border-gray-200 bg-white px-3 text-sm font-bold text-gray-950 disabled:cursor-wait disabled:opacity-60 dark:border-gray-700 dark:bg-gray-800 dark:text-white"
                                   >
                                     <option value="">{slot.mixedInstructor ? "혼합 배정" : "담당자 미정"}</option>
                                     {currentCoachMissingFromOptions && <option value={slot.instructorId}>{slot.instructorName || "현재 담당 선생님"}</option>}
@@ -1591,18 +1591,18 @@ function SeasonsView({
                           {!group.slots.length && <Empty text="등록된 요일별 수업 일정이 없습니다." />}
                         </div>
                       </div>
-                      <div className="rounded-[3px] bg-[var(--doc-grid-head)] p-3">
-                        <h4 className="text-sm font-bold">수강료 계산 규칙</h4>
+                      <div className="rounded-xl bg-gray-50 p-3 dark:bg-gray-800/80">
+                        <h4 className="text-sm font-black">수강료 계산 규칙</h4>
                         <div className="mt-2 space-y-2">
                           {group.pricingRules.map((rule) => (
-                            <div key={rule.key} className="rounded-[3px] bg-[var(--doc-surface)] px-3 py-2 text-sm">
+                            <div key={rule.key} className="rounded-lg bg-white px-3 py-2 text-sm dark:bg-gray-900">
                               <div className="flex items-center justify-between">
-                                <span className="font-bold">{rule.label}</span>
-                                {group.baseClass.shuttleAvailable && <span className="text-xs font-bold text-[var(--doc-ink-2)]">셔틀 +{(rule.shuttleFee ?? 0).toLocaleString()}원</span>}
+                                <span className="font-black">{rule.label}</span>
+                                {group.baseClass.shuttleAvailable && <span className="text-xs font-bold text-blue-700 dark:text-blue-300">셔틀 +{(rule.shuttleFee ?? 0).toLocaleString()}원</span>}
                               </div>
                               <div className="mt-1 flex items-center justify-between gap-3 text-xs">
-                                <span className="text-[var(--doc-ink-2)]">기존 {(rule.existingPrice ?? rule.price).toLocaleString()}원</span>
-                                <span className="font-bold text-[var(--doc-accent)]">신규 {(rule.newPrice ?? rule.price).toLocaleString()}원</span>
+                                <span className="text-gray-500">기존 {(rule.existingPrice ?? rule.price).toLocaleString()}원</span>
+                                <span className="font-bold text-[var(--brand-accent)]">신규 {(rule.newPrice ?? rule.price).toLocaleString()}원</span>
                               </div>
                             </div>
                           ))}
@@ -1610,8 +1610,8 @@ function SeasonsView({
                       </div>
                     </div>
                     {attendanceMissing.length > 0 && (
-                      <div role="status" className="mt-3 rounded-[3px] border border-[var(--doc-warn)] bg-[var(--doc-grid-head)] p-3 text-sm text-[var(--doc-warn)]">
-                        <p className="flex items-center gap-2 font-bold"><Icon name="warning" />출석 준비 미완료</p>
+                      <div role="status" className="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-100">
+                        <p className="flex items-center gap-2 font-black"><Icon name="warning" />출석 준비 미완료</p>
                         <p className="mt-1 text-xs">빠진 항목: {attendanceMissing.join(" · ")}</p>
                       </div>
                     )}
@@ -1724,24 +1724,24 @@ function ApplicationsView({
   const sortFor = (key: "name" | "parent" | "createdAt") => (dir: "asc" | "desc") => { setSort({ key, dir }); setOpenCol(null); };
 
   return <div className="space-y-4">
-    <div className="print:hidden inline-flex rounded-[3px] border border-[var(--doc-rule)] bg-[var(--doc-surface)] p-1" aria-label="신청 관리 보기">
-      <button type="button" onClick={() => onMode("applications")} className={`min-h-10 rounded-[3px] px-4 text-sm font-bold ${mode === "applications" ? "bg-[var(--doc-accent-soft)] text-[var(--doc-accent)]" : "text-[var(--doc-ink-2)]"}`}>신청별</button>
-      <button type="button" onClick={() => onMode("roster")} className={`min-h-10 rounded-[3px] px-4 text-sm font-bold ${mode === "roster" ? "bg-[var(--doc-accent-soft)] text-[var(--doc-accent)]" : "text-[var(--doc-ink-2)]"}`}>반별 명단</button>
+    <div className="print:hidden inline-flex rounded-xl border border-gray-200 bg-white p-1 dark:border-gray-700 dark:bg-gray-900" aria-label="신청 관리 보기">
+      <button type="button" onClick={() => onMode("applications")} className={`min-h-10 rounded-lg px-4 text-sm font-black ${mode === "applications" ? "bg-[var(--brand-accent-soft)] text-[var(--brand-accent)]" : "text-gray-500"}`}>신청별</button>
+      <button type="button" onClick={() => onMode("roster")} className={`min-h-10 rounded-lg px-4 text-sm font-black ${mode === "roster" ? "bg-[var(--brand-accent-soft)] text-[var(--brand-accent)]" : "text-gray-500"}`}>반별 명단</button>
     </div>
     {mode === "roster" ? <RosterView seasons={seasons} applications={allApplications} roster={roster} filters={rosterFilters} loading={rosterLoading} error={rosterError} onFilters={onRosterFilters} onSelect={onSelect} /> : <Panel title="신청 목록" icon="assignment_ind">
     {/* 진행 중 / 취소자 탭 — 취소자를 본 목록에서 분리해 관리 편의를 높인다. */}
-    <div className="mb-3 inline-flex rounded-[3px] border border-[var(--doc-rule)] bg-[var(--doc-surface)] p-1" aria-label="신청 진행 상태 탭">
-      <button type="button" onClick={() => onAppTab("active")} className={`min-h-10 rounded-[3px] px-4 text-sm font-bold ${appTab === "active" ? "bg-[var(--doc-accent-soft)] text-[var(--doc-accent)]" : "text-[var(--doc-ink-2)]"}`}>진행 중</button>
-      <button type="button" onClick={() => onAppTab("cancelled")} className={`min-h-10 rounded-[3px] px-4 text-sm font-bold ${appTab === "cancelled" ? "bg-[var(--doc-crit-soft)] text-[var(--doc-crit)] " : "text-[var(--doc-ink-2)]"}`}>취소자</button>
+    <div className="mb-3 inline-flex rounded-xl border border-gray-200 bg-white p-1 dark:border-gray-700 dark:bg-gray-900" aria-label="신청 진행 상태 탭">
+      <button type="button" onClick={() => onAppTab("active")} className={`min-h-10 rounded-lg px-4 text-sm font-black ${appTab === "active" ? "bg-[var(--brand-accent-soft)] text-[var(--brand-accent)]" : "text-gray-500"}`}>진행 중</button>
+      <button type="button" onClick={() => onAppTab("cancelled")} className={`min-h-10 rounded-lg px-4 text-sm font-black ${appTab === "cancelled" ? "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300" : "text-gray-500"}`}>취소자</button>
     </div>
     <div className="mb-4 flex flex-col gap-3 sm:flex-row">
       <label className="relative flex-1">
-        <Icon name="search" className="absolute left-3 top-3 text-xl text-[var(--doc-ink-3)]" />
-        <input value={search} onChange={(event) => onSearch(event.target.value)} placeholder="학생·학부모·전화번호 검색" className="min-h-11 w-full rounded-[3px] border border-[var(--doc-rule)] bg-[var(--doc-surface)] pl-10 pr-3" />
+        <Icon name="search" className="absolute left-3 top-3 text-xl text-gray-400" />
+        <input value={search} onChange={(event) => onSearch(event.target.value)} placeholder="학생·학부모·전화번호 검색" className="min-h-11 w-full rounded-xl border border-gray-200 bg-white pl-10 pr-3 dark:border-gray-700 dark:bg-gray-800" />
       </label>
       {/* 상태 세부 필터는 '진행 중' 탭에서만. 취소자 탭은 취소만 보이므로 필터 불필요. */}
       {appTab === "active" && (
-        <select aria-label="신청 상태" value={status} onChange={(event) => onStatus(event.target.value)} className="min-h-11 rounded-[3px] border border-[var(--doc-rule)] bg-[var(--doc-surface)] px-3">
+        <select aria-label="신청 상태" value={status} onChange={(event) => onStatus(event.target.value)} className="min-h-11 rounded-xl border border-gray-200 bg-white px-3 dark:border-gray-700 dark:bg-gray-800">
           <option value="ALL">전체 상태(취소 제외)</option>
           {["PENDING","APPROVED","WAITLISTED","REJECTED"].map((value) => <option value={value} key={value}>{STATUS_LABEL[value]}</option>)}
         </select>
@@ -1749,10 +1749,10 @@ function ApplicationsView({
     </div>
 
     {selectedItemCount > 0 && (
-      <div className="mb-4 flex flex-col gap-3 rounded-[6px] border border-[var(--doc-accent)] bg-[var(--doc-accent-soft)] p-4 sm:flex-row sm:items-center sm:justify-between">
+      <div className="mb-4 flex flex-col gap-3 rounded-2xl border border-[var(--brand-accent)] bg-[var(--brand-accent-soft)] p-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <p className="font-bold text-gray-950">선택한 신청 반 {selectedItemCount}개</p>
-          <p className="mt-1 text-xs font-bold text-[var(--doc-ink-2)]">{selectedApplicationCount}명 학생을 현재 목록에서 처리합니다.</p>
+          <p className="font-black text-gray-950 dark:text-white">선택한 신청 반 {selectedItemCount}개</p>
+          <p className="mt-1 text-xs font-bold text-gray-600 dark:text-gray-300">{selectedApplicationCount}명 학생을 현재 목록에서 처리합니다.</p>
         </div>
         <div className="flex flex-wrap gap-2">
           {BULK_ITEM_STATUSES.map((nextStatus) => (
@@ -1761,7 +1761,7 @@ function ApplicationsView({
               type="button"
               disabled={Boolean(bulkProcessingStatus) || bulkConverting}
               onClick={() => void onBulkStatus(nextStatus)}
-              className="inline-flex min-h-10 items-center justify-center gap-1 rounded-[3px] border border-[var(--doc-rule)] bg-[var(--doc-surface)] px-3 text-sm font-bold text-[var(--doc-ink)] hover:border-[var(--doc-accent)] hover:text-[var(--doc-accent)] disabled:cursor-wait disabled:opacity-60"
+              className="inline-flex min-h-10 items-center justify-center gap-1 rounded-xl border border-gray-200 bg-white px-3 text-sm font-black text-gray-900 hover:border-[var(--brand-accent)] hover:text-[var(--brand-accent)] disabled:cursor-wait disabled:opacity-60 dark:border-gray-700 dark:bg-gray-900 dark:text-white"
             >
               {bulkProcessingStatus === nextStatus ? "처리 중" : STATUS_LABEL[nextStatus]}
             </button>
@@ -1770,7 +1770,7 @@ function ApplicationsView({
             type="button"
             disabled={Boolean(bulkProcessingStatus) || bulkConverting}
             onClick={() => void onBulkConversion()}
-            className="inline-flex min-h-10 items-center justify-center gap-1 rounded-[3px] bg-[var(--doc-accent)] px-3 text-sm font-bold text-[var(--doc-on-accent)] disabled:cursor-wait disabled:opacity-60"
+            className="inline-flex min-h-10 items-center justify-center gap-1 rounded-xl bg-[var(--brand-accent)] px-3 text-sm font-black text-[var(--brand-accent-contrast)] disabled:cursor-wait disabled:opacity-60"
           >
             <Icon name="receipt_long" className="text-lg" />
             {bulkConverting ? "생성 중" : "수강·청구 생성"}
@@ -1781,7 +1781,7 @@ function ApplicationsView({
 
     <div className="overflow-x-auto">
       <table className="w-full min-w-[1080px] text-left text-sm">
-        <thead className="bg-[var(--doc-grid-head)] text-xs text-[var(--doc-ink-2)]">
+        <thead className="bg-gray-50 text-xs text-gray-500 dark:bg-gray-800">
           <tr className="align-top">
             <th className="w-12 px-4 py-3">
               <input
@@ -1790,7 +1790,7 @@ function ApplicationsView({
                 checked={allVisibleSelected}
                 disabled={visibleItemCount === 0}
                 onChange={(event) => onToggleAll(event.target.checked)}
-                className="h-5 w-5 rounded border-[var(--doc-rule)] accent-[var(--doc-accent)]"
+                className="h-5 w-5 rounded border-gray-300 accent-[var(--brand-accent)]"
               />
             </th>
             <th className="px-4 py-3">
@@ -1828,14 +1828,14 @@ function ApplicationsView({
             <th className="px-4 py-3"><span className="sr-only">상세</span></th>
           </tr>
         </thead>
-        <tbody className="divide-y divide-[var(--doc-rule)] dark:divide-[var(--doc-rule)]">
+        <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
           {displayApplications.map((application) => {
             const itemIds = application.items.map((item) => item.id);
             const selectedCount = itemIds.filter((itemId) => selectedItemIdSet.has(itemId)).length;
             const checked = itemIds.length > 0 && selectedCount === itemIds.length;
             const classInfo = applicationClassInfo(application.items);
             return (
-              <tr key={application.id} className={checked ? "bg-[var(--doc-accent-soft)]/60 " : "hover:bg-[var(--doc-grid-head)] "}>
+              <tr key={application.id} className={checked ? "bg-[var(--brand-accent-soft)]/60 dark:bg-gray-800" : "hover:bg-gray-50 dark:hover:bg-gray-800/50"}>
                 <td className="px-4 py-4 align-top">
                   <input
                     type="checkbox"
@@ -1843,34 +1843,34 @@ function ApplicationsView({
                     checked={checked}
                     disabled={itemIds.length === 0}
                     onChange={(event) => onToggleApplication(application, event.target.checked)}
-                    className="h-5 w-5 rounded border-[var(--doc-rule)] accent-[var(--doc-accent)]"
+                    className="h-5 w-5 rounded border-gray-300 accent-[var(--brand-accent)]"
                   />
                 </td>
                 <td className="px-4 py-4 align-top">
-                  <button type="button" onClick={() => onSelect(application)} className="font-bold hover:underline">{application.childName}</button>
-                  <p className="text-xs text-[var(--doc-ink-2)]">{application.childGrade} {application.childSchool}</p>
-                  {selectedCount > 0 && <p className="mt-1 text-xs font-bold text-[var(--doc-accent)]">{selectedCount}/{itemIds.length}개 선택</p>}
+                  <button type="button" onClick={() => onSelect(application)} className="font-black hover:underline">{application.childName}</button>
+                  <p className="text-xs text-gray-500">{application.childGrade} {application.childSchool}</p>
+                  {selectedCount > 0 && <p className="mt-1 text-xs font-black text-[var(--brand-accent)]">{selectedCount}/{itemIds.length}개 선택</p>}
                 </td>
                 <td className="px-4 py-4 align-top">
-                  <span className={`inline-flex min-h-7 items-center rounded-[3px] px-2.5 text-xs font-bold ${application.applicantType === "NEW" ? "bg-[var(--doc-grid-head)] text-[var(--doc-ink-2)]  " : "bg-[var(--doc-grid-head)] text-[var(--doc-ink-2)] "}`}>{application.applicantType === "NEW" ? "신규" : application.applicantType === "EXISTING" ? "기존" : "-"}</span>
+                  <span className={`inline-flex min-h-7 items-center rounded-full px-2.5 text-xs font-black ${application.applicantType === "NEW" ? "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-200" : "bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-200"}`}>{application.applicantType === "NEW" ? "신규" : application.applicantType === "EXISTING" ? "기존" : "-"}</span>
                 </td>
                 <td className="px-4 py-4 align-top">
                   <div className="space-y-0.5 font-bold">
-                    {classInfo.bases.length ? classInfo.bases.map((b) => <p key={b}>{b}</p>) : <p className="text-[var(--doc-ink-3)]">-</p>}
+                    {classInfo.bases.length ? classInfo.bases.map((b) => <p key={b}>{b}</p>) : <p className="text-gray-400">-</p>}
                   </div>
                   <div className="mt-1 flex flex-wrap gap-1">
                     {application.items.slice(0,2).map((item) => <span key={item.id} className={badge(item.status)}>{STATUS_LABEL[item.status]}</span>)}
-                    {application.items.length > 2 && <span className="inline-flex min-h-7 items-center rounded-[3px] bg-[var(--doc-grid-head)] px-2.5 text-xs font-bold text-[var(--doc-ink-2)]">+{application.items.length - 2}</span>}
+                    {application.items.length > 2 && <span className="inline-flex min-h-7 items-center rounded-full bg-gray-100 px-2.5 text-xs font-bold text-gray-700 dark:bg-gray-700 dark:text-gray-200">+{application.items.length - 2}</span>}
                   </div>
                 </td>
                 <td className="px-4 py-4 align-top">
                   <div className="flex flex-wrap gap-1">
-                    {classInfo.freqs.length ? classInfo.freqs.map((f) => <span key={f} className="inline-flex min-h-7 items-center rounded-[3px] bg-[var(--doc-accent-soft)] px-2.5 text-xs font-bold text-[var(--doc-accent)]">{f}</span>) : <span className="text-[var(--doc-ink-3)]">-</span>}
+                    {classInfo.freqs.length ? classInfo.freqs.map((f) => <span key={f} className="inline-flex min-h-7 items-center rounded-full bg-[var(--brand-accent-soft)] px-2.5 text-xs font-black text-[var(--brand-accent)]">{f}</span>) : <span className="text-gray-400">-</span>}
                   </div>
                 </td>
                 <td className="px-4 py-4 align-top">
                   <p className="font-bold">{application.parentName}</p>
-                  <a href={`tel:${application.parentPhone}`} className="text-xs text-[var(--doc-accent)] hover:underline">{application.parentPhone}</a>
+                  <a href={`tel:${application.parentPhone}`} className="text-xs text-[var(--brand-accent)] hover:underline">{application.parentPhone}</a>
                   <NotificationSummaryText summary={latestApplicationNotification(application)} />
                 </td>
                 <td className="px-4 py-4 align-top">
@@ -1879,11 +1879,11 @@ function ApplicationsView({
                 </td>
                 <td className="px-4 py-4 align-top">
                   {application.shuttleNeeded
-                    ? <span className="inline-flex min-h-7 items-center rounded-[3px] bg-[var(--doc-accent-soft)] px-2.5 text-xs font-bold text-[var(--doc-accent)]">🚌 이용</span>
-                    : <span className="inline-flex min-h-7 items-center rounded-[3px] bg-[var(--doc-grid-head)] px-2.5 text-xs font-bold text-[var(--doc-ink-2)]">미이용</span>}
+                    ? <span className="inline-flex min-h-7 items-center rounded-full bg-green-100 px-2.5 text-xs font-black text-green-700 dark:bg-green-900/40 dark:text-green-200">🚌 이용</span>
+                    : <span className="inline-flex min-h-7 items-center rounded-full bg-gray-100 px-2.5 text-xs font-black text-gray-500 dark:bg-gray-700 dark:text-gray-300">미이용</span>}
                 </td>
-                <td className="px-4 py-4 align-top text-[var(--doc-ink-2)]">{formatDate(application.createdAt)}</td>
-                <td className="px-4 py-4 align-top"><button type="button" onClick={() => onSelect(application)} className="inline-flex min-h-10 items-center rounded-[3px] border border-[var(--doc-rule)] px-3 font-bold">상세</button></td>
+                <td className="px-4 py-4 align-top text-gray-500">{formatDate(application.createdAt)}</td>
+                <td className="px-4 py-4 align-top"><button type="button" onClick={() => onSelect(application)} className="inline-flex min-h-10 items-center rounded-lg border border-gray-200 px-3 font-bold dark:border-gray-700">상세</button></td>
               </tr>
             );
           })}
@@ -1893,7 +1893,7 @@ function ApplicationsView({
     </div>
     {pagination.totalPages > 1 && (
       <nav className="mt-4 flex flex-col gap-2 text-sm font-bold sm:flex-row sm:items-center sm:justify-between" aria-label="신청 목록 페이지">
-        <span className="text-[var(--doc-ink-2)]">
+        <span className="text-gray-500">
           {pagination.total.toLocaleString()}건 중 {(pagination.page - 1) * pagination.pageSize + 1}-
           {Math.min(pagination.page * pagination.pageSize, pagination.total).toLocaleString()}건
         </span>
@@ -1902,7 +1902,7 @@ function ApplicationsView({
             type="button"
             disabled={pagination.page <= 1}
             onClick={() => onPage(pagination.page - 1)}
-            className="min-h-10 rounded-[3px] border border-[var(--doc-rule)] px-3 disabled:opacity-40"
+            className="min-h-10 rounded-lg border border-gray-200 px-3 disabled:opacity-40 dark:border-gray-700"
           >
             이전
           </button>
@@ -1911,7 +1911,7 @@ function ApplicationsView({
             type="button"
             disabled={pagination.page >= pagination.totalPages}
             onClick={() => onPage(pagination.page + 1)}
-            className="min-h-10 rounded-[3px] border border-[var(--doc-rule)] px-3 disabled:opacity-40"
+            className="min-h-10 rounded-lg border border-gray-200 px-3 disabled:opacity-40 dark:border-gray-700"
           >
             다음
           </button>
@@ -1997,27 +1997,27 @@ function RosterView({ seasons, applications, roster, filters, loading, error, on
   ].filter(Boolean).join(" · ") || "방학특강 일자별 출석부";
 
   return <Panel title="일자별 출석부" icon="fact_check" action={<div className="print:hidden flex gap-2">
-    <button type="button" onClick={() => window.print()} className="inline-flex min-h-10 items-center gap-1 rounded-[3px] border border-[var(--doc-rule)] px-3 text-sm font-bold"><Icon name="print" />인쇄</button>
-    <button type="button" onClick={() => void downloadCsv().catch((caught) => window.alert(caught instanceof Error ? caught.message : "CSV 다운로드에 실패했습니다."))} className="inline-flex min-h-10 items-center gap-1 rounded-[3px] bg-[var(--doc-accent)] px-3 text-sm font-bold text-[var(--doc-on-accent)]"><Icon name="download" />CSV</button>
+    <button type="button" onClick={() => window.print()} className="inline-flex min-h-10 items-center gap-1 rounded-lg border border-gray-200 px-3 text-sm font-black dark:border-gray-700"><Icon name="print" />인쇄</button>
+    <button type="button" onClick={() => void downloadCsv().catch((caught) => window.alert(caught instanceof Error ? caught.message : "CSV 다운로드에 실패했습니다."))} className="inline-flex min-h-10 items-center gap-1 rounded-lg bg-[var(--brand-accent)] px-3 text-sm font-black text-[var(--brand-accent-contrast)]"><Icon name="download" />CSV</button>
   </div>}>
     <style>{`@media print { @page { size: A4 landscape; margin: 12mm; } body * { visibility: hidden !important; } .seasonal-roster-print, .seasonal-roster-print * { visibility: visible !important; } .seasonal-roster-print { position: absolute; inset: 0; width: 100%; color: #000 !important; } .roster-desktop { display: block !important; } .roster-mobile, .print\\:hidden { display: none !important; } .seasonal-roster-print table { width: 100%; border-collapse: collapse; font-size: 10pt; } .seasonal-roster-print th, .seasonal-roster-print td { border: 1px solid #777; padding: 6px; } .seasonal-roster-print thead { display: table-header-group; } }`}</style>
     <div className="print:hidden grid gap-2 sm:grid-cols-2 xl:grid-cols-7">
-      <select aria-label="명단 시즌" value={filters.seasonId} onChange={(event) => changeFilter("seasonId", event.target.value)} className="min-h-11 rounded-[3px] border border-[var(--doc-rule)] bg-[var(--doc-surface)] px-3"><option value="">전체 시즌</option>{seasons.map((season) => <option key={season.id} value={season.id}>{season.name}</option>)}</select>
-      <select aria-label="명단 반" value={filters.offeringId} onChange={(event) => changeFilter("offeringId", event.target.value)} className="min-h-11 rounded-[3px] border border-[var(--doc-rule)] bg-[var(--doc-surface)] px-3"><option value="">전체 운영 반</option>{offerings.map((offering) => <option key={offering.id} value={offering.id}>{offering.name}</option>)}</select>
-      <input aria-label="명단 출석일" type="date" value={filters.date} onChange={(event) => changeFilter("date", event.target.value)} className="min-h-11 rounded-[3px] border border-[var(--doc-rule)] bg-[var(--doc-surface)] px-3 font-bold" />
-      <select aria-label="명단 요일" value={filters.weekday} onChange={(event) => changeFilter("weekday", event.target.value)} className="min-h-11 rounded-[3px] border border-[var(--doc-rule)] bg-[var(--doc-surface)] px-3"><option value="">전체 요일</option>{["월","화","수","목","금","토","일"].map((day) => <option key={day} value={day}>{day}요일</option>)}</select>
-      <select aria-label="명단 결제" value={filters.paymentStatus} onChange={(event) => changeFilter("paymentStatus", event.target.value)} className="min-h-11 rounded-[3px] border border-[var(--doc-rule)] bg-[var(--doc-surface)] px-3"><option value="">전체 결제</option><option value="PAID">결제 완료</option><option value="UNPAID">미결제</option><option value="PAYMENT_PENDING">결제 대기</option></select>
-      <select aria-label="명단 셔틀" value={filters.shuttleStatus} onChange={(event) => changeFilter("shuttleStatus", event.target.value)} className="min-h-11 rounded-[3px] border border-[var(--doc-rule)] bg-[var(--doc-surface)] px-3"><option value="">전체 셔틀</option><option value="NOT_USED">미이용</option><option value="REQUESTED">요청</option><option value="UNASSIGNED">미배정</option><option value="ASSIGNED">배정 완료</option></select>
-      <label className="relative"><span className="sr-only">명단 검색</span><Icon name="search" className="absolute left-3 top-3 text-xl text-[var(--doc-ink-3)]" /><input value={filters.q} onChange={(event) => changeFilter("q", event.target.value)} placeholder="학생·학교 검색" className="min-h-11 w-full rounded-[3px] border border-[var(--doc-rule)] bg-[var(--doc-surface)] pl-10 pr-3" /></label>
+      <select aria-label="명단 시즌" value={filters.seasonId} onChange={(event) => changeFilter("seasonId", event.target.value)} className="min-h-11 rounded-xl border border-gray-200 bg-white px-3 dark:border-gray-700 dark:bg-gray-800"><option value="">전체 시즌</option>{seasons.map((season) => <option key={season.id} value={season.id}>{season.name}</option>)}</select>
+      <select aria-label="명단 반" value={filters.offeringId} onChange={(event) => changeFilter("offeringId", event.target.value)} className="min-h-11 rounded-xl border border-gray-200 bg-white px-3 dark:border-gray-700 dark:bg-gray-800"><option value="">전체 운영 반</option>{offerings.map((offering) => <option key={offering.id} value={offering.id}>{offering.name}</option>)}</select>
+      <input aria-label="명단 출석일" type="date" value={filters.date} onChange={(event) => changeFilter("date", event.target.value)} className="min-h-11 rounded-xl border border-gray-200 bg-white px-3 font-bold dark:border-gray-700 dark:bg-gray-800" />
+      <select aria-label="명단 요일" value={filters.weekday} onChange={(event) => changeFilter("weekday", event.target.value)} className="min-h-11 rounded-xl border border-gray-200 bg-white px-3 dark:border-gray-700 dark:bg-gray-800"><option value="">전체 요일</option>{["월","화","수","목","금","토","일"].map((day) => <option key={day} value={day}>{day}요일</option>)}</select>
+      <select aria-label="명단 결제" value={filters.paymentStatus} onChange={(event) => changeFilter("paymentStatus", event.target.value)} className="min-h-11 rounded-xl border border-gray-200 bg-white px-3 dark:border-gray-700 dark:bg-gray-800"><option value="">전체 결제</option><option value="PAID">결제 완료</option><option value="UNPAID">미결제</option><option value="PAYMENT_PENDING">결제 대기</option></select>
+      <select aria-label="명단 셔틀" value={filters.shuttleStatus} onChange={(event) => changeFilter("shuttleStatus", event.target.value)} className="min-h-11 rounded-xl border border-gray-200 bg-white px-3 dark:border-gray-700 dark:bg-gray-800"><option value="">전체 셔틀</option><option value="NOT_USED">미이용</option><option value="REQUESTED">요청</option><option value="UNASSIGNED">미배정</option><option value="ASSIGNED">배정 완료</option></select>
+      <label className="relative"><span className="sr-only">명단 검색</span><Icon name="search" className="absolute left-3 top-3 text-xl text-gray-400" /><input value={filters.q} onChange={(event) => changeFilter("q", event.target.value)} placeholder="학생·학교 검색" className="min-h-11 w-full rounded-xl border border-gray-200 bg-white pl-10 pr-3 dark:border-gray-700 dark:bg-gray-800" /></label>
     </div>
-    <div className="mt-4 grid grid-cols-3 gap-2 text-center"><div className="rounded-[3px] bg-[var(--doc-accent-soft)] p-3 text-[var(--doc-accent)]"><strong className="block text-xl">{roster.stats.confirmed}</strong><span className="text-xs font-bold">확정</span></div><div className="rounded-[3px] bg-[var(--doc-grid-head)] p-3 text-[var(--doc-warn)]"><strong className="block text-xl">{roster.stats.unpaid}</strong><span className="text-xs font-bold">미결제</span></div><div className="rounded-[3px] bg-[var(--doc-grid-head)] p-3 text-[var(--doc-ink-2)]"><strong className="block text-xl">{roster.stats.shuttle}</strong><span className="text-xs font-bold">셔틀</span></div></div>
-    {error && <p role="alert" className="mt-4 rounded-[3px] bg-[var(--doc-crit-soft)] p-3 text-sm font-bold text-[var(--doc-crit)]">{error}</p>}
+    <div className="mt-4 grid grid-cols-3 gap-2 text-center"><div className="rounded-xl bg-emerald-50 p-3 text-emerald-800"><strong className="block text-xl">{roster.stats.confirmed}</strong><span className="text-xs font-bold">확정</span></div><div className="rounded-xl bg-amber-50 p-3 text-amber-800"><strong className="block text-xl">{roster.stats.unpaid}</strong><span className="text-xs font-bold">미결제</span></div><div className="rounded-xl bg-blue-50 p-3 text-blue-800"><strong className="block text-xl">{roster.stats.shuttle}</strong><span className="text-xs font-bold">셔틀</span></div></div>
+    {error && <p role="alert" className="mt-4 rounded-xl bg-red-50 p-3 text-sm font-bold text-red-700">{error}</p>}
     {loading ? <Loading /> : <section className="seasonal-roster-print mt-4" aria-label="반별 확정 명단 결과">
-      <div className="mb-3 hidden print:block"><h2 className="text-xl font-bold">{printTitle}</h2><p className="text-sm">확정 {roster.stats.confirmed}명 · 출력 {formatDateTime(new Date().toISOString())}</p></div>
-      <div className="roster-desktop hidden overflow-x-auto md:block"><table className="w-full min-w-[760px] text-left text-sm"><thead className="bg-[var(--doc-grid-head)] text-xs text-[var(--doc-ink-2)]"><tr><th className="px-3 py-3">번호</th><th className="px-3 py-3">요일</th><th className="px-3 py-3">운영 반</th><th className="px-3 py-3">학생</th><th className="px-3 py-3">결제</th><th className="px-3 py-3">셔틀</th><th className="px-3 py-3">출석</th><th className="px-3 py-3">메모</th></tr></thead><tbody className="divide-y divide-[var(--doc-rule)]">{roster.rows.map((row, index) => <tr key={row.id} className="hover:bg-[var(--doc-grid-head)]"><td className="px-3 py-3">{(roster.pagination.page - 1) * roster.pagination.pageSize + index + 1}</td><td className="px-3 py-3 font-bold">{row.weekday || "미정"}</td><td className="px-3 py-3 font-bold">{row.offeringName}</td><td className="px-3 py-3"><button type="button" onClick={() => openApplication(row.applicationId)} className="font-bold hover:underline print:pointer-events-none">{row.childName}</button><p className="text-xs text-[var(--doc-ink-2)]">{[row.childGrade,row.childSchool].filter(Boolean).join(" · ")}</p></td><td className="px-3 py-3"><span className={badge(row.paymentStatus)}>{STATUS_LABEL[row.paymentStatus] ?? row.paymentStatus}</span></td><td className="px-3 py-3"><span className={badge(row.shuttleStatus)}>{STATUS_LABEL[row.shuttleStatus] ?? (row.shuttleStatus === "NOT_USED" ? "미이용" : row.shuttleStatus)}</span></td><td className="px-3 py-3">□</td><td className="px-3 py-3"> </td></tr>)}{!roster.rows.length && <tr><td colSpan={8}><Empty text="조건에 맞는 출석부 명단이 없습니다." /></td></tr>}</tbody></table></div>
-      <div className="roster-mobile space-y-3 md:hidden">{roster.rows.map((row) => <article key={row.id} className="rounded-[3px] border border-[var(--doc-rule)] p-4"><div className="flex items-start justify-between gap-2"><div><button type="button" onClick={() => openApplication(row.applicationId)} className="min-h-11 font-bold hover:underline">{row.childName}</button><p className="text-xs text-[var(--doc-ink-2)]">{[row.childGrade,row.childSchool].filter(Boolean).join(" · ")}</p></div><span className="rounded-[3px] bg-[var(--doc-accent-soft)] px-2.5 py-1 text-xs font-bold text-[var(--doc-accent)]">{row.weekday || "요일 미정"}</span></div><p className="mt-2 text-sm font-bold">{row.offeringName}</p><div className="mt-2 flex flex-wrap gap-2"><span className={badge(row.paymentStatus)}>{STATUS_LABEL[row.paymentStatus] ?? row.paymentStatus}</span><span className={badge(row.shuttleStatus)}>{STATUS_LABEL[row.shuttleStatus] ?? (row.shuttleStatus === "NOT_USED" ? "미이용" : row.shuttleStatus)}</span></div><button type="button" onClick={() => openApplication(row.applicationId)} className="mt-3 min-h-11 w-full rounded-[3px] border border-[var(--doc-rule)] font-bold">신청 상세</button></article>)}</div>
+      <div className="mb-3 hidden print:block"><h2 className="text-xl font-black">{printTitle}</h2><p className="text-sm">확정 {roster.stats.confirmed}명 · 출력 {formatDateTime(new Date().toISOString())}</p></div>
+      <div className="roster-desktop hidden overflow-x-auto md:block"><table className="w-full min-w-[760px] text-left text-sm"><thead className="bg-gray-50 text-xs text-gray-500"><tr><th className="px-3 py-3">번호</th><th className="px-3 py-3">요일</th><th className="px-3 py-3">운영 반</th><th className="px-3 py-3">학생</th><th className="px-3 py-3">결제</th><th className="px-3 py-3">셔틀</th><th className="px-3 py-3">출석</th><th className="px-3 py-3">메모</th></tr></thead><tbody className="divide-y divide-gray-100">{roster.rows.map((row, index) => <tr key={row.id} className="hover:bg-gray-50"><td className="px-3 py-3">{(roster.pagination.page - 1) * roster.pagination.pageSize + index + 1}</td><td className="px-3 py-3 font-black">{row.weekday || "미정"}</td><td className="px-3 py-3 font-bold">{row.offeringName}</td><td className="px-3 py-3"><button type="button" onClick={() => openApplication(row.applicationId)} className="font-black hover:underline print:pointer-events-none">{row.childName}</button><p className="text-xs text-gray-500">{[row.childGrade,row.childSchool].filter(Boolean).join(" · ")}</p></td><td className="px-3 py-3"><span className={badge(row.paymentStatus)}>{STATUS_LABEL[row.paymentStatus] ?? row.paymentStatus}</span></td><td className="px-3 py-3"><span className={badge(row.shuttleStatus)}>{STATUS_LABEL[row.shuttleStatus] ?? (row.shuttleStatus === "NOT_USED" ? "미이용" : row.shuttleStatus)}</span></td><td className="px-3 py-3">□</td><td className="px-3 py-3"> </td></tr>)}{!roster.rows.length && <tr><td colSpan={8}><Empty text="조건에 맞는 출석부 명단이 없습니다." /></td></tr>}</tbody></table></div>
+      <div className="roster-mobile space-y-3 md:hidden">{roster.rows.map((row) => <article key={row.id} className="rounded-xl border border-gray-200 p-4"><div className="flex items-start justify-between gap-2"><div><button type="button" onClick={() => openApplication(row.applicationId)} className="min-h-11 font-black hover:underline">{row.childName}</button><p className="text-xs text-gray-500">{[row.childGrade,row.childSchool].filter(Boolean).join(" · ")}</p></div><span className="rounded-full bg-[var(--brand-accent-soft)] px-2.5 py-1 text-xs font-black text-[var(--brand-accent)]">{row.weekday || "요일 미정"}</span></div><p className="mt-2 text-sm font-bold">{row.offeringName}</p><div className="mt-2 flex flex-wrap gap-2"><span className={badge(row.paymentStatus)}>{STATUS_LABEL[row.paymentStatus] ?? row.paymentStatus}</span><span className={badge(row.shuttleStatus)}>{STATUS_LABEL[row.shuttleStatus] ?? (row.shuttleStatus === "NOT_USED" ? "미이용" : row.shuttleStatus)}</span></div><button type="button" onClick={() => openApplication(row.applicationId)} className="mt-3 min-h-11 w-full rounded-lg border border-gray-200 font-bold">신청 상세</button></article>)}</div>
     </section>}
-    {roster.pagination.totalPages > 1 && <nav className="print:hidden mt-4 flex items-center justify-center gap-3" aria-label="명단 페이지"><button type="button" disabled={filters.page <= 1} onClick={() => changeFilter("page", filters.page - 1)} className="min-h-10 rounded-[3px] border px-3 disabled:opacity-40">이전</button><span className="text-sm font-bold">{filters.page} / {roster.pagination.totalPages}</span><button type="button" disabled={filters.page >= roster.pagination.totalPages} onClick={() => changeFilter("page", filters.page + 1)} className="min-h-10 rounded-[3px] border px-3 disabled:opacity-40">다음</button></nav>}
+    {roster.pagination.totalPages > 1 && <nav className="print:hidden mt-4 flex items-center justify-center gap-3" aria-label="명단 페이지"><button type="button" disabled={filters.page <= 1} onClick={() => changeFilter("page", filters.page - 1)} className="min-h-10 rounded-lg border px-3 disabled:opacity-40">이전</button><span className="text-sm font-bold">{filters.page} / {roster.pagination.totalPages}</span><button type="button" disabled={filters.page >= roster.pagination.totalPages} onClick={() => changeFilter("page", filters.page + 1)} className="min-h-10 rounded-lg border px-3 disabled:opacity-40">다음</button></nav>}
   </Panel>;
 }
 
@@ -2071,20 +2071,20 @@ function ApplicationDrawer({
     <aside className="min-h-0 w-full flex-1 overflow-y-auto overscroll-contain p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] sm:p-7">
       <header className="flex items-start justify-between gap-4">
         <div>
-          <p className="text-sm font-bold text-[var(--doc-accent)]">신청 상세</p>
-          <h2 id="application-title" className="mt-1 text-2xl font-bold text-gray-950">{application.childName} <span className="text-base text-[var(--doc-ink-3)]">{application.childGrade || "학년 미입력"}</span></h2>
+          <p className="text-sm font-bold text-[var(--brand-accent)]">신청 상세</p>
+          <h2 id="application-title" className="mt-1 text-2xl font-black text-gray-950 dark:text-white">{application.childName} <span className="text-base text-gray-400">{application.childGrade || "학년 미입력"}</span></h2>
           <div className="mt-3 flex flex-wrap gap-2">
             <span className={badge(application.status)}>{STATUS_LABEL[application.status] ?? application.status}</span>
             <span className={badge(application.paymentStatus)}>{STATUS_LABEL[application.paymentStatus || ""] ?? application.paymentStatus ?? "청구 전"}</span>
             {application.shuttleNeeded && <span className={badge(application.shuttleStatus || "REQUESTED")}>셔틀 {STATUS_LABEL[application.shuttleStatus || "REQUESTED"]}</span>}
           </div>
         </div>
-        <button type="button" onClick={onClose} aria-label="닫기" data-admin-modal-initial-focus className="rounded-[3px] p-2 text-[var(--doc-ink-2)] hover:bg-[var(--doc-grid-head)]"><Icon name="close" /></button>
+        <button type="button" onClick={onClose} aria-label="닫기" data-admin-modal-initial-focus className="rounded-full p-2 text-gray-600 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-800"><Icon name="close" /></button>
       </header>
 
       <ApplicationReviewSummary application={application} onResolveReview={onResolveReview} resolving={resolvingReview} />
 
-      <section className="mt-6 grid gap-3 rounded-[6px] bg-[var(--doc-grid-head)] p-4 text-sm sm:grid-cols-2">
+      <section className="mt-6 grid gap-3 rounded-2xl bg-gray-50 p-4 text-sm dark:bg-gray-800 sm:grid-cols-2">
         <Info label="학부모">{application.parentName}{application.parentRelation ? ` · ${application.parentRelation}` : ""}</Info>
         <Info label="학부모 연락처">{application.parentPhone || "미입력"}</Info>
         <Info label="학생 정보">{[formatDate(application.childBirthDate), application.childGender, application.childPhone].filter(Boolean).join(" · ") || "미입력"}</Info>
@@ -2097,8 +2097,8 @@ function ApplicationDrawer({
       {/* 연락처가 없으면 눌러도 아무 일이 없는 빈 링크가 되므로, 번호가 있을 때만 버튼을 보여준다 */}
       {parentPhoneHref && parentSmsHref && (
         <div className="mt-3 grid grid-cols-2 gap-2">
-          <a href={parentPhoneHref} className="flex min-h-11 items-center justify-center gap-2 rounded-[3px] border border-[var(--doc-rule)] font-bold text-[var(--doc-ink)]"><Icon name="call" />전화</a>
-          <a href={parentSmsHref} className="flex min-h-11 items-center justify-center gap-2 rounded-[3px] border border-[var(--doc-rule)] font-bold text-[var(--doc-ink)]"><Icon name="sms" />직접 문자</a>
+          <a href={parentPhoneHref} className="flex min-h-11 items-center justify-center gap-2 rounded-xl border border-gray-200 font-bold text-gray-900 dark:border-gray-700 dark:text-white"><Icon name="call" />전화</a>
+          <a href={parentSmsHref} className="flex min-h-11 items-center justify-center gap-2 rounded-xl border border-gray-200 font-bold text-gray-900 dark:border-gray-700 dark:text-white"><Icon name="sms" />직접 문자</a>
         </div>
       )}
 
@@ -2113,16 +2113,16 @@ function ApplicationDrawer({
         <div className="flex items-end justify-between gap-3">
           <div>
             {/* 설명문 제거 — 아래 항목마다 승인/대기/반려/취소 버튼이 그대로 보인다 */}
-            <h3 className="font-bold text-gray-950">신청 항목별 처리</h3>
+            <h3 className="font-black text-gray-950 dark:text-white">신청 항목별 처리</h3>
           </div>
-          <span className="text-xs font-bold text-[var(--doc-ink-2)]">{application.items.length}개 반 신청</span>
+          <span className="text-xs font-bold text-gray-500 dark:text-gray-400">{application.items.length}개 반 신청</span>
         </div>
         <div className="mt-3 space-y-3">
           {hasNoItems && (
-            <section className="rounded-[6px] border border-[var(--doc-warn)] bg-[var(--doc-grid-head)] p-4 text-sm text-[var(--doc-warn)]">
+            <section className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950 dark:border-amber-500/30 dark:bg-amber-950/30 dark:text-amber-100">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>
-                  <p className="font-bold">신청 반이 아직 없습니다.</p>
+                  <p className="font-black">신청 반이 아직 없습니다.</p>
                   <p className="mt-1 text-xs font-bold opacity-80">반을 배정해 접수하거나, 실제 취소 건이면 여기서 신청 자체를 닫아 주세요.</p>
                 </div>
                 <div className="flex flex-wrap gap-2">
@@ -2132,7 +2132,7 @@ function ApplicationDrawer({
                       type="button"
                       disabled={applicationClosed || Boolean(updatingApplicationStatus)}
                       onClick={() => void onUpdateApplicationStatus(application.id, status)}
-                      className="min-h-10 rounded-[3px] border border-[var(--doc-warn)] bg-[var(--doc-surface)] px-3 text-xs font-bold text-[var(--doc-warn)] disabled:cursor-not-allowed disabled:opacity-50"
+                      className="min-h-10 rounded-xl border border-amber-300 bg-white px-3 text-xs font-black text-amber-950 shadow-sm disabled:cursor-not-allowed disabled:opacity-50 dark:border-amber-400/40 dark:bg-gray-950 dark:text-amber-100"
                     >
                       {updatingApplicationStatus === status ? "처리 중" : STATUS_LABEL[status]}
                     </button>
@@ -2172,8 +2172,8 @@ function ApplicationDrawer({
         </div>
       </section>
 
-      {application.memo && <section className="mt-6 rounded-[6px] border border-[var(--doc-rule)] p-4"><h3 className="text-sm font-bold text-gray-950">요청사항</h3><p className="mt-2 whitespace-pre-wrap text-sm text-[var(--doc-ink-2)]">{application.memo}</p></section>}
-      {application.processedNote && <section className="mt-3 rounded-[6px] border border-[var(--doc-rule)] p-4"><h3 className="text-sm font-bold text-gray-950">처리 메모</h3><p className="mt-2 whitespace-pre-wrap text-sm text-[var(--doc-ink-2)]">{application.processedNote}</p></section>}
+      {application.memo && <section className="mt-6 rounded-2xl border border-gray-200 p-4 dark:border-gray-700"><h3 className="text-sm font-black text-gray-950 dark:text-white">요청사항</h3><p className="mt-2 whitespace-pre-wrap text-sm text-gray-600 dark:text-gray-300">{application.memo}</p></section>}
+      {application.processedNote && <section className="mt-3 rounded-2xl border border-gray-200 p-4 dark:border-gray-700"><h3 className="text-sm font-black text-gray-950 dark:text-white">처리 메모</h3><p className="mt-2 whitespace-pre-wrap text-sm text-gray-600 dark:text-gray-300">{application.processedNote}</p></section>}
     </aside>
   </AdminModal>;
 }
@@ -2183,14 +2183,14 @@ function ApplicationReviewSummary({ application, onResolveReview, resolving }: {
   const weekdays = application.selectedWeekdays?.length ? application.selectedWeekdays.map(weekdayLabel).join(" · ") : "요일 미확인";
   const needsReview = application.reviewReasons ?? [];
   const [reviewNote, setReviewNote] = useState("");
-  return <section aria-label="운영 확인 정보" className="mt-5 rounded-[6px] border border-[var(--doc-rule)] bg-[var(--doc-surface)] p-4">
+  return <section aria-label="운영 확인 정보" className="mt-5 rounded-2xl border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-900">
     <div className="flex flex-wrap gap-2">
-      <span className="inline-flex min-h-7 items-center rounded-[3px] bg-[var(--doc-accent-soft)] px-2.5 text-xs font-bold text-[var(--doc-accent)]">{applicantTypeLabel(application.applicantType)} 회원</span>
-      <span className="inline-flex min-h-7 items-center rounded-[3px] bg-[var(--doc-grid-head)] px-2.5 text-xs font-bold text-[var(--doc-ink-2)]"><Icon name={application.imported ? "upload_file" : "language"} className="mr-1 text-base" />{importedLabel}</span>
+      <span className="inline-flex min-h-7 items-center rounded-full bg-[var(--brand-accent-soft)] px-2.5 text-xs font-black text-[var(--brand-accent)]">{applicantTypeLabel(application.applicantType)} 회원</span>
+      <span className="inline-flex min-h-7 items-center rounded-full bg-gray-100 px-2.5 text-xs font-bold text-gray-700 dark:bg-gray-800 dark:text-gray-200"><Icon name={application.imported ? "upload_file" : "language"} className="mr-1 text-base" />{importedLabel}</span>
       <span className={badge(application.paymentStatus)}>{paymentReviewLabel(application.paymentStatus)}</span>
     </div>
     <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-2"><Info label="선택 요일">{weekdays}</Info><Info label="원본 가져오기">{application.imported ? "완료" : "해당 없음"}</Info></dl>
-    {needsReview.length > 0 && <div className="mt-4 rounded-[3px] border border-[var(--doc-warn)] bg-[var(--doc-grid-head)] p-3 text-[var(--doc-warn)]"><p className="flex items-center gap-1 text-sm font-bold"><Icon name="error" className="text-lg" />확인 필요</p><ul className="mt-2 list-disc space-y-1 pl-5 text-xs">{needsReview.map((reason) => <li key={reason}>{reason}</li>)}</ul><label className="mt-3 block text-xs font-bold">검토 메모 (필수)<textarea value={reviewNote} onChange={(event) => setReviewNote(event.target.value)} rows={2} placeholder="확인한 내용과 처리 근거를 입력하세요" className="mt-1 w-full rounded-[3px] border border-[var(--doc-warn)] bg-[var(--doc-surface)] p-2 font-normal text-gray-950" /></label><div className="mt-2 flex justify-end"><button type="button" disabled={resolving || !reviewNote.trim()} onClick={() => void onResolveReview(application.id, reviewNote.trim())} className="min-h-9 rounded-[3px] bg-[var(--doc-grid-head)] px-3 text-xs font-bold text-white disabled:cursor-not-allowed disabled:opacity-60">{resolving ? "처리 중…" : "검토 완료"}</button></div></div>}
+    {needsReview.length > 0 && <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-amber-900 dark:border-amber-500/30 dark:bg-amber-950/30 dark:text-amber-100"><p className="flex items-center gap-1 text-sm font-black"><Icon name="error" className="text-lg" />확인 필요</p><ul className="mt-2 list-disc space-y-1 pl-5 text-xs">{needsReview.map((reason) => <li key={reason}>{reason}</li>)}</ul><label className="mt-3 block text-xs font-black">검토 메모 (필수)<textarea value={reviewNote} onChange={(event) => setReviewNote(event.target.value)} rows={2} placeholder="확인한 내용과 처리 근거를 입력하세요" className="mt-1 w-full rounded-lg border border-amber-300 bg-white p-2 font-normal text-gray-950 dark:border-amber-700 dark:bg-gray-900 dark:text-white" /></label><div className="mt-2 flex justify-end"><button type="button" disabled={resolving || !reviewNote.trim()} onClick={() => void onResolveReview(application.id, reviewNote.trim())} className="min-h-9 rounded-lg bg-amber-900 px-3 text-xs font-black text-white disabled:cursor-not-allowed disabled:opacity-60 dark:bg-amber-100 dark:text-amber-950">{resolving ? "처리 중…" : "검토 완료"}</button></div></div>}
   </section>;
 }
 
@@ -2281,40 +2281,40 @@ function ApplicationAssignmentEditor({
     await onSaveAssignment({ applicationId: application.id, itemId: item?.id, offeringId, selectedWeekdays, priceSnapshot });
   };
 
-  return <form onSubmit={submit} className="mt-4 rounded-[3px] border border-[var(--doc-rule)] bg-[var(--doc-grid-head)] p-3 text-sm">
+  return <form onSubmit={submit} className="mt-4 rounded-xl border border-gray-200 bg-gray-50 p-3 text-sm dark:border-gray-700 dark:bg-gray-800/70">
     <div className="flex flex-wrap items-center justify-between gap-2">
       <div>
-        <h4 className="font-bold text-gray-950">{item ? "수업 정보" : "반 지정 필요"}</h4>
-        <p className="mt-1 text-xs text-[var(--doc-ink-2)]">{locked ? "수강·청구 연결 후에는 이 화면에서 반 정보를 바꿀 수 없습니다." : "운영 반과 참여 요일을 고르면 금액은 자동으로 맞춰집니다."}</p>
+        <h4 className="font-black text-gray-950 dark:text-white">{item ? "수업 정보" : "반 지정 필요"}</h4>
+        <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">{locked ? "수강·청구 연결 후에는 이 화면에서 반 정보를 바꿀 수 없습니다." : "운영 반과 참여 요일을 고르면 금액은 자동으로 맞춰집니다."}</p>
       </div>
-      <button type="submit" disabled={saving || locked || offerings.length === 0} className="min-h-9 rounded-[3px] bg-[var(--doc-accent)] px-3 text-xs font-bold text-[var(--doc-on-accent)] disabled:cursor-not-allowed disabled:opacity-50">{saving ? "저장 중…" : "저장"}</button>
+      <button type="submit" disabled={saving || locked || offerings.length === 0} className="min-h-9 rounded-lg bg-[var(--brand-accent)] px-3 text-xs font-black text-[var(--brand-accent-contrast)] disabled:cursor-not-allowed disabled:opacity-50">{saving ? "저장 중…" : "저장"}</button>
     </div>
     <div className="mt-3 grid gap-2 sm:grid-cols-[1fr_140px]">
-      <label className="text-xs font-bold text-[var(--doc-ink-2)]">
+      <label className="text-xs font-black text-gray-600 dark:text-gray-300">
         특강 반
-        <select value={offeringId} disabled={saving || locked} onChange={(event) => setOfferingId(event.target.value)} className="mt-1 min-h-10 w-full rounded-[3px] border border-[var(--doc-rule)] bg-[var(--doc-surface)] px-3 text-sm font-bold text-gray-950 disabled:opacity-60">
+        <select value={offeringId} disabled={saving || locked} onChange={(event) => setOfferingId(event.target.value)} className="mt-1 min-h-10 w-full rounded-lg border border-gray-200 bg-white px-3 text-sm font-bold text-gray-950 disabled:opacity-60 dark:border-gray-700 dark:bg-gray-900 dark:text-white">
           <option value="">반 선택</option>
           {offerings.map((offering) => <option key={offering.id} value={offering.id}>{offering.name}</option>)}
         </select>
       </label>
-      <label className="text-xs font-bold text-[var(--doc-ink-2)]">
+      <label className="text-xs font-black text-gray-600 dark:text-gray-300">
         자동 금액
-        <input value={price} readOnly disabled={saving || locked} inputMode="numeric" type="number" min={1} className="mt-1 min-h-10 w-full rounded-[3px] border border-[var(--doc-rule)] bg-[var(--doc-surface)] px-3 text-sm font-bold text-gray-950 disabled:opacity-60" />
+        <input value={price} readOnly disabled={saving || locked} inputMode="numeric" type="number" min={1} className="mt-1 min-h-10 w-full rounded-lg border border-gray-200 bg-white px-3 text-sm font-bold text-gray-950 disabled:opacity-60 dark:border-gray-700 dark:bg-gray-900 dark:text-white" />
       </label>
     </div>
-    {!locked && <p className="mt-2 text-xs font-bold text-[var(--doc-ink-2)]">저장 시 {applicantTypeLabel(application.applicantType)} · 주 {selectedWeekdays.length || "-"}회 기준으로 청구 금액을 다시 계산합니다.</p>}
+    {!locked && <p className="mt-2 text-xs font-bold text-gray-500 dark:text-gray-400">저장 시 {applicantTypeLabel(application.applicantType)} · 주 {selectedWeekdays.length || "-"}회 기준으로 청구 금액을 다시 계산합니다.</p>}
     <fieldset className="mt-3">
-      <legend className="text-xs font-bold text-[var(--doc-ink-2)]">참여 요일</legend>
+      <legend className="text-xs font-black text-gray-600 dark:text-gray-300">참여 요일</legend>
       <div className="mt-2 flex flex-wrap gap-1.5">
         {WEEKDAY_OPTIONS.map((option) => (
-          <label key={option.value} className={`inline-flex min-h-9 items-center gap-1 rounded-[3px] border px-2.5 text-xs font-bold ${selectedWeekdays.includes(option.value) ? "border-[var(--doc-accent)] bg-[var(--doc-accent-soft)] text-[var(--doc-accent)]" : "border-[var(--doc-rule)] bg-[var(--doc-surface)] text-[var(--doc-ink-2)] "}`}>
+          <label key={option.value} className={`inline-flex min-h-9 items-center gap-1 rounded-lg border px-2.5 text-xs font-black ${selectedWeekdays.includes(option.value) ? "border-[var(--brand-accent)] bg-[var(--brand-accent-soft)] text-[var(--brand-accent)]" : "border-gray-200 bg-white text-gray-600 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300"}`}>
             <input type="checkbox" disabled={saving || locked} checked={selectedWeekdays.includes(option.value)} onChange={(event) => toggleWeekday(option.value, event.target.checked)} className="sr-only" />
             {option.label}
           </label>
         ))}
       </div>
     </fieldset>
-    {(localError || error) && <p role="alert" className="mt-3 rounded-[3px] border border-[var(--doc-crit)] bg-[var(--doc-crit-soft)] p-2 text-xs font-bold text-[var(--doc-crit)]">{localError || error}</p>}
+    {(localError || error) && <p role="alert" className="mt-3 rounded-lg border border-red-200 bg-red-50 p-2 text-xs font-bold text-red-700 dark:border-red-500/30 dark:bg-red-950/30 dark:text-red-200">{localError || error}</p>}
   </form>;
 }
 
@@ -2326,7 +2326,7 @@ function ItemPriceBreakdown({ item }: { item: ApplicationItem }) {
   const tuition = item.tuitionPriceSnapshot ?? 0;
   const shuttle = item.shuttleFeeSnapshot ?? 0;
   return (
-    <p className="mt-1 text-xs font-bold text-[var(--doc-accent)]">
+    <p className="mt-1 text-xs font-bold text-emerald-700 dark:text-emerald-300">
       수강료 {tuition.toLocaleString()}원 · 형제할인 −{discount.toLocaleString()}원
       {shuttle > 0 ? ` · 셔틀비(할인 없음) +${shuttle.toLocaleString()}원` : ""}
     </p>
@@ -2367,13 +2367,13 @@ function ApplicationItemCard({
   const quickStatuses: ItemStatus[] = ["APPROVED", "WAITLISTED", "REJECTED", "CANCELLED"];
   const statusNotification = itemNotification(item.status);
   const currentNotificationSummary = item.notificationSummary?.trigger === statusNotification?.trigger ? item.notificationSummary : null;
-  return <article className="rounded-[6px] border border-[var(--doc-rule)] p-4" aria-busy={updating}>
+  return <article className="rounded-2xl border border-gray-200 p-4 dark:border-gray-700" aria-busy={updating}>
     <div className="flex items-start justify-between gap-3">
       <div>
-        <p className="font-bold text-gray-950">{item.className}</p>
-        <p className="mt-1 text-xs text-[var(--doc-ink-2)]">{item.scheduleLabel || "일정 미정"} · {(item.amount ?? 0).toLocaleString()}원</p>
+        <p className="font-black text-gray-950 dark:text-white">{item.className}</p>
+        <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">{item.scheduleLabel || "일정 미정"} · {(item.amount ?? 0).toLocaleString()}원</p>
         <ItemPriceBreakdown item={item} />
-        {item.waitlistOrder && <p className="mt-1 text-xs font-bold text-[var(--doc-warn)]">대기 {item.waitlistOrder}번</p>}
+        {item.waitlistOrder && <p className="mt-1 text-xs font-bold text-amber-700 dark:text-amber-300">대기 {item.waitlistOrder}번</p>}
       </div>
       <span className={badge(item.status)}>{STATUS_LABEL[item.status]}</span>
     </div>
@@ -2386,12 +2386,12 @@ function ApplicationItemCard({
       onSaveAssignment={onSaveAssignment}
     />
     <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
-      {quickStatuses.map((status) => <button key={status} type="button" disabled={updating || item.status === status} onClick={() => void onUpdateItem(item.id, status)} className={`min-h-10 rounded-[3px] border px-3 text-sm font-bold disabled:cursor-wait disabled:opacity-60 ${item.status === status ? "border-transparent bg-[var(--doc-accent)] text-[var(--doc-on-accent)]" : "border-[var(--doc-rule)] text-[var(--doc-ink-2)] hover:border-[var(--doc-accent)] hover:text-[var(--doc-accent)] "}`}>{updating ? "처리 중…" : STATUS_LABEL[status]}</button>)}
+      {quickStatuses.map((status) => <button key={status} type="button" disabled={updating || item.status === status} onClick={() => void onUpdateItem(item.id, status)} className={`min-h-10 rounded-xl border px-3 text-sm font-black disabled:cursor-wait disabled:opacity-60 ${item.status === status ? "border-transparent bg-[var(--brand-accent)] text-[var(--brand-accent-contrast)]" : "border-gray-200 text-gray-700 hover:border-[var(--brand-accent)] hover:text-[var(--brand-accent)] dark:border-gray-700 dark:text-gray-200"}`}>{updating ? "처리 중…" : STATUS_LABEL[status]}</button>)}
     </div>
-    {updateError && <p role="alert" aria-live="assertive" className="mt-3 rounded-[3px] border border-[var(--doc-crit)] bg-[var(--doc-crit-soft)] p-3 text-sm font-bold text-[var(--doc-crit)]">{updateError}</p>}
-    <label className="mt-4 block text-xs font-bold text-[var(--doc-ink-2)]">
+    {updateError && <p role="alert" aria-live="assertive" className="mt-3 rounded-xl border border-red-200 bg-red-50 p-3 text-sm font-bold text-red-700 dark:border-red-500/30 dark:bg-red-950/30 dark:text-red-200">{updateError}</p>}
+    <label className="mt-4 block text-xs font-bold text-gray-500 dark:text-gray-400">
       상태 직접 변경
-      <select value={item.status} disabled={updating} aria-busy={updating} onChange={(event) => void onUpdateItem(item.id, event.target.value as ItemStatus)} className="mt-1 min-h-11 w-full rounded-[3px] border border-[var(--doc-rule)] bg-[var(--doc-surface)] px-3 text-sm text-[var(--doc-ink)] disabled:cursor-wait disabled:opacity-60">
+      <select value={item.status} disabled={updating} aria-busy={updating} onChange={(event) => void onUpdateItem(item.id, event.target.value as ItemStatus)} className="mt-1 min-h-11 w-full rounded-xl border border-gray-200 bg-white px-3 text-sm text-gray-900 disabled:cursor-wait disabled:opacity-60 dark:border-gray-700 dark:bg-gray-800 dark:text-white">
         {["PENDING","APPROVED","WAITLISTED","REJECTED","CANCELLED"].map((value) => <option key={value} value={value}>{STATUS_LABEL[value]}</option>)}
       </select>
     </label>
@@ -2411,7 +2411,7 @@ function ConversionReadinessBox({ item, onConvertItem, converting }: { item: App
   let title = "전환 준비됨";
   // 안내문은 제목(전환 준비됨 / 승인 후 청구서 발행 가능)의 풀어쓰기라 비워 둔다 — 다른 분기와 동일하게 helper = ""
   let helper = "";
-  let tone = "border-[var(--doc-accent)] bg-[var(--doc-accent-soft)] text-[var(--doc-accent)]   ";
+  let tone = "border-emerald-200 bg-emerald-50 text-emerald-900 dark:border-emerald-500/30 dark:bg-emerald-950/30 dark:text-emerald-100";
 
   if (hasEnrollment && hasPayment) {
     title = "수강·청구 완료";
@@ -2419,25 +2419,25 @@ function ConversionReadinessBox({ item, onConvertItem, converting }: { item: App
   } else if (!approved) {
     title = "승인 후 청구서 발행 가능";
     helper = "";
-    tone = "border-[var(--doc-rule)] bg-[var(--doc-grid-head)] text-[var(--doc-ink)]   ";
+    tone = "border-gray-200 bg-gray-50 text-gray-800 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100";
   } else if (!hasClass) {
     title = "청구서 발행 가능";
     helper = "";
-    tone = "border-[var(--doc-rule)] bg-[var(--doc-grid-head)] text-[var(--doc-ink-2)]   ";
+    tone = "border-sky-200 bg-sky-50 text-sky-900 dark:border-sky-500/30 dark:bg-sky-950/30 dark:text-sky-100";
   } else if (!hasEnrollment && hasPayment) {
     title = "수강 등록 필요";
     helper = "";
-    tone = "border-[var(--doc-warn)] bg-[var(--doc-grid-head)] text-[var(--doc-warn)]   ";
+    tone = "border-amber-200 bg-amber-50 text-amber-900 dark:border-amber-500/30 dark:bg-amber-950/30 dark:text-amber-100";
   } else if (hasEnrollment && !hasPayment) {
     title = "청구서 발행 필요";
     helper = "";
-    tone = "border-[var(--doc-warn)] bg-[var(--doc-grid-head)] text-[var(--doc-warn)]   ";
+    tone = "border-amber-200 bg-amber-50 text-amber-900 dark:border-amber-500/30 dark:bg-amber-950/30 dark:text-amber-100";
   }
 
-  return <div className={`mt-4 rounded-[3px] border p-3 text-sm ${tone}`}>
+  return <div className={`mt-4 rounded-xl border p-3 text-sm ${tone}`}>
     <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
       <div>
-        <p className="font-bold">{title}</p>
+        <p className="font-black">{title}</p>
         <p className="mt-1 text-xs opacity-80">{helper}</p>
       </div>
       <div className="flex shrink-0 flex-wrap justify-start gap-1 sm:justify-end">
@@ -2449,7 +2449,7 @@ function ConversionReadinessBox({ item, onConvertItem, converting }: { item: App
             type="button"
             disabled={converting}
             onClick={() => void onConvertItem(item.id)}
-            className="ml-0 min-h-8 rounded-[3px] bg-[var(--doc-accent)] px-3 text-[11px] font-bold text-[var(--doc-on-accent)] disabled:opacity-60 sm:ml-2"
+            className="ml-0 min-h-8 rounded-full bg-[var(--brand-accent)] px-3 text-[11px] font-black text-[var(--brand-accent-contrast)] disabled:opacity-60 sm:ml-2"
           >
             {converting ? "생성 중" : "수강·청구 생성"}
           </button>
@@ -2460,7 +2460,7 @@ function ConversionReadinessBox({ item, onConvertItem, converting }: { item: App
 }
 
 function MiniState({ active, label }: { active: boolean; label: string }) {
-  return <span className={`rounded-[3px] px-2 py-1 text-[11px] font-bold ${active ? "bg-[var(--doc-surface)] text-[var(--doc-accent)] " : "bg-[var(--doc-surface)]/60 text-[var(--doc-ink-2)] "}`}>{label}</span>;
+  return <span className={`rounded-full px-2 py-1 text-[11px] font-black ${active ? "bg-white text-emerald-700 dark:bg-emerald-100 dark:text-emerald-900" : "bg-white/60 text-gray-500 dark:bg-gray-900/50 dark:text-gray-300"}`}>{label}</span>;
 }
 
 function InvoiceActionBox({ item, onCopyInvoiceLink, onRetryNotification, sendingNotificationKey, onRefresh }: { item: ApplicationItem; onCopyInvoiceLink: (item: ApplicationItem) => Promise<void>; onRetryNotification: (scope: "application" | "item" | "invoice", id: string, trigger: string) => Promise<void>; sendingNotificationKey: string; onRefresh?: () => void }) {
@@ -2490,30 +2490,30 @@ function InvoiceActionBox({ item, onCopyInvoiceLink, onRetryNotification, sendin
     finally { setPaying(null); }
   }
 
-  return <div className="mt-4 rounded-[3px] border border-[var(--doc-rule)] bg-[var(--doc-surface)] p-3 text-sm">
+  return <div className="mt-4 rounded-xl border border-gray-200 bg-white p-3 text-sm dark:border-gray-700 dark:bg-gray-900">
     <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
       <div>
         <div className="flex items-center gap-2">
-          <p className="font-bold text-gray-950">청구서</p>
-          {isPaid && <span className="rounded-[3px] bg-[var(--doc-accent-soft)] px-2 py-0.5 text-[11px] font-bold text-[var(--doc-accent)]">납부 완료</span>}
+          <p className="font-black text-gray-950 dark:text-white">청구서</p>
+          {isPaid && <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-black text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">납부 완료</span>}
         </div>
-        <p className="mt-1 text-xs text-[var(--doc-ink-2)]">
+        <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
           {item.invoice?.invoiceNo || "청구번호 준비됨"} · {STATUS_LABEL[item.invoice?.status || ""] ?? item.invoice?.status ?? "발행"}
         </p>
-        <p className="mt-1 text-xs text-[var(--doc-ink-2)]">
+        <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
           {(item.invoice?.amount ?? item.amount ?? 0).toLocaleString()}원 · 납부기한 {formatDate(item.invoice?.dueDate)}
         </p>
       </div>
       <div className="flex shrink-0 flex-wrap gap-2">
-        {href && <a href={href} target="_blank" rel="noreferrer" className="inline-flex min-h-10 items-center rounded-[3px] border border-[var(--doc-rule)] px-3 text-xs font-bold text-[var(--doc-ink-2)] hover:border-[var(--doc-accent)] hover:text-[var(--doc-accent)]">청구서 열기</a>}
-        {!isPaid && <button type="button" onClick={() => void onCopyInvoiceLink(item)} className="inline-flex min-h-10 items-center rounded-[3px] bg-[var(--doc-accent)] px-3 text-xs font-bold text-[var(--doc-on-accent)]">{activationRequired ? "가입 링크 재발급·복사" : "결제 링크 복사"}</button>}
+        {href && <a href={href} target="_blank" rel="noreferrer" className="inline-flex min-h-10 items-center rounded-xl border border-gray-200 px-3 text-xs font-black text-gray-700 hover:border-[var(--brand-accent)] hover:text-[var(--brand-accent)] dark:border-gray-700 dark:text-gray-200">청구서 열기</a>}
+        {!isPaid && <button type="button" onClick={() => void onCopyInvoiceLink(item)} className="inline-flex min-h-10 items-center rounded-xl bg-[var(--brand-accent)] px-3 text-xs font-black text-[var(--brand-accent-contrast)]">{activationRequired ? "가입 링크 재발급·복사" : "결제 링크 복사"}</button>}
       </div>
     </div>
-    {!isPaid && item.invoice && <div className="mt-3 flex flex-wrap gap-2 border-t border-[var(--doc-rule)] pt-3">
-      <p className="w-full text-xs font-bold text-[var(--doc-ink-2)]">직접 납부 확인</p>
-      <button type="button" disabled={paying !== null} onClick={() => void handleMarkPaid("CASH")} className="inline-flex min-h-9 items-center rounded-[3px] border border-[var(--doc-rule)] px-3 text-xs font-bold text-[var(--doc-ink)] hover:border-[var(--doc-accent)] hover:text-[var(--doc-accent)] disabled:opacity-50">{paying === "CASH" ? "처리 중…" : "현금 납부 완료"}</button>
-      <button type="button" disabled={paying !== null} onClick={() => void handleMarkPaid("BANK_TRANSFER")} className="inline-flex min-h-9 items-center rounded-[3px] border border-[var(--doc-rule)] px-3 text-xs font-bold text-[var(--doc-ink)] hover:border-[var(--doc-accent)] hover:text-[var(--doc-accent)] disabled:opacity-50">{paying === "BANK_TRANSFER" ? "처리 중…" : "계좌이체 납부 완료"}</button>
-      {payErr && <p className="w-full text-xs font-bold text-[var(--doc-crit)]">⚠ {payErr}</p>}
+    {!isPaid && item.invoice && <div className="mt-3 flex flex-wrap gap-2 border-t border-gray-100 pt-3 dark:border-gray-800">
+      <p className="w-full text-xs font-bold text-gray-500 dark:text-gray-400">직접 납부 확인</p>
+      <button type="button" disabled={paying !== null} onClick={() => void handleMarkPaid("CASH")} className="inline-flex min-h-9 items-center rounded-xl border border-gray-200 px-3 text-xs font-black text-gray-800 hover:border-emerald-400 hover:text-emerald-700 disabled:opacity-50 dark:border-gray-700 dark:text-white">{paying === "CASH" ? "처리 중…" : "현금 납부 완료"}</button>
+      <button type="button" disabled={paying !== null} onClick={() => void handleMarkPaid("BANK_TRANSFER")} className="inline-flex min-h-9 items-center rounded-xl border border-gray-200 px-3 text-xs font-black text-gray-800 hover:border-emerald-400 hover:text-emerald-700 disabled:opacity-50 dark:border-gray-700 dark:text-white">{paying === "BANK_TRANSFER" ? "처리 중…" : "계좌이체 납부 완료"}</button>
+      {payErr && <p className="w-full text-xs font-bold text-red-600">⚠ {payErr}</p>}
     </div>}
     <NotificationActionRow label={notificationLabel} summary={currentNotificationSummary} sending={sendingNotificationKey === `invoice:${item.id}:${defaultTrigger}`} onSend={() => void onRetryNotification("invoice", item.id, defaultTrigger)} />
   </div>;
@@ -2539,14 +2539,14 @@ function latestApplicationNotification(application: Application) {
 }
 
 function notificationStatus(summary?: NotificationSummary | null) {
-  if (!summary) return { text: "미발송", className: "text-[var(--doc-ink-2)] " };
-  if (notificationNeedsReview(summary)) return { text: "발송 여부 확인 필요", className: "text-[var(--doc-warn)] " };
-  if (summary.status === "SENDING") return { text: "발송 처리 중", className: "text-[var(--doc-warn)] " };
-  if (summary.status === "PENDING") return { text: "발송 중", className: "text-[var(--doc-warn)] " };
-  if (summary.status === "SENT") return { text: "발송 완료", className: "text-[var(--doc-accent)] " };
-  if (summary.status === "FAILED") return { text: "발송 실패", className: "text-[var(--doc-crit)] " };
-  if (summary.status === "SKIPPED") return { text: "템플릿 꺼짐·미발송", className: "text-[var(--doc-warn)] " };
-  return { text: "발송 상태 확인 필요", className: "text-[var(--doc-warn)] " };
+  if (!summary) return { text: "미발송", className: "text-gray-500 dark:text-gray-400" };
+  if (notificationNeedsReview(summary)) return { text: "발송 여부 확인 필요", className: "text-amber-700 dark:text-amber-300" };
+  if (summary.status === "SENDING") return { text: "발송 처리 중", className: "text-amber-700 dark:text-amber-300" };
+  if (summary.status === "PENDING") return { text: "발송 중", className: "text-amber-700 dark:text-amber-300" };
+  if (summary.status === "SENT") return { text: "발송 완료", className: "text-emerald-700 dark:text-emerald-300" };
+  if (summary.status === "FAILED") return { text: "발송 실패", className: "text-red-700 dark:text-red-300" };
+  if (summary.status === "SKIPPED") return { text: "템플릿 꺼짐·미발송", className: "text-amber-700 dark:text-amber-300" };
+  return { text: "발송 상태 확인 필요", className: "text-amber-700 dark:text-amber-300" };
 }
 
 function notificationNeedsReview(summary?: NotificationSummary | null) {
@@ -2577,15 +2577,15 @@ function NotificationActionRow({ label, summary, sending, onSend }: { label: str
   const needsReview = notificationNeedsReview(summary);
   const pending = sending || ((summary?.status === "PENDING" || summary?.status === "SENDING") && !needsReview);
   const disabled = pending || Boolean(summary && !summary.canRetry && !needsReview);
-  return <div className="mt-3 flex flex-col gap-2 rounded-[3px] bg-[var(--doc-grid-head)] p-3 text-sm sm:flex-row sm:items-center sm:justify-between" aria-live="polite">
+  return <div className="mt-3 flex flex-col gap-2 rounded-xl bg-gray-50 p-3 text-sm dark:bg-gray-800 sm:flex-row sm:items-center sm:justify-between" aria-live="polite">
     <div className="min-w-0">
-      <p className="font-bold text-[var(--doc-ink)]">{label}</p>
+      <p className="font-black text-gray-900 dark:text-white">{label}</p>
       <p className={`mt-1 text-xs font-bold ${state.className}`}>{pending ? "발송 중" : state.text}{summary?.updatedAt ? ` · ${formatDateTime(summary.updatedAt)}` : ""}</p>
-      {summary?.status === "FAILED" && summary.errorCode && <p className="mt-1 text-xs text-[var(--doc-crit)]">{NOTIFICATION_ERROR_LABEL[summary.errorCode] ?? "발송 오류 — 솔라피 이력을 확인해주세요."}</p>}
-      {needsReview && <p className="mt-1 text-xs text-[var(--doc-warn)]">중복 발송을 피하려면 발송 이력을 확인한 뒤 재시도하세요.</p>}
-      {summary?.status === "SKIPPED" && <p className="mt-1 text-xs text-[var(--doc-warn)]">문자 템플릿이 켜져 있는지 확인한 뒤 재시도하세요.</p>}
+      {summary?.status === "FAILED" && summary.errorCode && <p className="mt-1 text-xs text-red-600 dark:text-red-300">{NOTIFICATION_ERROR_LABEL[summary.errorCode] ?? "발송 오류 — 솔라피 이력을 확인해주세요."}</p>}
+      {needsReview && <p className="mt-1 text-xs text-amber-700 dark:text-amber-300">중복 발송을 피하려면 발송 이력을 확인한 뒤 재시도하세요.</p>}
+      {summary?.status === "SKIPPED" && <p className="mt-1 text-xs text-amber-700 dark:text-amber-300">문자 템플릿이 켜져 있는지 확인한 뒤 재시도하세요.</p>}
     </div>
-    <button type="button" disabled={disabled} onClick={onSend} aria-label={`${label} ${needsReview ? "확인 후 재시도" : summary ? "재발송" : "발송"}`} className="min-h-10 shrink-0 rounded-[3px] border border-[var(--doc-rule)] bg-[var(--doc-surface)] px-3 text-xs font-bold text-[var(--doc-ink)] disabled:cursor-not-allowed disabled:opacity-50">{pending ? "발송 중…" : needsReview ? "확인 후 재시도" : summary ? "재발송" : "발송"}</button>
+    <button type="button" disabled={disabled} onClick={onSend} aria-label={`${label} ${needsReview ? "확인 후 재시도" : summary ? "재발송" : "발송"}`} className="min-h-10 shrink-0 rounded-xl border border-gray-200 bg-white px-3 text-xs font-black text-gray-800 disabled:cursor-not-allowed disabled:opacity-50 dark:border-gray-700 dark:bg-gray-900 dark:text-white">{pending ? "발송 중…" : needsReview ? "확인 후 재시도" : summary ? "재발송" : "발송"}</button>
   </div>;
 }
 
@@ -2652,11 +2652,11 @@ function ShuttleLocationCard({ point }: { point: ShuttlePoint }) {
     : searchQuery ? `https://map.naver.com/p/search/${encodeURIComponent(searchQuery)}` : null;
   const accuracy = finiteCoordinate(point.accuracyMeters);
 
-  return <article className="min-w-0 rounded-[3px] border border-[var(--doc-rule)] bg-[var(--doc-surface)] p-3">
+  return <article className="min-w-0 rounded-xl border border-blue-200 bg-white p-3 dark:border-blue-800 dark:bg-gray-900">
     <div className="flex flex-wrap items-start justify-between gap-2">
       <div className="flex min-w-0 items-center gap-2">
-        <Icon name={point.label === "탑승 위치" ? "trip_origin" : "location_on"} className="shrink-0 text-xl text-[var(--doc-ink-2)]" />
-        <h5 className="font-bold text-gray-950">{point.label}</h5>
+        <Icon name={point.label === "탑승 위치" ? "trip_origin" : "location_on"} className="shrink-0 text-xl text-blue-700 dark:text-blue-300" />
+        <h5 className="font-black text-gray-950 dark:text-white">{point.label}</h5>
       </div>
       {hasCoordinates ? (
         <span className={badge("UNASSIGNED")}>지도 핀 제출 · 관리자 확인 필요</span>
@@ -2665,11 +2665,11 @@ function ShuttleLocationCard({ point }: { point: ShuttlePoint }) {
       )}
     </div>
 
-    <p className="mt-3 break-words text-sm font-bold text-[var(--doc-ink)]">{displayAddress}</p>
-    {point.location && point.location !== displayAddress && <p className="mt-1 break-words text-xs text-[var(--doc-ink-2)]">상세 설명: {point.location}</p>}
+    <p className="mt-3 break-words text-sm font-bold text-gray-900 dark:text-white">{displayAddress}</p>
+    {point.location && point.location !== displayAddress && <p className="mt-1 break-words text-xs text-gray-600 dark:text-gray-300">상세 설명: {point.location}</p>}
     {(kakaoHref || naverHref) && <div className="mt-3 grid grid-cols-2 gap-2">
-      {kakaoHref && <a href={kakaoHref} target="_blank" rel="noreferrer" className="inline-flex min-h-10 items-center justify-center gap-1 rounded-[3px] border border-[var(--doc-rule)] bg-[var(--doc-surface)] px-2 text-xs font-bold text-[var(--doc-ink-2)] hover:bg-[var(--doc-grid-head)]"><Icon name="map" className="text-base" />카카오맵</a>}
-      {naverHref && <a href={naverHref} target="_blank" rel="noreferrer" className="inline-flex min-h-10 items-center justify-center gap-1 rounded-[3px] border border-[var(--doc-accent)] bg-[var(--doc-surface)] px-2 text-xs font-bold text-[var(--doc-accent)] hover:bg-[var(--doc-accent-soft)]"><Icon name="map" className="text-base" />네이버 지도</a>}
+      {kakaoHref && <a href={kakaoHref} target="_blank" rel="noreferrer" className="inline-flex min-h-10 items-center justify-center gap-1 rounded-lg border border-blue-200 bg-white px-2 text-xs font-black text-blue-800 hover:bg-blue-50 dark:border-blue-800 dark:bg-gray-900 dark:text-blue-200 dark:hover:bg-blue-950/40"><Icon name="map" className="text-base" />카카오맵</a>}
+      {naverHref && <a href={naverHref} target="_blank" rel="noreferrer" className="inline-flex min-h-10 items-center justify-center gap-1 rounded-lg border border-emerald-200 bg-white px-2 text-xs font-black text-emerald-800 hover:bg-emerald-50 dark:border-emerald-800 dark:bg-gray-900 dark:text-emerald-200 dark:hover:bg-emerald-950/40"><Icon name="map" className="text-base" />네이버 지도</a>}
     </div>}
   </article>;
 }
@@ -2693,19 +2693,19 @@ function ShuttleRequestBox({ request, onChanged }: { request: ShuttleRequest; on
     finally { setBusy(false); }
   }
   // 취소(미이용) 상태면 회색 톤 + 상세 카드를 접어, 실제로 신청이 빠졌음을 한눈에 알 수 있게 한다.
-  return <div className={`mt-4 min-w-0 rounded-[3px] p-3 text-sm ${cancelled ? "bg-[var(--doc-grid-head)] " : "bg-[var(--doc-grid-head)] "}`}>
+  return <div className={`mt-4 min-w-0 rounded-xl p-3 text-sm ${cancelled ? "bg-gray-100 dark:bg-gray-800/50" : "bg-blue-50 dark:bg-blue-950/30"}`}>
     <div className="flex flex-wrap items-center justify-between gap-2">
-      <h4 className={`font-bold ${cancelled ? "text-[var(--doc-ink-2)] line-through " : "text-[var(--doc-ink-2)] "}`}>셔틀 요청</h4>
+      <h4 className={`font-black ${cancelled ? "text-gray-500 line-through dark:text-gray-400" : "text-blue-900 dark:text-blue-100"}`}>셔틀 요청</h4>
       <div className="flex items-center gap-2">
         <span className={badge(request.status || "REQUESTED")}>{STATUS_LABEL[request.status || "REQUESTED"]}</span>
         {cancelled
-          ? <button type="button" disabled={busy} onClick={() => toggleRide(true)} className="rounded-[3px] border border-[var(--doc-accent)] px-2.5 py-1 text-[11px] font-bold text-[var(--doc-accent)] disabled:opacity-50">{busy ? "처리 중…" : "🚌 셔틀 이용으로 변경"}</button>
-          : <button type="button" disabled={busy} onClick={() => toggleRide(false)} className="rounded-[3px] border border-[var(--doc-crit)] px-2.5 py-1 text-[11px] font-bold text-[var(--doc-crit)] disabled:opacity-50">{busy ? "처리 중…" : "🚫 셔틀 신청 취소"}</button>}
+          ? <button type="button" disabled={busy} onClick={() => toggleRide(true)} className="rounded-lg border border-green-300 px-2.5 py-1 text-[11px] font-black text-green-700 disabled:opacity-50">{busy ? "처리 중…" : "🚌 셔틀 이용으로 변경"}</button>
+          : <button type="button" disabled={busy} onClick={() => toggleRide(false)} className="rounded-lg border border-red-300 px-2.5 py-1 text-[11px] font-black text-red-600 disabled:opacity-50">{busy ? "처리 중…" : "🚫 셔틀 신청 취소"}</button>}
       </div>
     </div>
-    {err && <p className="mt-1 text-[11px] font-bold text-[var(--doc-crit)]">⚠ {err}</p>}
+    {err && <p className="mt-1 text-[11px] font-bold text-red-600">⚠ {err}</p>}
     {cancelled ? (
-      <p className="mt-2 rounded-[3px] bg-[var(--doc-surface)] px-3 py-2 text-xs font-bold text-[var(--doc-ink-2)]">🚫 셔틀 미이용 처리됨 — 배차 명단에서 제외되었습니다. 다시 태우려면 위 버튼을 누르세요.</p>
+      <p className="mt-2 rounded-lg bg-white px-3 py-2 text-xs font-bold text-gray-500 dark:bg-gray-900 dark:text-gray-400">🚫 셔틀 미이용 처리됨 — 배차 명단에서 제외되었습니다. 다시 태우려면 위 버튼을 누르세요.</p>
     ) : <>
       <div className="mt-3 grid min-w-0 gap-3 lg:grid-cols-2">
         <ShuttleLocationCard point={shuttlePoint(request, "pickup")} />
@@ -2714,13 +2714,13 @@ function ShuttleRequestBox({ request, onChanged }: { request: ShuttleRequest; on
       {request.pickupTime && <dl className="mt-3 grid gap-2 sm:grid-cols-2">
         <Info label="희망 시간">{request.pickupTime}</Info>
       </dl>}
-      {request.note && <p className="mt-3 whitespace-pre-wrap break-words text-xs text-[var(--doc-ink-2)]">{request.note}</p>}
+      {request.note && <p className="mt-3 whitespace-pre-wrap break-words text-xs text-blue-900 dark:text-blue-100">{request.note}</p>}
     </>}
   </div>;
 }
 
 function Info({ label, children }: { label: string; children: React.ReactNode }) {
-  return <p><span className="block text-xs font-bold text-[var(--doc-ink-2)]">{label}</span><b className="font-bold text-[var(--doc-ink)]">{children}</b></p>;
+  return <p><span className="block text-xs font-bold text-gray-500 dark:text-gray-400">{label}</span><b className="font-bold text-gray-900 dark:text-white">{children}</b></p>;
 }
 
 function dateInputValue(value?: string | null) {
@@ -2792,14 +2792,14 @@ function ClassForm({ seasonId, initial, coaches, onClose, onSubmit }: { seasonId
     }
   }
 
-  const inputClass = "mt-1 min-h-11 w-full rounded-[3px] border border-[var(--doc-rule)] bg-[var(--doc-surface)] px-3 font-normal text-gray-950   ";
+  const inputClass = "mt-1 min-h-11 w-full rounded-xl border border-gray-200 bg-white px-3 font-normal text-gray-950 dark:border-gray-700 dark:bg-gray-800 dark:text-white";
   const selectedCoach = coaches.find((coach) => coach.id === selectedInstructorId);
   const currentCoachMissingFromOptions = Boolean(selectedInstructorId && !selectedCoach);
   const attendanceMissing = ["OPEN", "CLOSED"].includes(attendanceReadiness.status)
     ? missingAttendancePreparation(attendanceReadiness.linkedClassId, attendanceReadiness.instructorId)
     : [];
-  return <AdminModal onClose={() => { if (!pending) onClose(); }} titleId="seasonal-class-modal-title"><form onSubmit={submit} className="w-full max-w-3xl p-6"><header className="flex items-center justify-between"><div><h2 id="seasonal-class-modal-title" className="text-xl font-bold">{initial ? "특강 반 수정" : "특강 반 추가"}</h2></div><button type="button" onClick={onClose} disabled={pending} aria-label="닫기"><Icon name="close" /></button></header>
-    {error && <p role="alert" className="mt-4 rounded-[3px] bg-[var(--doc-crit-soft)] p-3 text-sm font-bold text-[var(--doc-crit)]">{error}</p>}
+  return <AdminModal onClose={() => { if (!pending) onClose(); }} titleId="seasonal-class-modal-title"><form onSubmit={submit} className="w-full max-w-3xl p-6"><header className="flex items-center justify-between"><div><h2 id="seasonal-class-modal-title" className="text-xl font-black">{initial ? "특강 반 수정" : "특강 반 추가"}</h2></div><button type="button" onClick={onClose} disabled={pending} aria-label="닫기"><Icon name="close" /></button></header>
+    {error && <p role="alert" className="mt-4 rounded-lg bg-red-50 p-3 text-sm font-bold text-red-700">{error}</p>}
     <div className="mt-5 grid gap-4 sm:grid-cols-2">
       <ClassInput name="code" label="반 코드" required defaultValue={initial?.code} placeholder="예: MON-1" />
       <ClassInput name="title" label="반 이름" required defaultValue={initial?.name} placeholder="예: 초등 고학년 1교시" />
@@ -2810,7 +2810,7 @@ function ClassForm({ seasonId, initial, coaches, onClose, onSubmit }: { seasonId
       <ClassInput name="newApplicantPrice" label="신규 회원 수강료" type="number" defaultValue={initial?.newApplicantPrice} />
       <ClassInput name="existingApplicantPrice" label="기존 회원 수강료" type="number" defaultValue={initial?.existingApplicantPrice} />
       <ClassInput name="shuttleFee" label="셔틀비" type="number" defaultValue={initial?.shuttleFee ?? 0} />
-      <label className="text-sm font-bold text-[var(--doc-ink-2)]">담당 선생님
+      <label className="text-sm font-bold text-gray-700 dark:text-gray-200">담당 선생님
         <select name="instructorId" value={selectedInstructorId} onChange={(event) => {
           setSelectedInstructorId(event.target.value);
           setAttendanceReadiness((current) => ({ ...current, instructorId: event.target.value }));
@@ -2823,19 +2823,19 @@ function ClassForm({ seasonId, initial, coaches, onClose, onSubmit }: { seasonId
       </label>
       <ClassInput name="linkedProgramId" label="연결 프로그램 ID" defaultValue={initial?.linkedProgramId} placeholder="기존 프로그램 ID (선택)" />
       <ClassInput name="linkedClassId" label="연결 정규 반 ID" defaultValue={initial?.linkedClassId} placeholder="수강·출석에 연결할 반 ID" onChange={(value) => setAttendanceReadiness((current) => ({ ...current, linkedClassId: value }))} />
-      <label className="text-sm font-bold text-[var(--doc-ink-2)]">공개 상태<select name="status" value={attendanceReadiness.status} onChange={(event) => setAttendanceReadiness((current) => ({ ...current, status: event.target.value as NonNullable<SeasonalClass["status"]> }))} className={inputClass}><option value="DRAFT">작성 중</option><option value="OPEN">모집 중</option><option value="CLOSED">모집 마감</option><option value="CANCELLED">취소</option></select></label>
-      <label className="flex min-h-11 items-center gap-3 self-end rounded-[3px] border border-[var(--doc-rule)] px-3 text-sm font-bold"><input name="shuttleAvailable" type="checkbox" defaultChecked={initial?.shuttleAvailable} className="size-5" />셔틀 이용 가능</label>
+      <label className="text-sm font-bold text-gray-700 dark:text-gray-200">공개 상태<select name="status" value={attendanceReadiness.status} onChange={(event) => setAttendanceReadiness((current) => ({ ...current, status: event.target.value as NonNullable<SeasonalClass["status"]> }))} className={inputClass}><option value="DRAFT">작성 중</option><option value="OPEN">모집 중</option><option value="CLOSED">모집 마감</option><option value="CANCELLED">취소</option></select></label>
+      <label className="flex min-h-11 items-center gap-3 self-end rounded-xl border border-gray-200 px-3 text-sm font-bold dark:border-gray-700"><input name="shuttleAvailable" type="checkbox" defaultChecked={initial?.shuttleAvailable} className="size-5" />셔틀 이용 가능</label>
     </div>
-    {attendanceMissing.length > 0 && <div role="status" className="mt-4 rounded-[3px] border border-[var(--doc-warn)] bg-[var(--doc-grid-head)] p-3 text-sm text-[var(--doc-warn)]"><p className="flex items-center gap-2 font-bold"><Icon name="warning" />출석 준비 미완료</p><p className="mt-1">빠진 항목: {attendanceMissing.join(" · ")}. 모집 상태로 저장할 수 있지만 수업 시작 전 연결해 주세요.</p></div>}
-    <section className="mt-6 border-t border-[var(--doc-rule)] pt-5"><div className="flex items-center justify-between"><div><h3 className="font-bold">전체 수업 일정</h3><p className="text-xs text-[var(--doc-ink-2)]">학생에게 안내할 모든 회차를 입력하세요.</p></div><button type="button" onClick={() => setSessionDates((rows) => [...rows, { startsAt: "", endsAt: "", location: initial?.location ?? "", note: "" }])} className="min-h-10 rounded-[3px] border border-[var(--doc-rule)] px-3 text-sm font-bold">회차 추가</button></div>
-      <div className="mt-3 space-y-3">{sessionDates.map((row, index) => <div key={index} className="grid gap-3 rounded-[3px] bg-[var(--doc-grid-head)] p-3 sm:grid-cols-2"><label className="text-xs font-bold">{index + 1}회 시작<input required type="datetime-local" value={row.startsAt} onChange={(event) => setSessionDates((rows) => rows.map((item, rowIndex) => rowIndex === index ? { ...item, startsAt: event.target.value } : item))} className={inputClass} /></label><label className="text-xs font-bold">{index + 1}회 종료<input required type="datetime-local" value={row.endsAt} onChange={(event) => setSessionDates((rows) => rows.map((item, rowIndex) => rowIndex === index ? { ...item, endsAt: event.target.value } : item))} className={inputClass} /></label><label className="text-xs font-bold">장소<input value={row.location} onChange={(event) => setSessionDates((rows) => rows.map((item, rowIndex) => rowIndex === index ? { ...item, location: event.target.value } : item))} className={inputClass} /></label><div className="flex items-end gap-2"><label className="min-w-0 flex-1 text-xs font-bold">메모<input value={row.note} onChange={(event) => setSessionDates((rows) => rows.map((item, rowIndex) => rowIndex === index ? { ...item, note: event.target.value } : item))} className={inputClass} /></label>{sessionDates.length > 1 && <button type="button" aria-label={`${index + 1}회 삭제`} onClick={() => setSessionDates((rows) => rows.filter((_, rowIndex) => rowIndex !== index))} className="mb-0 min-h-11 rounded-[3px] border border-[var(--doc-crit)] px-3 text-sm font-bold text-[var(--doc-crit)]">삭제</button>}</div></div>)}</div>
+    {attendanceMissing.length > 0 && <div role="status" className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-100"><p className="flex items-center gap-2 font-black"><Icon name="warning" />출석 준비 미완료</p><p className="mt-1">빠진 항목: {attendanceMissing.join(" · ")}. 모집 상태로 저장할 수 있지만 수업 시작 전 연결해 주세요.</p></div>}
+    <section className="mt-6 border-t border-gray-100 pt-5 dark:border-gray-800"><div className="flex items-center justify-between"><div><h3 className="font-black">전체 수업 일정</h3><p className="text-xs text-gray-500">학생에게 안내할 모든 회차를 입력하세요.</p></div><button type="button" onClick={() => setSessionDates((rows) => [...rows, { startsAt: "", endsAt: "", location: initial?.location ?? "", note: "" }])} className="min-h-10 rounded-lg border border-gray-200 px-3 text-sm font-bold dark:border-gray-700">회차 추가</button></div>
+      <div className="mt-3 space-y-3">{sessionDates.map((row, index) => <div key={index} className="grid gap-3 rounded-xl bg-gray-50 p-3 sm:grid-cols-2 dark:bg-gray-800"><label className="text-xs font-bold">{index + 1}회 시작<input required type="datetime-local" value={row.startsAt} onChange={(event) => setSessionDates((rows) => rows.map((item, rowIndex) => rowIndex === index ? { ...item, startsAt: event.target.value } : item))} className={inputClass} /></label><label className="text-xs font-bold">{index + 1}회 종료<input required type="datetime-local" value={row.endsAt} onChange={(event) => setSessionDates((rows) => rows.map((item, rowIndex) => rowIndex === index ? { ...item, endsAt: event.target.value } : item))} className={inputClass} /></label><label className="text-xs font-bold">장소<input value={row.location} onChange={(event) => setSessionDates((rows) => rows.map((item, rowIndex) => rowIndex === index ? { ...item, location: event.target.value } : item))} className={inputClass} /></label><div className="flex items-end gap-2"><label className="min-w-0 flex-1 text-xs font-bold">메모<input value={row.note} onChange={(event) => setSessionDates((rows) => rows.map((item, rowIndex) => rowIndex === index ? { ...item, note: event.target.value } : item))} className={inputClass} /></label>{sessionDates.length > 1 && <button type="button" aria-label={`${index + 1}회 삭제`} onClick={() => setSessionDates((rows) => rows.filter((_, rowIndex) => rowIndex !== index))} className="mb-0 min-h-11 rounded-lg border border-red-200 px-3 text-sm font-bold text-red-700">삭제</button>}</div></div>)}</div>
     </section>
-    <footer className="mt-6 flex justify-end gap-2"><button type="button" onClick={onClose} disabled={pending} className="min-h-11 rounded-[3px] border border-[var(--doc-rule)] px-4 font-bold disabled:opacity-60">취소</button><button disabled={pending} className="min-h-11 rounded-[3px] bg-[var(--doc-accent)] px-5 font-bold text-[var(--doc-on-accent)] disabled:opacity-60">{pending ? "저장 중…" : "저장"}</button></footer>
+    <footer className="mt-6 flex justify-end gap-2"><button type="button" onClick={onClose} disabled={pending} className="min-h-11 rounded-xl border border-gray-200 px-4 font-bold disabled:opacity-60 dark:border-gray-700">취소</button><button disabled={pending} className="min-h-11 rounded-xl bg-[var(--brand-accent)] px-5 font-black text-[var(--brand-accent-contrast)] disabled:opacity-60">{pending ? "저장 중…" : "저장"}</button></footer>
   </form></AdminModal>;
 }
 
 function ClassInput({ name, label, type = "text", placeholder, required, defaultValue, onChange }: Field) {
-  return <label className="text-sm font-bold text-[var(--doc-ink-2)]">{label}{required && <span className="text-[var(--doc-crit)]"> *</span>}<input name={name} type={type} required={required} placeholder={placeholder} defaultValue={defaultValue ?? ""} onChange={onChange ? (event) => onChange(event.target.value) : undefined} min={type === "number" ? 0 : undefined} className="mt-1 min-h-11 w-full rounded-[3px] border border-[var(--doc-rule)] bg-[var(--doc-surface)] px-3 font-normal text-gray-950" /></label>;
+  return <label className="text-sm font-bold text-gray-700 dark:text-gray-200">{label}{required && <span className="text-red-500"> *</span>}<input name={name} type={type} required={required} placeholder={placeholder} defaultValue={defaultValue ?? ""} onChange={onChange ? (event) => onChange(event.target.value) : undefined} min={type === "number" ? 0 : undefined} className="mt-1 min-h-11 w-full rounded-xl border border-gray-200 bg-white px-3 font-normal text-gray-950 dark:border-gray-700 dark:bg-gray-800 dark:text-white" /></label>;
 }
 
 type Field = { name: string; label: string; type?: string; placeholder?: string; required?: boolean; defaultValue?: string | number | null; onChange?: (value: string) => void };
@@ -2843,9 +2843,9 @@ function FormModal({ title, helper, fields, onClose, onSubmit }: { title: string
   const [pending, setPending] = useState(false); const [error, setError] = useState("");
   async function submit(event: FormEvent<HTMLFormElement>) { event.preventDefault(); setPending(true); setError(""); const form = new FormData(event.currentTarget); const payload = Object.fromEntries(form.entries()); try { await onSubmit(payload); } catch (caught) { setError(caught instanceof Error ? caught.message : "저장하지 못했습니다."); setPending(false); } }
   const titleId = "seasonal-form-modal-title";
-  return <AdminModal onClose={() => { if (!pending) onClose(); }} titleId={titleId}><form onSubmit={submit} className="w-full p-6"><header className="flex items-center justify-between"><h2 id={titleId} className="text-xl font-bold">{title}</h2><button type="button" onClick={onClose} disabled={pending} aria-label="닫기"><Icon name="close" /></button></header>{helper && <p className="mt-3 rounded-[3px] bg-[var(--doc-grid-head)] p-3 text-xs font-bold text-[var(--doc-warn)]">{helper}</p>}{error && <p role="alert" className="mt-4 rounded-[3px] bg-[var(--doc-crit-soft)] p-3 text-sm font-bold text-[var(--doc-crit)]">{error}</p>}<div className="mt-5 grid gap-4 sm:grid-cols-2">{fields.map((field, index) => <label key={field.name} className="text-sm font-bold text-[var(--doc-ink-2)]">{field.label}{field.required && <span className="text-[var(--doc-crit)]"> *</span>}<input name={field.name} type={field.type || "text"} required={field.required} placeholder={field.placeholder} defaultValue={field.defaultValue ?? ""} min={field.type === "number" ? 0 : undefined} data-admin-modal-initial-focus={index === 0 ? "true" : undefined} className="mt-1 min-h-11 w-full rounded-[3px] border border-[var(--doc-rule)] bg-[var(--doc-surface)] px-3 font-normal text-gray-950" /></label>)}</div><footer className="mt-6 flex justify-end gap-2"><button type="button" onClick={onClose} disabled={pending} className="min-h-11 rounded-[3px] border border-[var(--doc-rule)] px-4 font-bold disabled:opacity-60">취소</button><button disabled={pending} className="min-h-11 rounded-[3px] bg-[var(--doc-accent)] px-5 font-bold text-[var(--doc-on-accent)] disabled:opacity-60">{pending ? "저장 중…" : "저장"}</button></footer></form></AdminModal>;
+  return <AdminModal onClose={() => { if (!pending) onClose(); }} titleId={titleId}><form onSubmit={submit} className="w-full p-6"><header className="flex items-center justify-between"><h2 id={titleId} className="text-xl font-black">{title}</h2><button type="button" onClick={onClose} disabled={pending} aria-label="닫기"><Icon name="close" /></button></header>{helper && <p className="mt-3 rounded-xl bg-amber-50 p-3 text-xs font-bold text-amber-900 dark:bg-amber-950/30 dark:text-amber-100">{helper}</p>}{error && <p role="alert" className="mt-4 rounded-lg bg-red-50 p-3 text-sm font-bold text-red-700">{error}</p>}<div className="mt-5 grid gap-4 sm:grid-cols-2">{fields.map((field, index) => <label key={field.name} className="text-sm font-bold text-gray-700 dark:text-gray-200">{field.label}{field.required && <span className="text-red-500"> *</span>}<input name={field.name} type={field.type || "text"} required={field.required} placeholder={field.placeholder} defaultValue={field.defaultValue ?? ""} min={field.type === "number" ? 0 : undefined} data-admin-modal-initial-focus={index === 0 ? "true" : undefined} className="mt-1 min-h-11 w-full rounded-xl border border-gray-200 bg-white px-3 font-normal text-gray-950 dark:border-gray-700 dark:bg-gray-800 dark:text-white" /></label>)}</div><footer className="mt-6 flex justify-end gap-2"><button type="button" onClick={onClose} disabled={pending} className="min-h-11 rounded-xl border border-gray-200 px-4 font-bold disabled:opacity-60 dark:border-gray-700">취소</button><button disabled={pending} className="min-h-11 rounded-xl bg-[var(--brand-accent)] px-5 font-black text-[var(--brand-accent-contrast)] disabled:opacity-60">{pending ? "저장 중…" : "저장"}</button></footer></form></AdminModal>;
 }
 
-function Panel({ title, icon, action, children }: { title: string; icon: string; action?: React.ReactNode; children: React.ReactNode }) { return <section className="min-w-0 max-w-full rounded-[6px] border border-[var(--doc-rule)] bg-[var(--doc-surface)]"><header className="flex min-w-0 flex-col justify-between gap-3 border-b border-[var(--doc-rule)] px-5 py-4 sm:flex-row sm:items-center"><h2 className="flex min-w-0 items-center gap-2 break-words font-bold"><Icon name={icon} className="text-[var(--doc-accent)]" />{title}</h2>{action}</header><div className="min-w-0 max-w-full p-5">{children}</div></section>; }
-function Empty({ text }: { text: string }) { return <div className="py-10 text-center"><Icon name="inbox" className="text-4xl text-[var(--doc-ink-3)]" /><p className="mt-2 text-sm text-[var(--doc-ink-2)]">{text}</p></div>; }
-function Loading() { return <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">{Array.from({ length: 8 }).map((_, index) => <div key={index} className="h-36 rounded-[6px] bg-[var(--doc-grid-head)]" />)}</div>; }
+function Panel({ title, icon, action, children }: { title: string; icon: string; action?: React.ReactNode; children: React.ReactNode }) { return <section className="min-w-0 max-w-full rounded-2xl border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-900"><header className="flex min-w-0 flex-col justify-between gap-3 border-b border-gray-100 px-5 py-4 sm:flex-row sm:items-center dark:border-gray-800"><h2 className="flex min-w-0 items-center gap-2 break-words font-black"><Icon name={icon} className="text-[var(--brand-accent)]" />{title}</h2>{action}</header><div className="min-w-0 max-w-full p-5">{children}</div></section>; }
+function Empty({ text }: { text: string }) { return <div className="py-10 text-center"><Icon name="inbox" className="text-4xl text-gray-300" /><p className="mt-2 text-sm text-gray-500">{text}</p></div>; }
+function Loading() { return <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">{Array.from({ length: 8 }).map((_, index) => <div key={index} className="h-36 animate-pulse rounded-2xl bg-gray-100 dark:bg-gray-800" />)}</div>; }

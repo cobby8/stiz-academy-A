@@ -215,7 +215,7 @@ function isLikelyDefaultScheduleTime(dateStr: string | null) {
     return date.getHours() === 9 && date.getMinutes() === 0;
 }
 
-const MODAL_INPUT_CLASS = "w-full rounded-[3px] border border-[var(--doc-rule)] bg-[var(--doc-surface)] px-3 py-2 text-sm text-[var(--doc-ink)] focus:outline-none focus: focus:ring-brand-orange-500    dark:focus:ring-brand-neon-lime";
+const MODAL_INPUT_CLASS = "w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-brand-orange-500 dark:border-gray-700 dark:bg-gray-900 dark:text-white dark:focus:ring-brand-neon-lime";
 
 const DAY_LABELS: Record<string, string> = {
     Mon: "월",
@@ -309,7 +309,7 @@ function formatPreferredSchedule(lead: TrialLead, classes: ClassInfo[]) {
 
 function FormField({ label, children }: { label: string; children: ReactNode }) {
     return (
-        <label className="block text-sm font-medium text-[var(--doc-ink-2)]">
+        <label className="block text-sm font-medium text-gray-700 dark:text-gray-200">
             <span className="mb-1 block">{label}</span>
             {children}
         </label>
@@ -332,24 +332,24 @@ function ModalActions({
     muted?: boolean;
 }) {
     const submitClass = muted
-        ? "bg-[var(--doc-grid-head)] text-white hover:bg-[var(--doc-grid-head)]   dark:hover:bg-[var(--doc-surface)]"
+        ? "bg-gray-700 text-white hover:bg-gray-800 dark:bg-gray-200 dark:text-gray-900 dark:hover:bg-white"
         : accent === "sky"
-            ? "bg-[var(--doc-grid-head)] text-white hover:bg-[var(--doc-grid-head)]"
-            : "bg-[var(--doc-accent)] text-white hover:bg-[var(--doc-accent)]  dark:text-[var(--doc-ink)] dark:hover:bg-lime-400";
+            ? "bg-sky-500 text-white hover:bg-sky-600"
+            : "bg-brand-orange-500 text-white hover:bg-brand-orange-600 dark:bg-brand-neon-lime dark:text-brand-navy-900 dark:hover:bg-lime-400";
 
     return (
         <div className="flex gap-3 pt-2">
             <button
                 type="button"
                 onClick={onClose}
-                className="flex-1 rounded-[3px] border border-[var(--doc-rule)] px-4 py-2.5 text-sm font-medium text-[var(--doc-ink-2)] transition hover:bg-[var(--doc-grid-head)]"
+                className="flex-1 rounded-lg border border-gray-300 px-4 py-2.5 text-sm font-medium text-gray-700 transition hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-200 dark:hover:bg-gray-800"
             >
                 닫기
             </button>
             <button
                 type="submit"
                 disabled={busy}
-                className={`flex-1 rounded-[3px] px-4 py-2.5 text-sm font-bold transition disabled:opacity-50 ${submitClass}`}
+                className={`flex-1 rounded-lg px-4 py-2.5 text-sm font-bold transition disabled:opacity-50 ${submitClass}`}
             >
                 {busy ? busyLabel : submitLabel}
             </button>
@@ -415,14 +415,14 @@ function TrialEditModal({
 
     return (
         <AdminModal onClose={onClose} titleId="trial-edit-title" panelClassName="max-w-2xl p-6">
-                <h2 id="trial-edit-title" className="mb-1 flex items-center gap-2 text-lg font-bold text-[var(--doc-ink)]">
-                    <span className="material-symbols-outlined text-[var(--doc-accent)]">edit</span>
+                <h2 id="trial-edit-title" className="mb-1 flex items-center gap-2 text-lg font-bold text-gray-900 dark:text-white">
+                    <span className="material-symbols-outlined text-brand-orange-500 dark:text-brand-neon-lime">edit</span>
                     체험 신청 수정
                 </h2>
-                <p className="mb-4 text-sm text-[var(--doc-ink-2)]">상담 중 확인한 신청 내용을 바로 정리합니다.</p>
+                <p className="mb-4 text-sm text-gray-500 dark:text-gray-400">상담 중 확인한 신청 내용을 바로 정리합니다.</p>
                 <form onSubmit={handleSubmit} className="space-y-4">
                     {formError && (
-                        <p className="rounded-[3px] bg-[var(--doc-crit-soft)] px-3 py-2 text-sm font-semibold text-[var(--doc-crit)]">
+                        <p className="rounded-lg bg-red-50 px-3 py-2 text-sm font-semibold text-red-700 dark:bg-red-950/40 dark:text-red-200">
                             {formError}
                         </p>
                     )}
@@ -475,7 +475,7 @@ function TrialEditModal({
                             <input value={form.preferredPeriod} onChange={(e) => setForm({ ...form, preferredPeriod: e.target.value })} className={MODAL_INPUT_CLASS} placeholder="4" />
                         </FormField>
                     </div>
-                    <label className="flex items-center gap-2 rounded-[3px] border border-[var(--doc-rule)] px-3 py-2 text-sm font-semibold text-[var(--doc-ink-2)]">
+                    <label className="flex items-center gap-2 rounded-lg border border-gray-200 px-3 py-2 text-sm font-semibold text-gray-700 dark:border-gray-700 dark:text-gray-200">
                         <input
                             type="checkbox"
                             checked={form.trialFeeConfirmed}
@@ -564,31 +564,31 @@ function TrialScheduleModal({
 
     return (
         <AdminModal onClose={onClose} titleId="trial-schedule-title" panelClassName="max-w-2xl p-6">
-                <h2 id="trial-schedule-title" className="mb-1 flex items-center gap-2 text-lg font-bold text-[var(--doc-ink)]">
-                    <span className="material-symbols-outlined text-[var(--doc-ink-2)]">event_available</span>
+                <h2 id="trial-schedule-title" className="mb-1 flex items-center gap-2 text-lg font-bold text-gray-900 dark:text-white">
+                    <span className="material-symbols-outlined text-sky-500">event_available</span>
                     체험 일정 확정/변경
                 </h2>
-                <p className="mb-4 text-sm text-[var(--doc-ink-2)]">
-                    <span className="font-medium text-[var(--doc-ink)]">{lead.childName}</span> 체험 일정을 저장합니다.
+                <p className="mb-4 text-sm text-gray-500 dark:text-gray-400">
+                    <span className="font-medium text-gray-900 dark:text-white">{lead.childName}</span> 체험 일정을 저장합니다.
                 </p>
                 <form onSubmit={handleSubmit} className="space-y-4">
                     {formError && (
-                        <p className="rounded-[3px] bg-[var(--doc-crit-soft)] px-3 py-2 text-sm font-semibold text-[var(--doc-crit)]">
+                        <p className="rounded-lg bg-red-50 px-3 py-2 text-sm font-semibold text-red-700 dark:bg-red-950/40 dark:text-red-200">
                             {formError}
                         </p>
                     )}
-                    <div className="grid gap-3 rounded-[3px] border border-[var(--doc-rule)] bg-[var(--doc-grid-head)] p-3 text-sm text-[var(--doc-ink-2)] sm:grid-cols-3">
+                    <div className="grid gap-3 rounded-xl border border-sky-100 bg-sky-50 p-3 text-sm text-sky-900 dark:border-sky-900/50 dark:bg-sky-950/30 dark:text-sky-100 sm:grid-cols-3">
                         <div>
-                            <p className="text-xs font-bold uppercase opacity-70">신청일</p>
-                            <p className="mt-1 font-bold">{dateInputValue(lead.createdAt) || "-"}</p>
+                            <p className="text-xs font-black uppercase opacity-70">신청일</p>
+                            <p className="mt-1 font-black">{dateInputValue(lead.createdAt) || "-"}</p>
                         </div>
                         <div>
-                            <p className="text-xs font-bold uppercase opacity-70">희망일자</p>
-                            <p className="mt-1 font-bold">{dateInputValue(lead.trialDate) || "미입력"}</p>
+                            <p className="text-xs font-black uppercase opacity-70">희망일자</p>
+                            <p className="mt-1 font-black">{dateInputValue(lead.trialDate) || "미입력"}</p>
                         </div>
                         <div>
-                            <p className="text-xs font-bold uppercase opacity-70">수업교시</p>
-                            <p className="mt-1 font-bold">{preferredSchedule}</p>
+                            <p className="text-xs font-black uppercase opacity-70">수업교시</p>
+                            <p className="mt-1 font-black">{preferredSchedule}</p>
                         </div>
                     </div>
                     <FormField label="확정 수업">
@@ -613,7 +613,7 @@ function TrialScheduleModal({
                             <input type="time" value={scheduledTime} onChange={(e) => setScheduledTime(e.target.value)} className={MODAL_INPUT_CLASS} />
                         </FormField>
                     </div>
-                    <p className="rounded-[3px] bg-[var(--doc-grid-head)] px-3 py-2 text-xs font-semibold text-[var(--doc-ink-2)]">
+                    <p className="rounded-lg bg-gray-50 px-3 py-2 text-xs font-semibold text-gray-500 dark:bg-gray-900 dark:text-gray-400">
                         확정 수업을 선택하면 해당 반의 시작 시간이 자동으로 들어갑니다. 실제 체험 시간이 다르면 시간만 직접 바꿔주세요.
                     </p>
                     <FormField label="관리 메모">
@@ -641,12 +641,12 @@ function TrialCancelModal({
 
     return (
         <AdminModal onClose={onClose} titleId="trial-cancel-title" panelClassName="max-w-md p-6">
-                <h2 id="trial-cancel-title" className="mb-1 flex items-center gap-2 text-lg font-bold text-[var(--doc-ink)]">
-                    <span className="material-symbols-outlined text-[var(--doc-ink-2)]">block</span>
+                <h2 id="trial-cancel-title" className="mb-1 flex items-center gap-2 text-lg font-bold text-gray-900 dark:text-white">
+                    <span className="material-symbols-outlined text-gray-500">block</span>
                     체험 신청 취소
                 </h2>
-                <p className="mb-4 text-sm text-[var(--doc-ink-2)]">
-                    <span className="font-medium text-[var(--doc-ink)]">{lead.childName}</span> 신청을 삭제하지 않고 취소 상태로 남깁니다.
+                <p className="mb-4 text-sm text-gray-500 dark:text-gray-400">
+                    <span className="font-medium text-gray-900 dark:text-white">{lead.childName}</span> 신청을 삭제하지 않고 취소 상태로 남깁니다.
                 </p>
                 <form
                     onSubmit={(event) => {
@@ -661,11 +661,11 @@ function TrialCancelModal({
                                 key={option}
                                 type="button"
                                 onClick={() => setReason(option)}
-                                className={`rounded-[3px] border px-3 py-1 text-xs font-semibold transition ${
- reason === option
- ? "border-[var(--doc-rule)] bg-[var(--doc-grid-head)] text-[var(--doc-ink)] "
- : "border-[var(--doc-rule)] text-[var(--doc-ink-2)] hover:border-[var(--doc-rule)] hover:text-[var(--doc-ink)] dark:hover:border-[var(--doc-rule)] "
- }`}
+                                className={`rounded-full border px-3 py-1 text-xs font-semibold transition ${
+                                    reason === option
+                                        ? "border-gray-500 bg-gray-100 text-gray-900 dark:border-gray-500 dark:bg-gray-700 dark:text-white"
+                                        : "border-gray-200 text-gray-600 hover:border-gray-300 hover:text-gray-900 dark:border-gray-700 dark:text-gray-300 dark:hover:border-gray-500 dark:hover:text-white"
+                                }`}
                             >
                                 {option}
                             </button>
@@ -718,48 +718,48 @@ function AddLeadModal({
 
     return (
         <AdminModal onClose={onClose} titleId="trial-add-title" panelClassName="max-w-md p-6">
-                <h2 id="trial-add-title" className="text-lg font-bold text-[var(--doc-ink)] flex items-center gap-2 mb-4">
-                    <span className="material-symbols-outlined text-[var(--doc-accent)]">person_add</span>
+                <h2 id="trial-add-title" className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2 mb-4">
+                    <span className="material-symbols-outlined text-brand-orange-500 dark:text-brand-neon-lime">person_add</span>
                     체험 신청 등록
                 </h2>
                 <form onSubmit={handleSubmit} className="space-y-4">
                     {formError && (
-                        <p className="rounded-[3px] bg-[var(--doc-crit-soft)] px-3 py-2 text-sm font-semibold text-[var(--doc-crit)]">
+                        <p className="rounded-lg bg-red-50 px-3 py-2 text-sm font-semibold text-red-700 dark:bg-red-950/40 dark:text-red-200">
                             {formError}
                         </p>
                     )}
                     <div>
-                        <label className="block text-sm font-medium text-[var(--doc-ink-2)] mb-1">아이 이름 *</label>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">아이 이름 *</label>
                         <input
                             type="text"
                             value={form.childName}
                             onChange={(e) => setForm({ ...form, childName: e.target.value })}
-                            className="w-full border border-[var(--doc-rule)] rounded-[3px] px-3 py-2 text-sm focus:outline-none focus: focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime"
+                            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime"
                             placeholder="홍길동"
                         />
                     </div>
                     <div>
-                        <label className="block text-sm font-medium text-[var(--doc-ink-2)] mb-1">나이/학년</label>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">나이/학년</label>
                         <input
                             type="text"
                             value={form.childAge}
                             onChange={(e) => setForm({ ...form, childAge: e.target.value })}
-                            className="w-full border border-[var(--doc-rule)] rounded-[3px] px-3 py-2 text-sm focus:outline-none focus: focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime"
+                            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime"
                             placeholder="초등 3학년"
                         />
                     </div>
                     <div>
-                        <label className="block text-sm font-medium text-[var(--doc-ink-2)] mb-1">학부모 이름 *</label>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">학부모 이름 *</label>
                         <input
                             type="text"
                             value={form.parentName}
                             onChange={(e) => setForm({ ...form, parentName: e.target.value })}
-                            className="w-full border border-[var(--doc-rule)] rounded-[3px] px-3 py-2 text-sm focus:outline-none focus: focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime"
+                            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime"
                             placeholder="홍부모"
                         />
                     </div>
                     <div>
-                        <label className="block text-sm font-medium text-[var(--doc-ink-2)] mb-1">연락처 *</label>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">연락처 *</label>
                         <input
                             type="tel"
                             value={form.parentPhone}
@@ -770,17 +770,17 @@ function AddLeadModal({
                                 else if (nums.length > 3) formatted = `${nums.slice(0, 3)}-${nums.slice(3)}`;
                                 setForm({ ...form, parentPhone: formatted });
                             }}
-                            className="w-full border border-[var(--doc-rule)] rounded-[3px] px-3 py-2 text-sm focus:outline-none focus: focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime"
+                            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime"
                             placeholder="숫자만 입력 (자동 변환: 010-1234-5678)"
                         />
-                        <p className="text-xs text-[var(--doc-ink-3)] mt-1">숫자만 입력하면 자동으로 000-0000-0000 형식으로 변환됩니다</p>
+                        <p className="text-xs text-gray-400 mt-1">숫자만 입력하면 자동으로 000-0000-0000 형식으로 변환됩니다</p>
                     </div>
                     <div>
-                        <label className="block text-sm font-medium text-[var(--doc-ink-2)] mb-1">유입 경로</label>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">유입 경로</label>
                         <select
                             value={form.source}
                             onChange={(e) => setForm({ ...form, source: e.target.value })}
-                            className="w-full border border-[var(--doc-rule)] rounded-[3px] px-3 py-2 text-sm focus:outline-none focus: focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime"
+                            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime"
                         >
                             <option value="WEBSITE">홈페이지</option>
                             <option value="NAVER">네이버</option>
@@ -789,12 +789,12 @@ function AddLeadModal({
                         </select>
                     </div>
                     <div>
-                        <label className="block text-sm font-medium text-[var(--doc-ink-2)] mb-1">메모</label>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">메모</label>
                         <textarea
                             value={form.memo}
                             onChange={(e) => setForm({ ...form, memo: e.target.value })}
                             rows={3}
-                            className="w-full border border-[var(--doc-rule)] rounded-[3px] px-3 py-2 text-sm focus:outline-none focus: focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime resize-none"
+                            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime resize-none"
                             placeholder="추가 메모 사항"
                         />
                     </div>
@@ -802,14 +802,14 @@ function AddLeadModal({
                         <button
                             type="button"
                             onClick={onClose}
-                            className="flex-1 px-4 py-2.5 border border-[var(--doc-rule)] rounded-[3px] text-[var(--doc-ink-2)] hover:bg-[var(--doc-grid-head)] transition-colors text-sm font-medium"
+                            className="flex-1 px-4 py-2.5 border border-gray-300 rounded-lg text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:bg-gray-900 transition-colors text-sm font-medium"
                         >
                             취소
                         </button>
                         <button
                             type="submit"
                             disabled={busy}
-                            className="flex-1 px-4 py-2.5 bg-[var(--doc-accent)] dark:text-[var(--doc-ink)] text-white rounded-[3px] hover:bg-[var(--doc-accent)] dark:hover:bg-lime-400 transition-colors text-sm font-medium disabled:opacity-50"
+                            className="flex-1 px-4 py-2.5 bg-brand-orange-500 dark:bg-brand-neon-lime dark:text-brand-navy-900 text-white rounded-lg hover:bg-brand-orange-600 dark:hover:bg-lime-400 transition-colors text-sm font-medium disabled:opacity-50"
                         >
                             {busy ? "등록 중..." : "등록"}
                         </button>
@@ -869,45 +869,45 @@ function ConvertModal({
 
     return (
         <AdminModal onClose={onClose} titleId="trial-convert-title" panelClassName="max-w-md p-6">
-                <h2 id="trial-convert-title" className="text-lg font-bold text-[var(--doc-ink)] flex items-center gap-2 mb-4">
-                    <span className="material-symbols-outlined text-[var(--doc-accent)]">how_to_reg</span>
+                <h2 id="trial-convert-title" className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2 mb-4">
+                    <span className="material-symbols-outlined text-emerald-500">how_to_reg</span>
                     정규 등록 전환
                 </h2>
-                <p className="text-sm text-[var(--doc-ink-2)] mb-4">
+                <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
                     체험 학생 &quot;{lead.childName}&quot;을 정규 원생으로 등록합니다.
                 </p>
                 <form onSubmit={handleSubmit} className="space-y-4">
                     {formError && (
-                        <p className="rounded-[3px] bg-[var(--doc-crit-soft)] px-3 py-2 text-sm font-semibold text-[var(--doc-crit)]">
+                        <p className="rounded-lg bg-red-50 px-3 py-2 text-sm font-semibold text-red-700 dark:bg-red-950/40 dark:text-red-200">
                             {formError}
                         </p>
                     )}
                     <div>
-                        <label className="block text-sm font-medium text-[var(--doc-ink-2)] mb-1">아이 이름 *</label>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">아이 이름 *</label>
                         <input
                             type="text"
                             value={form.name}
                             onChange={(e) => setForm({ ...form, name: e.target.value })}
-                            className="w-full border border-[var(--doc-rule)] rounded-[3px] px-3 py-2 text-sm focus:outline-none focus: focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime"
+                            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime"
                         />
                     </div>
                     <div>
-                        <label className="block text-sm font-medium text-[var(--doc-ink-2)] mb-1">생년월일 *</label>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">생년월일 *</label>
                         <input
                             type="date"
                             min="1950-01-01"
                             max="2025-12-31"
                             value={form.birthDate}
                             onChange={(e) => setForm({ ...form, birthDate: e.target.value })}
-                            className="w-full border border-[var(--doc-rule)] rounded-[3px] px-3 py-2 text-sm focus:outline-none focus: focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime"
+                            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime"
                         />
                     </div>
                     <div>
-                        <label className="block text-sm font-medium text-[var(--doc-ink-2)] mb-1">성별</label>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">성별</label>
                         <select
                             value={form.gender}
                             onChange={(e) => setForm({ ...form, gender: e.target.value })}
-                            className="w-full border border-[var(--doc-rule)] rounded-[3px] px-3 py-2 text-sm focus:outline-none focus: focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime"
+                            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime"
                         >
                             <option value="">선택 안함</option>
                             <option value="남">남</option>
@@ -915,16 +915,16 @@ function ConvertModal({
                         </select>
                     </div>
                     <div>
-                        <label className="block text-sm font-medium text-[var(--doc-ink-2)] mb-1">학부모 이름 *</label>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">학부모 이름 *</label>
                         <input
                             type="text"
                             value={form.parentName}
                             onChange={(e) => setForm({ ...form, parentName: e.target.value })}
-                            className="w-full border border-[var(--doc-rule)] rounded-[3px] px-3 py-2 text-sm focus:outline-none focus: focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime"
+                            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime"
                         />
                     </div>
                     <div>
-                        <label className="block text-sm font-medium text-[var(--doc-ink-2)] mb-1">학부모 연락처</label>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">학부모 연락처</label>
                         <input
                             type="tel"
                             value={form.parentPhone}
@@ -935,42 +935,42 @@ function ConvertModal({
                                 else if (nums.length > 3) formatted = `${nums.slice(0, 3)}-${nums.slice(3)}`;
                                 setForm({ ...form, parentPhone: formatted });
                             }}
-                            className="w-full border border-[var(--doc-rule)] rounded-[3px] px-3 py-2 text-sm focus:outline-none focus: focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime"
+                            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime"
                             placeholder="숫자만 입력 (자동 변환: 010-1234-5678)"
                         />
-                        <p className="text-xs text-[var(--doc-ink-3)] mt-1">숫자만 입력하면 자동으로 000-0000-0000 형식으로 변환됩니다</p>
+                        <p className="text-xs text-gray-400 mt-1">숫자만 입력하면 자동으로 000-0000-0000 형식으로 변환됩니다</p>
                     </div>
                     <div>
-                        <label className="block text-sm font-medium text-[var(--doc-ink-2)] mb-1">학부모 이메일</label>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">학부모 이메일</label>
                         <input
                             type="email"
                             value={form.parentEmail}
                             onChange={(e) => setForm({ ...form, parentEmail: e.target.value })}
-                            className="w-full border border-[var(--doc-rule)] rounded-[3px] px-3 py-2 text-sm focus:outline-none focus: focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime"
+                            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime"
                             placeholder="로그인에 사용됩니다 (선택)"
                         />
                     </div>
                     <div>
-                        <label className="block text-sm font-medium text-[var(--doc-ink-2)] mb-1">메모</label>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">메모</label>
                         <textarea
                             value={form.memo}
                             onChange={(e) => setForm({ ...form, memo: e.target.value })}
                             rows={2}
-                            className="w-full border border-[var(--doc-rule)] rounded-[3px] px-3 py-2 text-sm focus:outline-none focus: focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime resize-none"
+                            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime resize-none"
                         />
                     </div>
                     <div className="flex gap-3 pt-2">
                         <button
                             type="button"
                             onClick={onClose}
-                            className="flex-1 px-4 py-2.5 border border-[var(--doc-rule)] rounded-[3px] text-[var(--doc-ink-2)] hover:bg-[var(--doc-grid-head)] transition-colors text-sm font-medium"
+                            className="flex-1 px-4 py-2.5 border border-gray-300 rounded-lg text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:bg-gray-900 transition-colors text-sm font-medium"
                         >
                             취소
                         </button>
                         <button
                             type="submit"
                             disabled={busy}
-                            className="flex-1 px-4 py-2.5 bg-[var(--doc-accent)] text-white rounded-[3px] hover:bg-[var(--doc-accent)] transition-colors text-sm font-medium disabled:opacity-50"
+                            className="flex-1 px-4 py-2.5 bg-emerald-500 text-white rounded-lg hover:bg-emerald-600 transition-colors text-sm font-medium disabled:opacity-50"
                         >
                             {busy ? "등록 중..." : "정규 등록"}
                         </button>
@@ -995,34 +995,34 @@ function LostModal({
 
     return (
         <AdminModal onClose={onClose} titleId="trial-lost-title" panelClassName="max-w-md p-6">
-                <h2 id="trial-lost-title" className="text-lg font-bold text-[var(--doc-ink)] flex items-center gap-2 mb-4">
-                    <span className="material-symbols-outlined text-[var(--doc-crit)]">person_off</span>
+                <h2 id="trial-lost-title" className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2 mb-4">
+                    <span className="material-symbols-outlined text-red-500">person_off</span>
                     이탈 처리
                 </h2>
-                <p className="text-sm text-[var(--doc-ink-2)] mb-4">
+                <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
                     &quot;{lead.childName}&quot; 체험 건을 이탈로 처리합니다.
                 </p>
                 <div className="mb-4">
-                    <label className="block text-sm font-medium text-[var(--doc-ink-2)] mb-1">이탈 사유</label>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">이탈 사유</label>
                     <textarea
                         value={reason}
                         onChange={(e) => setReason(e.target.value)}
                         rows={3}
-                        className="w-full border border-[var(--doc-rule)] rounded-[3px] px-3 py-2 text-sm focus:outline-none focus: focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime resize-none"
+                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime resize-none"
                         placeholder="사유를 입력하세요 (선택)"
                     />
                 </div>
                 <div className="flex gap-3">
                     <button
                         onClick={onClose}
-                        className="flex-1 px-4 py-2.5 border border-[var(--doc-rule)] rounded-[3px] text-[var(--doc-ink-2)] hover:bg-[var(--doc-grid-head)] transition-colors text-sm font-medium"
+                        className="flex-1 px-4 py-2.5 border border-gray-300 rounded-lg text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:bg-gray-900 transition-colors text-sm font-medium"
                     >
                         취소
                     </button>
                     <button
                         onClick={() => onSubmit(reason)}
                         disabled={busy}
-                        className="flex-1 px-4 py-2.5 bg-[var(--doc-crit)] text-white rounded-[3px] hover:bg-[var(--doc-crit)] transition-colors text-sm font-medium disabled:opacity-50"
+                        className="flex-1 px-4 py-2.5 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors text-sm font-medium disabled:opacity-50"
                     >
                         {busy ? "처리 중..." : "이탈 처리"}
                     </button>
@@ -1046,8 +1046,8 @@ function MemoModal({
 
     return (
         <AdminModal onClose={onClose} titleId="trial-memo-title" panelClassName="max-w-md p-6">
-                <h2 id="trial-memo-title" className="text-lg font-bold text-[var(--doc-ink)] flex items-center gap-2 mb-4">
-                    <span className="material-symbols-outlined text-[var(--doc-accent)]">edit_note</span>
+                <h2 id="trial-memo-title" className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2 mb-4">
+                    <span className="material-symbols-outlined text-brand-orange-500 dark:text-brand-neon-lime">edit_note</span>
                     메모 편집
                 </h2>
                 <div className="mb-4">
@@ -1055,7 +1055,7 @@ function MemoModal({
                         value={memo}
                         onChange={(e) => setMemo(e.target.value)}
                         rows={4}
-                        className="w-full border border-[var(--doc-rule)] rounded-[3px] px-3 py-2 text-sm focus:outline-none focus: focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime resize-none"
+                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime resize-none"
                         placeholder="메모를 입력하세요"
                         autoFocus
                     />
@@ -1063,14 +1063,14 @@ function MemoModal({
                 <div className="flex gap-3">
                     <button
                         onClick={onClose}
-                        className="flex-1 px-4 py-2.5 border border-[var(--doc-rule)] rounded-[3px] text-[var(--doc-ink-2)] hover:bg-[var(--doc-grid-head)] transition-colors text-sm font-medium"
+                        className="flex-1 px-4 py-2.5 border border-gray-300 rounded-lg text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:bg-gray-900 transition-colors text-sm font-medium"
                     >
                         취소
                     </button>
                     <button
                         onClick={() => onSubmit(memo)}
                         disabled={busy}
-                        className="flex-1 px-4 py-2.5 bg-[var(--doc-accent)] dark:text-[var(--doc-ink)] text-white rounded-[3px] hover:bg-[var(--doc-accent)] dark:hover:bg-lime-400 transition-colors text-sm font-medium disabled:opacity-50"
+                        className="flex-1 px-4 py-2.5 bg-brand-orange-500 dark:bg-brand-neon-lime dark:text-brand-navy-900 text-white rounded-lg hover:bg-brand-orange-600 dark:hover:bg-lime-400 transition-colors text-sm font-medium disabled:opacity-50"
                     >
                         {busy ? "저장 중..." : "저장"}
                     </button>

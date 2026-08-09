@@ -56,10 +56,10 @@ const DAY_LABELS: Record<string, string> = {
 
 // 상태 라벨 + 색상
 const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string }> = {
-    WAITING: { label: "대기중", color: "text-[var(--doc-warn)]", bg: "bg-[var(--doc-grid-head)]" },
-    OFFERED: { label: "제안됨", color: "text-[var(--doc-ink-2)]", bg: "bg-[var(--doc-grid-head)]" },
-    ENROLLED: { label: "등록완료", color: "text-[var(--doc-accent)]", bg: "bg-[var(--doc-accent-soft)]" },
-    CANCELLED: { label: "취소", color: "text-[var(--doc-ink-2)] ", bg: "bg-[var(--doc-grid-head)] " },
+    WAITING: { label: "대기중", color: "text-yellow-700", bg: "bg-yellow-100" },
+    OFFERED: { label: "제안됨", color: "text-blue-700", bg: "bg-blue-100" },
+    ENROLLED: { label: "등록완료", color: "text-green-700", bg: "bg-green-100" },
+    CANCELLED: { label: "취소", color: "text-gray-500 dark:text-gray-400", bg: "bg-gray-100 dark:bg-gray-800" },
 };
 
 function WaitlistLoadingFallback() {
@@ -67,28 +67,28 @@ function WaitlistLoadingFallback() {
         <div className="space-y-6">
             <div className="flex items-center justify-between">
                 <div className="space-y-2">
-                    <div className="h-8 w-44 rounded bg-[var(--doc-grid-head)]" />
-                    <div className="h-4 w-80 rounded bg-[var(--doc-grid-head)]" />
+                    <div className="h-8 w-44 rounded bg-gray-200 dark:bg-gray-700 animate-pulse" />
+                    <div className="h-4 w-80 rounded bg-gray-100 dark:bg-gray-800 animate-pulse" />
                 </div>
-                <div className="h-11 w-28 rounded-[3px] bg-[var(--doc-grid-head)]" />
+                <div className="h-11 w-28 rounded-lg bg-gray-200 dark:bg-gray-700 animate-pulse" />
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                 {Array.from({ length: 4 }).map((_, index) => (
                     <div
                         key={index}
-                        className="h-32 rounded-[3px] border border-[var(--doc-rule)] bg-[var(--doc-surface)]"
+                        className="h-32 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 animate-pulse"
                     />
                 ))}
             </div>
             <div className="flex items-center gap-3">
-                <div className="h-10 w-44 rounded-[3px] bg-[var(--doc-grid-head)]" />
-                <div className="h-5 w-32 rounded bg-[var(--doc-grid-head)]" />
+                <div className="h-10 w-44 rounded-lg bg-gray-100 dark:bg-gray-800 animate-pulse" />
+                <div className="h-5 w-32 rounded bg-gray-100 dark:bg-gray-800 animate-pulse" />
             </div>
             <div className="space-y-4">
                 {Array.from({ length: 3 }).map((_, index) => (
                     <div
                         key={index}
-                        className="h-40 rounded-[3px] border border-[var(--doc-rule)] bg-[var(--doc-surface)]"
+                        className="h-40 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 animate-pulse"
                     />
                 ))}
             </div>
@@ -98,13 +98,13 @@ function WaitlistLoadingFallback() {
 
 function WaitlistErrorState({ onRetry }: { onRetry: () => void }) {
     return (
-        <div className="rounded-[6px] border border-[var(--doc-crit)] bg-[var(--doc-surface)] p-8 text-center">
-            <span className="material-symbols-outlined mb-3 text-4xl text-[var(--doc-crit)]">error</span>
-            <p className="font-bold text-[var(--doc-ink)]">대기자 정보를 불러오지 못했습니다.</p>
+        <div className="rounded-2xl border border-red-100 bg-white p-8 text-center shadow-sm dark:border-red-900/40 dark:bg-gray-800">
+            <span className="material-symbols-outlined mb-3 text-4xl text-red-500">error</span>
+            <p className="font-bold text-gray-900 dark:text-white">대기자 정보를 불러오지 못했습니다.</p>
             <button
                 type="button"
                 onClick={onRetry}
-                className="mt-4 rounded-[3px] bg-[var(--doc-accent)] px-4 py-2 text-sm font-bold text-white transition hover:bg-[var(--doc-accent)] dark:text-[var(--doc-ink)]"
+                className="mt-4 rounded-xl bg-brand-orange-500 px-4 py-2 text-sm font-bold text-white transition hover:bg-brand-orange-600 dark:bg-brand-neon-lime dark:text-brand-navy-900"
             >
                 다시 시도
             </button>
@@ -284,8 +284,8 @@ export default function WaitlistClient({
             {/* 페이지 헤더 */}
             <div className="flex items-center justify-between">
                 <div>
-                    <h1 className="text-2xl font-bold text-[var(--doc-ink)] flex items-center gap-2">
-                        <span className="material-symbols-outlined text-3xl text-[var(--doc-accent)]">hourglass_top</span>
+                    <h1 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                        <span className="material-symbols-outlined text-3xl text-brand-orange-500 dark:text-brand-neon-lime">hourglass_top</span>
                         대기자 관리
                     </h1>
                 </div>
@@ -294,7 +294,7 @@ export default function WaitlistClient({
                         setShowAddModal(true);
                         void loadStudents();
                     }}
-                    className="flex items-center gap-2 bg-[var(--doc-accent)] dark:text-[var(--doc-ink)] text-white px-4 py-2.5 rounded-[3px] font-semibold hover:bg-[var(--doc-accent)] dark:hover:bg-lime-400 transition-colors"
+                    className="flex items-center gap-2 bg-brand-orange-500 dark:bg-brand-neon-lime dark:text-brand-navy-900 text-white px-4 py-2.5 rounded-lg font-semibold hover:bg-brand-orange-600 dark:hover:bg-lime-400 transition-colors"
                 >
                     <span className="material-symbols-outlined text-xl">person_add</span>
                     대기 등록
@@ -308,28 +308,28 @@ export default function WaitlistClient({
                         <button
                             key={c.id}
                             onClick={() => setFilterClassId(filterClassId === c.id ? "ALL" : c.id)}
-                            className={`p-4 rounded-[3px] border text-left transition-all ${
- filterClassId === c.id
- ? "border-[var(--doc-accent)] bg-[var(--doc-accent)]  ring-brand-orange-500 dark:focus:ring-brand-neon-lime"
- : "border-[var(--doc-rule)] bg-[var(--doc-surface)] hover:border-[var(--doc-rule)]"
- }`}
+                            className={`p-4 rounded-xl border text-left transition-all ${
+                                filterClassId === c.id
+                                    ? "border-brand-orange-500 dark:border-brand-neon-lime bg-brand-orange-50 dark:bg-brand-neon-lime/10  ring-1 ring-brand-orange-500 dark:focus:ring-brand-neon-lime"
+                                    : "border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 hover:border-gray-300"
+                            }`}
                         >
-                            <p className="text-sm font-semibold text-[var(--doc-ink-2)] truncate">{c.name}</p>
-                            <p className="text-xs text-[var(--doc-ink-3)] mt-0.5">
+                            <p className="text-sm font-semibold text-gray-700 dark:text-gray-200 truncate">{c.name}</p>
+                            <p className="text-xs text-gray-400 mt-0.5">
                                 {DAY_LABELS[c.dayOfWeek] ?? c.dayOfWeek} {c.startTime}~{c.endTime}
                             </p>
                             <div className="mt-3 flex items-end gap-3">
                                 {/* 정원 바 */}
                                 <div className="flex-1">
-                                    <div className="flex justify-between text-xs text-[var(--doc-ink-2)] mb-1">
+                                    <div className="flex justify-between text-xs text-gray-500 dark:text-gray-400 mb-1">
                                         <span>등록 {c.enrolled}/{c.capacity}</span>
                                         <span>잔여 {c.remaining}</span>
                                     </div>
-                                    <div className="h-2 bg-[var(--doc-grid-head)] rounded-[3px] overflow-hidden">
+                                    <div className="h-2 bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden">
                                         <div
-                                            className={`h-full rounded-[3px] transition-all ${
- c.remaining <= 0 ? "bg-[var(--doc-crit)]" : c.remaining <= 2 ? "bg-[var(--doc-grid-head)]" : "bg-[var(--doc-accent)]"
- }`}
+                                            className={`h-full rounded-full transition-all ${
+                                                c.remaining <= 0 ? "bg-red-500" : c.remaining <= 2 ? "bg-yellow-500" : "bg-green-500"
+                                            }`}
                                             style={{ width: `${Math.min(100, (c.enrolled / Math.max(c.capacity, 1)) * 100)}%` }}
                                         />
                                     </div>
@@ -337,8 +337,8 @@ export default function WaitlistClient({
                                 {/* 대기자 수 */}
                                 {c.waiting > 0 && (
                                     <div className="text-center">
-                                        <span className="text-lg font-bold text-[var(--doc-warn)]">{c.waiting}</span>
-                                        <p className="text-[10px] text-[var(--doc-ink-3)]">대기</p>
+                                        <span className="text-lg font-bold text-yellow-600">{c.waiting}</span>
+                                        <p className="text-[10px] text-gray-400">대기</p>
                                     </div>
                                 )}
                             </div>
@@ -352,7 +352,7 @@ export default function WaitlistClient({
                 <select
                     value={filterClassId}
                     onChange={(e) => setFilterClassId(e.target.value)}
-                    className="border border-[var(--doc-rule)] rounded-[3px] px-3 py-2 text-sm"
+                    className="border border-gray-300 rounded-lg px-3 py-2 text-sm"
                 >
                     <option value="ALL">전체 반</option>
                     {classes.map((c) => (
@@ -362,62 +362,62 @@ export default function WaitlistClient({
                     ))}
                 </select>
 
-                <label className="flex items-center gap-2 text-sm text-[var(--doc-ink-2)] cursor-pointer">
+                <label className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-300 cursor-pointer">
                     <input
                         type="checkbox"
                         checked={showAll}
                         onChange={(e) => setShowAll(e.target.checked)}
-                        className="rounded border-[var(--doc-rule)]"
+                        className="rounded border-gray-300"
                     />
                     완료/취소 항목 포함
                 </label>
 
-                <span className="text-sm text-[var(--doc-ink-3)] ml-auto">
+                <span className="text-sm text-gray-400 ml-auto">
                     총 {filteredList.length}건
                 </span>
             </div>
 
             {/* 대기자 목록 — 반별 그룹핑 */}
             {filteredList.length === 0 ? (
-                <div className="text-center py-16 bg-[var(--doc-surface)] rounded-[3px] border border-[var(--doc-rule)]">
-                    <span className="material-symbols-outlined text-5xl text-[var(--doc-ink-3)]">hourglass_empty</span>
-                    <p className="text-[var(--doc-ink-3)] mt-2">대기자가 없습니다</p>
+                <div className="text-center py-16 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700">
+                    <span className="material-symbols-outlined text-5xl text-gray-300">hourglass_empty</span>
+                    <p className="text-gray-400 mt-2">대기자가 없습니다</p>
                 </div>
             ) : (
                 <div className="space-y-4">
                     {Array.from(groupedByClass.entries()).map(([classId, items]) => (
-                        <div key={classId} className="bg-[var(--doc-surface)] rounded-[3px] border border-[var(--doc-rule)] overflow-hidden">
+                        <div key={classId} className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
                             {/* 반 헤더 */}
-                            <div className="px-5 py-3 bg-[var(--doc-grid-head)] border-b border-[var(--doc-rule)] flex items-center gap-2">
-                                <span className="material-symbols-outlined text-lg text-[var(--doc-ink-2)]">school</span>
-                                <span className="font-semibold text-[var(--doc-ink-2)]">{items[0].className}</span>
-                                <span className="text-xs text-[var(--doc-ink-3)]">
+                            <div className="px-5 py-3 bg-gray-50 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700 flex items-center gap-2">
+                                <span className="material-symbols-outlined text-lg text-gray-500 dark:text-gray-400">school</span>
+                                <span className="font-semibold text-gray-700 dark:text-gray-200">{items[0].className}</span>
+                                <span className="text-xs text-gray-400">
                                     {DAY_LABELS[items[0].classDay] ?? items[0].classDay} {items[0].classStart}~{items[0].classEnd}
                                 </span>
-                                <span className="ml-auto text-xs text-[var(--doc-ink-2)]">{items.length}명 대기</span>
+                                <span className="ml-auto text-xs text-gray-500 dark:text-gray-400">{items.length}명 대기</span>
                             </div>
                             {/* 대기자 행 */}
-                            <div className="divide-y divide-[var(--doc-rule)]">
+                            <div className="divide-y divide-gray-100">
                                 {items.map((w, idx) => {
                                     const cfg = STATUS_CONFIG[w.status] ?? STATUS_CONFIG.WAITING;
                                     return (
                                         <div key={w.id} className="px-5 py-3 flex items-center gap-4">
                                             {/* 순번 */}
-                                            <span className="text-sm font-mono text-[var(--doc-ink-3)] w-6 text-center">{idx + 1}</span>
+                                            <span className="text-sm font-mono text-gray-400 w-6 text-center">{idx + 1}</span>
                                             {/* 학생명 */}
                                             <div className="flex-1 min-w-0">
-                                                <p className="text-sm font-semibold text-[var(--doc-ink)]">{w.studentName}</p>
+                                                <p className="text-sm font-semibold text-gray-800 dark:text-gray-100">{w.studentName}</p>
                                                 {w.memo && (
-                                                    <p className="text-xs text-[var(--doc-ink-3)] truncate">{w.memo}</p>
+                                                    <p className="text-xs text-gray-400 truncate">{w.memo}</p>
                                                 )}
                                             </div>
                                             {/* 상태 뱃지 */}
-                                            <span className={`text-xs font-semibold px-2.5 py-1 rounded-[3px] ${cfg.bg} ${cfg.color}`}>
+                                            <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${cfg.bg} ${cfg.color}`}>
                                                 {cfg.label}
                                             </span>
                                             {/* 응답 기한 (OFFERED일 때) */}
                                             {w.status === "OFFERED" && w.respondBy && (
-                                                <span className="text-xs text-[var(--doc-ink-2)]">
+                                                <span className="text-xs text-blue-500">
                                                     기한: {new Date(w.respondBy).toLocaleDateString("ko-KR")}
                                                 </span>
                                             )}
@@ -427,7 +427,7 @@ export default function WaitlistClient({
                                                     <button
                                                         onClick={() => handleOffer(w.id)}
                                                         disabled={busy}
-                                                        className="text-xs bg-[var(--doc-grid-head)] text-white px-3 py-1.5 rounded-[3px] hover:bg-[var(--doc-grid-head)] disabled:opacity-50 transition-colors"
+                                                        className="text-xs bg-blue-500 text-white px-3 py-1.5 rounded-lg hover:bg-blue-600 disabled:opacity-50 transition-colors"
                                                         title="자리 제안"
                                                     >
                                                         자리 제안
@@ -438,14 +438,14 @@ export default function WaitlistClient({
                                                         <button
                                                             onClick={() => handleAccept(w.id)}
                                                             disabled={busy}
-                                                            className="text-xs bg-[var(--doc-accent)] text-white px-3 py-1.5 rounded-[3px] hover:bg-[var(--doc-accent)] disabled:opacity-50 transition-colors"
+                                                            className="text-xs bg-green-500 text-white px-3 py-1.5 rounded-lg hover:bg-green-600 disabled:opacity-50 transition-colors"
                                                         >
                                                             수락
                                                         </button>
                                                         <button
                                                             onClick={() => handleReject(w.id)}
                                                             disabled={busy}
-                                                            className="text-xs bg-[var(--doc-crit)] text-white px-3 py-1.5 rounded-[3px] hover:bg-[var(--doc-crit)] disabled:opacity-50 transition-colors"
+                                                            className="text-xs bg-red-500 text-white px-3 py-1.5 rounded-lg hover:bg-red-600 disabled:opacity-50 transition-colors"
                                                         >
                                                             거절
                                                         </button>
@@ -455,7 +455,7 @@ export default function WaitlistClient({
                                                     <button
                                                         onClick={() => handleCancel(w.id)}
                                                         disabled={busy}
-                                                        className="text-xs text-[var(--doc-ink-3)] hover:text-[var(--doc-crit)] px-2 py-1.5 transition-colors"
+                                                        className="text-xs text-gray-400 hover:text-red-500 px-2 py-1.5 transition-colors"
                                                         title="대기 취소"
                                                     >
                                                         <span className="material-symbols-outlined text-base">close</span>
@@ -548,11 +548,11 @@ function AddWaitlistModal({
         >
             <div className="w-full p-6">
                 <div className="flex items-center justify-between mb-5">
-                    <h3 id="add-waitlist-title" className="text-lg font-bold text-[var(--doc-ink)] flex items-center gap-2">
-                        <span className="material-symbols-outlined text-[var(--doc-accent)]">person_add</span>
+                    <h3 id="add-waitlist-title" className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                        <span className="material-symbols-outlined text-brand-orange-500 dark:text-brand-neon-lime">person_add</span>
                         대기 등록
                     </h3>
-                    <button onClick={onClose} className="text-[var(--doc-ink-3)] hover:text-[var(--doc-ink-2)]">
+                    <button onClick={onClose} className="text-gray-400 hover:text-gray-600 dark:text-gray-300">
                         <span className="material-symbols-outlined">close</span>
                     </button>
                 </div>
@@ -560,20 +560,20 @@ function AddWaitlistModal({
                 <form onSubmit={handleSubmit} className="space-y-4">
                     {/* 학생 선택 */}
                     <div>
-                        <label className="block text-sm font-medium text-[var(--doc-ink-2)] mb-1">학생 *</label>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">학생 *</label>
                         <input
                             type="text"
                             placeholder="이름 검색..."
                             value={studentSearch}
                             onChange={(e) => setStudentSearch(e.target.value)}
                             disabled={studentsLoading || Boolean(studentsError)}
-                            className="w-full border border-[var(--doc-rule)] rounded-[3px] px-3 py-2 text-sm mb-1"
+                            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm mb-1"
                         />
                         <select
                             value={studentId}
                             onChange={(e) => setStudentId(e.target.value)}
                             disabled={studentsLoading || Boolean(studentsError)}
-                            className="w-full border border-[var(--doc-rule)] rounded-[3px] px-3 py-2 text-sm"
+                            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
                             size={5}
                         >
                             <option value="">
@@ -584,19 +584,19 @@ function AddWaitlistModal({
                             ))}
                         </select>
                         {studentsError && (
-                            <div className="mt-2 flex items-center justify-between gap-3 rounded-[3px] bg-[var(--doc-crit-soft)] px-3 py-2 text-sm text-[var(--doc-crit)]">
+                            <div className="mt-2 flex items-center justify-between gap-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-950/30 dark:text-red-200">
                                 <span>{studentsError}</span>
                                 <button
                                     type="button"
                                     onClick={() => void onRetryLoadStudents()}
-                                    className="shrink-0 rounded-[3px] border border-[var(--doc-crit)] px-2 py-1 text-xs font-medium text-[var(--doc-crit)] hover:bg-[var(--doc-crit-soft)]"
+                                    className="shrink-0 rounded-md border border-red-200 px-2 py-1 text-xs font-medium text-red-700 hover:bg-red-100 dark:border-red-800 dark:text-red-200 dark:hover:bg-red-900/40"
                                 >
                                     다시 시도
                                 </button>
                             </div>
                         )}
                         {!studentsLoading && !studentsError && students.length === 0 && (
-                            <p className="mt-2 text-sm text-[var(--doc-ink-2)]">
+                            <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
                                 등록된 학생이 없습니다.
                             </p>
                         )}
@@ -604,11 +604,11 @@ function AddWaitlistModal({
 
                     {/* 반 선택 */}
                     <div>
-                        <label className="block text-sm font-medium text-[var(--doc-ink-2)] mb-1">반 *</label>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">반 *</label>
                         <select
                             value={classId}
                             onChange={(e) => setClassId(e.target.value)}
-                            className="w-full border border-[var(--doc-rule)] rounded-[3px] px-3 py-2 text-sm"
+                            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
                         >
                             <option value="">-- 반 선택 --</option>
                             {classes.map((c) => (
@@ -621,13 +621,13 @@ function AddWaitlistModal({
 
                     {/* 메모 */}
                     <div>
-                        <label className="block text-sm font-medium text-[var(--doc-ink-2)] mb-1">메모 (선택)</label>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">메모 (선택)</label>
                         <input
                             type="text"
                             value={memo}
                             onChange={(e) => setMemo(e.target.value)}
                             placeholder="대기 사유나 참고사항"
-                            className="w-full border border-[var(--doc-rule)] rounded-[3px] px-3 py-2 text-sm"
+                            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
                         />
                     </div>
 
@@ -636,14 +636,14 @@ function AddWaitlistModal({
                         <button
                             type="button"
                             onClick={onClose}
-                            className="px-4 py-2 text-sm text-[var(--doc-ink-2)] hover:text-[var(--doc-ink)]"
+                            className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800 dark:text-gray-100"
                         >
                             취소
                         </button>
                         <button
                             type="submit"
                             disabled={busy}
-                            className="px-5 py-2 bg-[var(--doc-accent)] dark:text-[var(--doc-ink)] text-white text-sm font-semibold rounded-[3px] hover:bg-[var(--doc-accent)] dark:hover:bg-lime-400 disabled:opacity-50 transition-colors"
+                            className="px-5 py-2 bg-brand-orange-500 dark:bg-brand-neon-lime dark:text-brand-navy-900 text-white text-sm font-semibold rounded-lg hover:bg-brand-orange-600 dark:hover:bg-lime-400 disabled:opacity-50 transition-colors"
                         >
                             {busy ? "등록 중..." : "대기 등록"}
                         </button>

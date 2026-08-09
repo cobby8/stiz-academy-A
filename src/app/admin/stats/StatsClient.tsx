@@ -90,40 +90,40 @@ function StatsLoadingFallback() {
     return (
         <div className="mx-auto max-w-7xl space-y-8">
             <div>
-                <div className="h-8 w-44 rounded bg-[var(--doc-grid-head)]" />
-                <div className="mt-2 h-4 w-80 max-w-full rounded bg-[var(--doc-grid-head)]" />
+                <div className="h-8 w-44 rounded bg-gray-200 dark:bg-gray-700 animate-pulse" />
+                <div className="mt-2 h-4 w-80 max-w-full rounded bg-gray-100 dark:bg-gray-800 animate-pulse" />
             </div>
             <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
                 {Array.from({ length: 4 }).map((_, index) => (
                     <div
                         key={index}
-                        className="rounded-[6px] border border-[var(--doc-rule)] bg-[var(--doc-surface)] p-5"
+                        className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm dark:border-gray-800 dark:bg-gray-800"
                     >
-                        <div className="h-4 w-24 rounded bg-[var(--doc-grid-head)]" />
-                        <div className="mt-3 h-8 w-28 rounded bg-[var(--doc-grid-head)]" />
-                        <div className="mt-2 h-4 w-32 rounded bg-[var(--doc-grid-head)]" />
+                        <div className="h-4 w-24 rounded bg-gray-100 dark:bg-gray-700 animate-pulse" />
+                        <div className="mt-3 h-8 w-28 rounded bg-gray-200 dark:bg-gray-700 animate-pulse" />
+                        <div className="mt-2 h-4 w-32 rounded bg-gray-100 dark:bg-gray-700 animate-pulse" />
                     </div>
                 ))}
             </div>
             <div className="flex gap-2">
-                <div className="h-8 w-24 rounded-[3px] bg-[var(--doc-grid-head)]" />
-                <div className="h-8 w-24 rounded-[3px] bg-[var(--doc-grid-head)]" />
+                <div className="h-8 w-24 rounded-full bg-gray-200 dark:bg-gray-700 animate-pulse" />
+                <div className="h-8 w-24 rounded-full bg-gray-100 dark:bg-gray-700 animate-pulse" />
             </div>
             <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
                 {Array.from({ length: 4 }).map((_, index) => (
                     <div
                         key={index}
-                        className="rounded-[6px] border border-[var(--doc-rule)] bg-[var(--doc-surface)] p-6"
+                        className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm dark:border-gray-800 dark:bg-gray-800"
                     >
                         <div className="mb-4 flex items-center gap-2">
-                            <div className="h-6 w-6 rounded bg-[var(--doc-grid-head)]" />
-                            <div className="h-5 w-32 rounded bg-[var(--doc-grid-head)]" />
+                            <div className="h-6 w-6 rounded bg-gray-100 dark:bg-gray-700 animate-pulse" />
+                            <div className="h-5 w-32 rounded bg-gray-200 dark:bg-gray-700 animate-pulse" />
                         </div>
                         <div className="flex h-[220px] items-end gap-3">
                             {Array.from({ length: 8 }).map((_, barIndex) => (
                                 <div
                                     key={barIndex}
-                                    className="flex-1 rounded-t bg-[var(--doc-grid-head)]"
+                                    className="flex-1 rounded-t bg-gray-100 dark:bg-gray-700 animate-pulse"
                                     style={{ height: `${36 + ((barIndex * 17) % 58)}%` }}
                                 />
                             ))}
@@ -137,13 +137,13 @@ function StatsLoadingFallback() {
 
 function StatsErrorState({ onRetry }: { onRetry: () => void }) {
     return (
-        <div className="mx-auto max-w-7xl rounded-[6px] border border-[var(--doc-crit)] bg-[var(--doc-surface)] p-8 text-center">
-            <span className="material-symbols-outlined mb-3 text-4xl text-[var(--doc-crit)]">error</span>
-            <p className="font-bold text-[var(--doc-ink)]">운영 통계를 불러오지 못했습니다.</p>
+        <div className="mx-auto max-w-7xl rounded-2xl border border-red-100 bg-white p-8 text-center shadow-sm dark:border-red-900/40 dark:bg-gray-800">
+            <span className="material-symbols-outlined mb-3 text-4xl text-red-500">error</span>
+            <p className="font-bold text-gray-900 dark:text-white">운영 통계를 불러오지 못했습니다.</p>
             <button
                 type="button"
                 onClick={onRetry}
-                className="mt-4 rounded-[3px] bg-[var(--doc-accent)] px-4 py-2 text-sm font-bold text-white transition hover:bg-[var(--doc-grid-head)] dark:text-[var(--doc-ink)]"
+                className="mt-4 rounded-xl bg-brand-orange-500 px-4 py-2 text-sm font-bold text-white transition hover:bg-orange-600 dark:bg-brand-neon-lime dark:text-brand-navy-900"
             >
                 다시 시도
             </button>
@@ -246,19 +246,19 @@ export default function StatsClient({
             {/* 페이지 헤더 */}
             <div>
                 {/* 설명문구 제거: 제목 + 기간 토글로 이미 자명 */}
-                <h1 className="text-2xl font-bold text-[var(--doc-ink)]">상세 운영 통계</h1>
+                <h1 className="text-2xl font-extrabold text-gray-900 dark:text-white">상세 운영 통계</h1>
             </div>
 
             {/* ── KPI 요약 카드 4개 ────────────────────────────────────────── */}
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
                 {/* 이번 달 매출 */}
-                <div className="bg-[var(--doc-surface)] p-5 rounded-[6px] border border-[var(--doc-rule)]">
-                    <p className="text-xs font-medium text-[var(--doc-ink-2)] mb-1">이번 달 매출</p>
-                    <h3 className="text-2xl font-bold text-[var(--doc-ink)]">
+                <div className="bg-white dark:bg-gray-800 p-5 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800">
+                    <p className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">이번 달 매출</p>
+                    <h3 className="text-2xl font-extrabold text-gray-900 dark:text-white">
                         {formatKRW(thisMonth?.amount ?? 0)}
                     </h3>
                     {lastMonth && lastMonth.amount > 0 && (
-                        <div className={`flex items-center gap-1 mt-1 text-xs font-medium ${revDiff >= 0 ? "text-[var(--doc-accent)]" : "text-[var(--doc-crit)]"}`}>
+                        <div className={`flex items-center gap-1 mt-1 text-xs font-medium ${revDiff >= 0 ? "text-green-600" : "text-red-600"}`}>
                             {/* Material Symbols 아이콘: 상승/하락 */}
                             <span className="material-symbols-outlined text-sm">
                                 {revDiff >= 0 ? "trending_up" : "trending_down"}
@@ -269,30 +269,30 @@ export default function StatsClient({
                 </div>
 
                 {/* 이번 달 출석률 */}
-                <div className="bg-[var(--doc-surface)] p-5 rounded-[6px] border border-[var(--doc-rule)]">
-                    <p className="text-xs font-medium text-[var(--doc-ink-2)] mb-1">이번 달 출석률</p>
-                    <h3 className="text-2xl font-bold text-[var(--doc-ink)]">
+                <div className="bg-white dark:bg-gray-800 p-5 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800">
+                    <p className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">이번 달 출석률</p>
+                    <h3 className="text-2xl font-extrabold text-gray-900 dark:text-white">
                         {thisMonthAtt?.rate ?? 0}%
                     </h3>
-                    <p className="text-xs text-[var(--doc-ink-3)] mt-1">
+                    <p className="text-xs text-gray-400 mt-1">
                         {thisMonthAtt?.present ?? 0}/{thisMonthAtt?.total ?? 0}건 출석
                     </p>
                 </div>
 
                 {/* 수납률 */}
-                <div className="bg-[var(--doc-surface)] p-5 rounded-[6px] border border-[var(--doc-rule)]">
-                    <p className="text-xs font-medium text-[var(--doc-ink-2)] mb-1">이번 달 수납률</p>
-                    <h3 className="text-2xl font-bold text-[var(--doc-ink)]">{collectionRate.rate}%</h3>
-                    <p className="text-xs text-[var(--doc-ink-3)] mt-1">
+                <div className="bg-white dark:bg-gray-800 p-5 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800">
+                    <p className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">이번 달 수납률</p>
+                    <h3 className="text-2xl font-extrabold text-gray-900 dark:text-white">{collectionRate.rate}%</h3>
+                    <p className="text-xs text-gray-400 mt-1">
                         {collectionRate.paid}/{collectionRate.total}건 납부
                     </p>
                 </div>
 
                 {/* 체험 전환율 */}
-                <div className="bg-[var(--doc-surface)] p-5 rounded-[6px] border border-[var(--doc-rule)]">
-                    <p className="text-xs font-medium text-[var(--doc-ink-2)] mb-1">체험 전환율</p>
-                    <h3 className="text-2xl font-bold text-[var(--doc-ink)]">{trialStats.conversionRate}%</h3>
-                    <p className="text-xs text-[var(--doc-ink-3)] mt-1">
+                <div className="bg-white dark:bg-gray-800 p-5 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800">
+                    <p className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">체험 전환율</p>
+                    <h3 className="text-2xl font-extrabold text-gray-900 dark:text-white">{trialStats.conversionRate}%</h3>
+                    <p className="text-xs text-gray-400 mt-1">
                         {trialStats.CONVERTED}명 전환 / 전체 {trialStats.total}명
                     </p>
                 </div>
@@ -302,21 +302,21 @@ export default function StatsClient({
             <div className="flex gap-2">
                 <button
                     onClick={() => setRevenuePeriod(6)}
-                    className={`px-4 py-1.5 rounded-[3px] text-sm font-medium transition ${
- revenuePeriod === 6
- ? "bg-[var(--doc-grid-head)] text-white"
- : "bg-[var(--doc-grid-head)] text-[var(--doc-ink-2)] hover:bg-[var(--doc-grid-head)]"
- }`}
+                    className={`px-4 py-1.5 rounded-full text-sm font-medium transition ${
+                        revenuePeriod === 6
+                            ? "bg-gray-900 text-white"
+                            : "bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-200"
+                    }`}
                 >
                     최근 6개월
                 </button>
                 <button
                     onClick={() => setRevenuePeriod(12)}
-                    className={`px-4 py-1.5 rounded-[3px] text-sm font-medium transition ${
- revenuePeriod === 12
- ? "bg-[var(--doc-grid-head)] text-white"
- : "bg-[var(--doc-grid-head)] text-[var(--doc-ink-2)] hover:bg-[var(--doc-grid-head)]"
- }`}
+                    className={`px-4 py-1.5 rounded-full text-sm font-medium transition ${
+                        revenuePeriod === 12
+                            ? "bg-gray-900 text-white"
+                            : "bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-200"
+                    }`}
                 >
                     최근 12개월
                 </button>
@@ -325,23 +325,23 @@ export default function StatsClient({
             {/* ── 매출 + 출석률 추이 (LineChart) ──────────────────────────── */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 {/* 매출 추이 */}
-                <div className="bg-[var(--doc-surface)] p-6 rounded-[6px] border border-[var(--doc-rule)]">
-                    <h3 className="font-bold text-[var(--doc-ink)] mb-4 flex items-center gap-2">
-                        <span className="material-symbols-outlined text-[var(--doc-warn)]">payments</span>
+                <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800">
+                    <h3 className="font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+                        <span className="material-symbols-outlined text-orange-500 dark:text-brand-neon-lime">payments</span>
                         매출 추이
                     </h3>
                     <LineChart
                         data={revenueData.map((d) => ({ label: d.label, value: d.amount }))}
-                        color="var(--doc-accent)"
+                        color="var(--brand-accent)"
                         height={220}
                         formatValue={formatKRW}
                     />
                 </div>
 
                 {/* 출석률 추이 */}
-                <div className="bg-[var(--doc-surface)] p-6 rounded-[6px] border border-[var(--doc-rule)]">
-                    <h3 className="font-bold text-[var(--doc-ink)] mb-4 flex items-center gap-2">
-                        <span className="material-symbols-outlined text-[var(--doc-accent)]">event_available</span>
+                <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800">
+                    <h3 className="font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+                        <span className="material-symbols-outlined text-emerald-500">event_available</span>
                         출석률 추이
                     </h3>
                     <LineChart
@@ -356,17 +356,17 @@ export default function StatsClient({
             {/* ── 원생 현황: 신규/퇴원 추이 + 반별 정원 ──────────────────── */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 {/* 신규/퇴원 추이 — 두 개의 LineChart를 겹쳐서 표현 */}
-                <div className="bg-[var(--doc-surface)] p-6 rounded-[6px] border border-[var(--doc-rule)]">
-                    <h3 className="font-bold text-[var(--doc-ink)] mb-4 flex items-center gap-2">
-                        <span className="material-symbols-outlined text-[var(--doc-ink-2)]">group</span>
+                <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800">
+                    <h3 className="font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+                        <span className="material-symbols-outlined text-blue-500">group</span>
                         신규 등록 / 퇴원 추이
                     </h3>
                     <div className="space-y-4">
                         {/* 신규 등록 */}
                         <div>
                             <div className="flex items-center gap-2 mb-1">
-                                <span className="w-3 h-3 rounded-[3px] bg-[var(--doc-grid-head)] inline-block" />
-                                <span className="text-xs text-[var(--doc-ink-2)]">신규 등록</span>
+                                <span className="w-3 h-3 rounded-full bg-blue-500 inline-block" />
+                                <span className="text-xs text-gray-500 dark:text-gray-400">신규 등록</span>
                             </div>
                             <LineChart
                                 data={enrollData.map((d) => ({ label: d.label, value: d.newCount }))}
@@ -378,8 +378,8 @@ export default function StatsClient({
                         {/* 퇴원 */}
                         <div>
                             <div className="flex items-center gap-2 mb-1">
-                                <span className="w-3 h-3 rounded-[3px] bg-[var(--doc-crit)] inline-block" />
-                                <span className="text-xs text-[var(--doc-ink-2)]">퇴원</span>
+                                <span className="w-3 h-3 rounded-full bg-red-400 inline-block" />
+                                <span className="text-xs text-gray-500 dark:text-gray-400">퇴원</span>
                             </div>
                             <LineChart
                                 data={enrollData.map((d) => ({ label: d.label, value: d.dropCount }))}
@@ -392,13 +392,13 @@ export default function StatsClient({
                 </div>
 
                 {/* 반별 정원 대비 등록률 */}
-                <div className="bg-[var(--doc-surface)] p-6 rounded-[6px] border border-[var(--doc-rule)]">
-                    <h3 className="font-bold text-[var(--doc-ink)] mb-4 flex items-center gap-2">
-                        <span className="material-symbols-outlined text-[var(--doc-ink-2)]">school</span>
+                <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800">
+                    <h3 className="font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+                        <span className="material-symbols-outlined text-purple-500">school</span>
                         반별 등록 현황
                     </h3>
                     {classCapacity.length === 0 ? (
-                        <p className="text-sm text-[var(--doc-ink-3)] py-8 text-center">등록된 반이 없습니다</p>
+                        <p className="text-sm text-gray-400 py-8 text-center">등록된 반이 없습니다</p>
                     ) : (
                         <BarChart
                             data={classCapacity.map((c) => ({
@@ -418,9 +418,9 @@ export default function StatsClient({
             {/* ── 체험 전환 + 수납률 (DonutChart) ─────────────────────────── */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 {/* 체험 전환율 도넛 */}
-                <div className="bg-[var(--doc-surface)] p-6 rounded-[6px] border border-[var(--doc-rule)]">
-                    <h3 className="font-bold text-[var(--doc-ink)] mb-4 flex items-center gap-2">
-                        <span className="material-symbols-outlined text-[var(--doc-warn)]">handshake</span>
+                <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800">
+                    <h3 className="font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+                        <span className="material-symbols-outlined text-orange-500 dark:text-brand-neon-lime">handshake</span>
                         체험 전환율
                     </h3>
                     <div className="flex justify-center">
@@ -428,7 +428,7 @@ export default function StatsClient({
                             value={trialStats.CONVERTED}
                             max={trialStats.ATTENDED + trialStats.CONVERTED}
                             label="체험 참석 대비 전환"
-                            color="var(--doc-accent)"
+                            color="var(--brand-accent)"
                             size={160}
                         />
                     </div>
@@ -444,9 +444,9 @@ export default function StatsClient({
                 </div>
 
                 {/* 수납률 도넛 */}
-                <div className="bg-[var(--doc-surface)] p-6 rounded-[6px] border border-[var(--doc-rule)]">
-                    <h3 className="font-bold text-[var(--doc-ink)] mb-4 flex items-center gap-2">
-                        <span className="material-symbols-outlined text-[var(--doc-accent)]">account_balance_wallet</span>
+                <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800">
+                    <h3 className="font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+                        <span className="material-symbols-outlined text-green-500">account_balance_wallet</span>
                         이번 달 수납률
                     </h3>
                     <div className="flex justify-center">
@@ -460,20 +460,20 @@ export default function StatsClient({
                     </div>
                     <div className="mt-4 space-y-2">
                         <div className="flex justify-between text-sm">
-                            <span className="text-[var(--doc-ink-2)]">납부 완료</span>
-                            <span className="font-bold text-[var(--doc-accent)]">{collectionRate.paid}건</span>
+                            <span className="text-gray-500 dark:text-gray-400">납부 완료</span>
+                            <span className="font-bold text-green-600">{collectionRate.paid}건</span>
                         </div>
                         <div className="flex justify-between text-sm">
-                            <span className="text-[var(--doc-ink-2)]">미납</span>
-                            <span className="font-bold text-[var(--doc-crit)]">{collectionRate.unpaid}건</span>
+                            <span className="text-gray-500 dark:text-gray-400">미납</span>
+                            <span className="font-bold text-red-600">{collectionRate.unpaid}건</span>
                         </div>
                     </div>
                 </div>
 
                 {/* 전체 원생 흐름 요약 */}
-                <div className="bg-[var(--doc-surface)] p-6 rounded-[6px] border border-[var(--doc-rule)]">
-                    <h3 className="font-bold text-[var(--doc-ink)] mb-4 flex items-center gap-2">
-                        <span className="material-symbols-outlined text-[var(--doc-ink-2)]">summarize</span>
+                <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800">
+                    <h3 className="font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+                        <span className="material-symbols-outlined text-blue-500">summarize</span>
                         이번 달 원생 흐름
                     </h3>
                     {(() => {
@@ -511,8 +511,8 @@ export default function StatsClient({
                                 />
                                 <div className="pt-2 border-t">
                                     <div className="flex justify-between">
-                                        <span className="text-sm text-[var(--doc-ink-2)]">총 대기자</span>
-                                        <span className="font-bold text-[var(--doc-ink)]">
+                                        <span className="text-sm text-gray-500 dark:text-gray-400">총 대기자</span>
+                                        <span className="font-bold text-gray-900 dark:text-white">
                                             {classCapacity.reduce((s, c) => s + c.waiting, 0)}명
                                         </span>
                                     </div>
@@ -524,18 +524,18 @@ export default function StatsClient({
             </div>
 
             {/* ── 코치 워크로드 ───────────────────────────────────────────── */}
-            <div className="bg-[var(--doc-surface)] p-6 rounded-[6px] border border-[var(--doc-rule)]">
-                <h3 className="font-bold text-[var(--doc-ink)] mb-4 flex items-center gap-2">
-                    <span className="material-symbols-outlined text-[var(--doc-ink-2)]">sports</span>
+            <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800">
+                <h3 className="font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+                    <span className="material-symbols-outlined text-indigo-500">sports</span>
                     코치별 워크로드
                 </h3>
                 {coachWorkload.length === 0 ? (
-                    <p className="text-sm text-[var(--doc-ink-3)] py-4">등록된 코치가 없습니다</p>
+                    <p className="text-sm text-gray-400 py-4">등록된 코치가 없습니다</p>
                 ) : (
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                         {/* 수업 수 막대 그래프 */}
                         <div>
-                            <p className="text-sm text-[var(--doc-ink-2)] mb-2">담당 수업 수</p>
+                            <p className="text-sm text-gray-500 dark:text-gray-400 mb-2">담당 수업 수</p>
                             <BarChart
                                 data={coachWorkload.map((c) => ({
                                     label: c.name,
@@ -548,7 +548,7 @@ export default function StatsClient({
                         </div>
                         {/* 원생 수 막대 그래프 */}
                         <div>
-                            <p className="text-sm text-[var(--doc-ink-2)] mb-2">담당 원생 수</p>
+                            <p className="text-sm text-gray-500 dark:text-gray-400 mb-2">담당 원생 수</p>
                             <BarChart
                                 data={coachWorkload.map((c) => ({
                                     label: c.name,
@@ -571,17 +571,17 @@ export default function StatsClient({
 // 체험 파이프라인 항목
 function PipelineItem({ label, count, color }: { label: string; count: number; color: string }) {
     const colorMap: Record<string, string> = {
-        blue: "bg-[var(--doc-grid-head)] text-[var(--doc-ink-2)]",
-        yellow: "bg-[var(--doc-grid-head)] text-[var(--doc-warn)]",
-        purple: "bg-[var(--doc-grid-head)] text-[var(--doc-ink-2)]",
-        green: "bg-[var(--doc-accent-soft)] text-[var(--doc-accent)]",
-        orange: "bg-[var(--doc-grid-head)] text-[var(--doc-warn)]",
-        red: "bg-[var(--doc-crit-soft)] text-[var(--doc-crit)]",
+        blue: "bg-blue-100 text-blue-700",
+        yellow: "bg-yellow-100 text-yellow-700",
+        purple: "bg-purple-100 text-purple-700",
+        green: "bg-green-100 text-green-700",
+        orange: "bg-orange-100 text-orange-700",
+        red: "bg-red-100 text-red-700",
     };
     return (
-        <div className={`rounded-[3px] py-1.5 px-2 ${colorMap[color] ?? colorMap.blue}`}>
+        <div className={`rounded-lg py-1.5 px-2 ${colorMap[color] ?? colorMap.blue}`}>
             <p className="text-xs font-medium">{label}</p>
-            <p className="text-lg font-bold">{count}</p>
+            <p className="text-lg font-extrabold">{count}</p>
         </div>
     );
 }
@@ -603,10 +603,10 @@ function FlowItem({
     invertTrend?: boolean;
 }) {
     const colorMap: Record<string, string> = {
-        blue: "text-[var(--doc-ink-2)]",
-        red: "text-[var(--doc-crit)]",
-        orange: "text-[var(--doc-warn)]",
-        green: "text-[var(--doc-accent)]",
+        blue: "text-blue-500",
+        red: "text-red-500",
+        orange: "text-orange-500",
+        green: "text-green-500",
     };
 
     // 전월 대비 변화 표시
@@ -618,12 +618,12 @@ function FlowItem({
         <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
                 <span className={`material-symbols-outlined text-lg ${colorMap[color] ?? ""}`}>{icon}</span>
-                <span className="text-sm text-[var(--doc-ink-2)]">{label}</span>
+                <span className="text-sm text-gray-600 dark:text-gray-300">{label}</span>
             </div>
             <div className="flex items-center gap-2">
-                <span className="font-bold text-[var(--doc-ink)]">{value}명</span>
+                <span className="font-bold text-gray-900 dark:text-white">{value}명</span>
                 {diff !== null && diff !== 0 && (
-                    <span className={`text-xs font-medium ${isGood ? "text-[var(--doc-accent)]" : "text-[var(--doc-crit)]"}`}>
+                    <span className={`text-xs font-medium ${isGood ? "text-green-600" : "text-red-600"}`}>
                         {diff > 0 ? "+" : ""}{diff}
                     </span>
                 )}

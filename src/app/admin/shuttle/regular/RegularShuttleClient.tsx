@@ -55,10 +55,10 @@ function geocodePlace(sdk: KakaoSdk, keyword: string): Promise<{ lat: number; ln
 
 const WD_ORDER = [1, 2, 3, 4, 5, 6, 0]; // 월→일
 const DIR_META: Record<string, { label: string; cls: string }> = {
-  BOARD: { label: "승차", cls: "bg-[var(--doc-grid-head)] text-[var(--doc-ink-2)]" },
-  ALIGHT: { label: "하차", cls: "bg-[var(--doc-grid-head)] text-[var(--doc-warn)]" },
-  PIVOT: { label: "학원 경유", cls: "bg-[var(--doc-ink)] text-white" },
-  RETURN: { label: "복귀", cls: "bg-[var(--doc-grid-head)] text-[var(--doc-ink-2)]" },
+  BOARD: { label: "승차", cls: "bg-blue-100 text-blue-700" },
+  ALIGHT: { label: "하차", cls: "bg-orange-100 text-orange-700" },
+  PIVOT: { label: "학원 경유", cls: "bg-brand-navy-900 text-white" },
+  RETURN: { label: "복귀", cls: "bg-gray-200 text-gray-600" },
 };
 
 function tel(p: string | null): string | null { if (!p) return null; const d = p.replace(/[^0-9]/g, ""); return d.length >= 9 ? `tel:${d}` : null; }
@@ -187,54 +187,54 @@ export default function RegularShuttleClient({ initialStops, importedAt: initial
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-4">
-      <div className="rounded-[6px] border border-[var(--doc-rule)] bg-[var(--doc-surface)] p-4">
+      <div className="rounded-2xl border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-800">
         <div className="flex flex-wrap items-start justify-between gap-2">
           <div>
-            <h3 className="text-base font-bold text-[var(--doc-ink)]">정규 셔틀 운행리스트</h3>
-            <p className="mt-0.5 text-[12.5px] text-[var(--doc-ink-2)]">구글 시트를 앱으로 가져와 요일별 타임라인으로 봅니다.{importedAt ? ` · 마지막 가져오기 ${fmtImported(importedAt)}` : " · 아직 가져오지 않음"}</p>
+            <h3 className="text-base font-black text-gray-900 dark:text-white">정규 셔틀 운행리스트</h3>
+            <p className="mt-0.5 text-[12.5px] text-gray-500 dark:text-gray-400">구글 시트를 앱으로 가져와 요일별 타임라인으로 봅니다.{importedAt ? ` · 마지막 가져오기 ${fmtImported(importedAt)}` : " · 아직 가져오지 않음"}</p>
           </div>
         </div>
 
         {/* 시트 가져오기·좌표 채우기 — 최초 1회만 쓰는 준비 작업이라 접어 둔다. */}
-        <details className="mt-3 rounded-[3px] border border-[var(--doc-rule)] bg-[var(--doc-grid-head)]" open={stops.length === 0}>
-          <summary className="cursor-pointer select-none px-3 py-2 text-[12px] font-bold text-[var(--doc-ink-2)]">⚙️ 시트 가져오기 · 좌표 채우기 (최초 1회)</summary>
-          <div className="border-t border-[var(--doc-rule)] p-3">
+        <details className="mt-3 rounded-xl border border-gray-200 bg-gray-50 dark:border-gray-700 dark:bg-gray-900/40" open={stops.length === 0}>
+          <summary className="cursor-pointer select-none px-3 py-2 text-[12px] font-black text-gray-600 dark:text-gray-300">⚙️ 시트 가져오기 · 좌표 채우기 (최초 1회)</summary>
+          <div className="border-t border-gray-200 p-3 dark:border-gray-700">
             <div className="flex flex-wrap items-end gap-2">
-              <label className="flex min-w-[220px] flex-1 flex-col gap-1 text-[11px] font-bold text-[var(--doc-ink-2)]">구글 시트 URL
-                <input value={sheetUrl} onChange={(e) => setSheetUrl(e.target.value)} placeholder="https://docs.google.com/spreadsheets/..." className="rounded-[3px] border border-[var(--doc-rule)] px-3 py-2 text-[12px] font-semibold" />
+              <label className="flex min-w-[220px] flex-1 flex-col gap-1 text-[11px] font-bold text-gray-500">구글 시트 URL
+                <input value={sheetUrl} onChange={(e) => setSheetUrl(e.target.value)} placeholder="https://docs.google.com/spreadsheets/..." className="rounded-lg border border-gray-200 px-3 py-2 text-[12px] font-semibold dark:border-gray-600 dark:bg-gray-900 dark:text-white" />
               </label>
-              <button onClick={importSheet} disabled={busy} className="rounded-[3px] bg-[var(--doc-accent)] px-4 py-2.5 text-sm font-bold text-white disabled:opacity-50">{busy ? "가져오는 중…" : "⬇ 시트에서 가져오기"}</button>
+              <button onClick={importSheet} disabled={busy} className="rounded-xl bg-brand-orange-500 px-4 py-2.5 text-sm font-black text-white disabled:opacity-50">{busy ? "가져오는 중…" : "⬇ 시트에서 가져오기"}</button>
             </div>
             {stops.length > 0 && (
               <div className="mt-2 flex flex-wrap items-center gap-2">
                 <div className="min-w-0 flex-1">
-                  <p className="text-[12.5px] font-bold text-[var(--doc-ink-2)]">📍 정류장 좌표</p>
-                  <p className="text-[11px] text-[var(--doc-ink-2)]">
+                  <p className="text-[12.5px] font-black text-gray-700 dark:text-gray-200">📍 정류장 좌표</p>
+                  <p className="text-[11px] text-gray-500 dark:text-gray-400">
                     {geoBusy && geoProgress
                       ? `찾는 중… ${geoProgress.done}/${geoProgress.total}`
                       : `${totalNames - missingNames.length}/${totalNames}곳 좌표 있음${missingNames.length > 0 ? ` · ${missingNames.length}곳 남음` : " · 완료"}`}
                   </p>
                 </div>
                 <button onClick={runGeocode} disabled={geoBusy || missingNames.length === 0}
-                  className="rounded-[3px] bg-[var(--doc-ink)] px-4 py-2.5 text-sm font-bold text-white disabled:opacity-40 dark:text-[var(--doc-ink)]">
+                  className="rounded-xl bg-brand-navy-900 px-4 py-2.5 text-sm font-black text-white disabled:opacity-40 dark:bg-white dark:text-brand-navy-900">
                   {geoBusy ? "채우는 중…" : missingNames.length === 0 ? "✓ 좌표 완료" : `📍 좌표 자동 채우기 (${missingNames.length})`}
                 </button>
               </div>
             )}
           </div>
         </details>
-        {err && <p className="mt-2 rounded-[3px] bg-[var(--doc-crit-soft)] px-3 py-2 text-xs font-bold text-[var(--doc-crit)]">⚠ {err}</p>}
-        {msg && <p className="mt-2 rounded-[3px] bg-[var(--doc-accent-soft)] px-3 py-2 text-xs font-bold text-[var(--doc-accent)]">✓ {msg}</p>}
+        {err && <p className="mt-2 rounded-lg bg-red-50 px-3 py-2 text-xs font-bold text-red-600">⚠ {err}</p>}
+        {msg && <p className="mt-2 rounded-lg bg-green-50 px-3 py-2 text-xs font-bold text-green-700 dark:bg-green-900/30 dark:text-green-200">✓ {msg}</p>}
 
         {stops.length === 0 ? (
-          <div className="mt-4 rounded-[3px] border border-dashed border-[var(--doc-rule)] p-8 text-center text-sm text-[var(--doc-ink-3)]">아직 가져온 운행리스트가 없습니다. 위에서 「시트에서 가져오기」를 눌러주세요.</div>
+          <div className="mt-4 rounded-xl border border-dashed border-gray-300 p-8 text-center text-sm text-gray-400">아직 가져온 운행리스트가 없습니다. 위에서 「시트에서 가져오기」를 눌러주세요.</div>
         ) : (
           <>
             {/* 요일 탭 */}
-            <div className="mt-3 flex flex-wrap items-center gap-1 rounded-[3px] bg-[var(--doc-grid-head)] p-1">
+            <div className="mt-3 flex flex-wrap items-center gap-1 rounded-xl bg-gray-100 p-1 dark:bg-gray-900">
               {weekdays.map((w) => (
                 <button key={w.weekday} onClick={() => setActive(w.weekday)}
-                  className={`min-h-9 rounded-[3px] px-4 text-sm font-bold ${activeWd === w.weekday ? "bg-[var(--doc-surface)] text-[var(--doc-ink)] " : "text-[var(--doc-ink-2)] hover:text-[var(--doc-ink-2)] dark:hover:text-[var(--doc-ink-3)]"}`}>
+                  className={`min-h-9 rounded-lg px-4 text-sm font-black ${activeWd === w.weekday ? "bg-white text-brand-navy-900 shadow dark:bg-gray-700 dark:text-white" : "text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"}`}>
                   {w.label}
                 </button>
               ))}
@@ -244,7 +244,7 @@ export default function RegularShuttleClient({ initialStops, importedAt: initial
             <div className="mt-3 flex items-center gap-1">
               {([["dispatch", "🗺 배차·지도"], ["list", "📋 운행 목록"]] as const).map(([m, label]) => (
                 <button key={m} onClick={() => setMode(m)}
-                  className={`rounded-[3px] px-3 py-1.5 text-[12px] font-bold ${mode === m ? "bg-[var(--doc-ink)] text-white dark:text-[var(--doc-ink)]" : "text-[var(--doc-ink-2)] hover:text-[var(--doc-ink-2)] dark:hover:text-[var(--doc-ink-3)]"}`}>
+                  className={`rounded-lg px-3 py-1.5 text-[12px] font-black ${mode === m ? "bg-brand-navy-900 text-white dark:bg-brand-neon-lime dark:text-brand-navy-900" : "text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"}`}>
                   {label}
                 </button>
               ))}
@@ -254,18 +254,18 @@ export default function RegularShuttleClient({ initialStops, importedAt: initial
               <div className="mt-3">
                 {/* 기사님 링크 — 하나만 전달하면 매일 그날 요일 운행이 자동으로 뜬다. */}
                 <div className="mb-3 flex flex-wrap items-center gap-2">
-                  <button onClick={copyRegularRunLink} className="rounded-[3px] bg-[var(--doc-ink)] px-4 py-2.5 text-sm font-bold text-white dark:text-[var(--doc-ink)]">🚌 기사님 운행 링크 복사</button>
-                  <span className="text-[11.5px] text-[var(--doc-ink-3)]">기사님 폰·태블릿에 이 링크 하나만 저장 → 매일 열면 그날 요일 노선·탑승체크</span>
+                  <button onClick={copyRegularRunLink} className="rounded-xl bg-brand-navy-900 px-4 py-2.5 text-sm font-black text-white dark:bg-brand-neon-lime dark:text-brand-navy-900">🚌 기사님 운행 링크 복사</button>
+                  <span className="text-[11.5px] text-gray-400">기사님 폰·태블릿에 이 링크 하나만 저장 → 매일 열면 그날 요일 노선·탑승체크</span>
                 </div>
                 {classTimes.length === 0 ? (
-                  <div className="rounded-[3px] border border-dashed border-[var(--doc-rule)] p-6 text-center text-sm text-[var(--doc-ink-3)]">이 요일에 수업 정차가 없습니다.</div>
+                  <div className="rounded-xl border border-dashed border-gray-300 p-6 text-center text-sm text-gray-400">이 요일에 수업 정차가 없습니다.</div>
                 ) : (
                   <>
                     {/* 수업시간 탭 */}
-                    <div className="flex flex-wrap items-center gap-1 rounded-[3px] bg-[var(--doc-grid-head)] p-1">
+                    <div className="flex flex-wrap items-center gap-1 rounded-xl bg-gray-100 p-1 dark:bg-gray-900">
                       {classTimes.map((ct) => (
                         <button key={ct} onClick={() => setActiveClass(ct)}
-                          className={`min-h-8 rounded-[3px] px-3 text-[12.5px] font-bold ${curClass === ct ? "bg-[var(--doc-surface)] text-[var(--doc-ink)] " : "text-[var(--doc-ink-2)] hover:text-[var(--doc-ink-2)] dark:hover:text-[var(--doc-ink-3)]"}`}>
+                          className={`min-h-8 rounded-lg px-3 text-[12.5px] font-black ${curClass === ct ? "bg-white text-brand-navy-900 shadow dark:bg-gray-700 dark:text-white" : "text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"}`}>
                           {ct}
                         </button>
                       ))}
@@ -281,7 +281,7 @@ export default function RegularShuttleClient({ initialStops, importedAt: initial
               </div>
             ) : (
             <>
-            <p className="mt-3 text-[12.5px] font-bold text-[var(--doc-ink-2)]">📅 {["일", "월", "화", "수", "목", "금", "토"][activeWd]}요일 · {dayStops.length}개 정차</p>
+            <p className="mt-3 text-[12.5px] font-black text-gray-700 dark:text-gray-200">📅 {["일", "월", "화", "수", "목", "금", "토"][activeWd]}요일 · {dayStops.length}개 정차</p>
 
             <ol className="mt-2 space-y-1.5">
               {dayStops.map((s, i) => {
@@ -289,22 +289,22 @@ export default function RegularShuttleClient({ initialStops, importedAt: initial
                 const isPivot = s.direction === "PIVOT";
                 const t = tel(s.studentPhone), tp = tel(s.parentPhone);
                 return (
-                  <li key={i} className={`rounded-[3px] border p-2.5 ${isPivot ? "border-brand-navy-900/30 bg-[var(--doc-ink)]/5 " : "border-[var(--doc-rule)] "}`}>
+                  <li key={i} className={`rounded-xl border p-2.5 ${isPivot ? "border-brand-navy-900/30 bg-brand-navy-900/5 dark:border-white/20 dark:bg-white/5" : "border-gray-200 dark:border-gray-700"}`}>
                     <div className="flex items-center gap-2">
-                      <span className="w-12 shrink-0 text-[13px] font-bold text-[var(--doc-ink-2)]">{s.arriveTime ?? "-"}</span>
-                      <span className={`shrink-0 rounded px-1.5 py-0.5 text-[11px] font-bold ${dir.cls}`}>{dir.label}</span>
-                      <span className="min-w-0 flex-1 truncate text-[13.5px] font-bold text-[var(--doc-ink)]">{s.stopName}</span>
+                      <span className="w-12 shrink-0 text-[13px] font-black text-blue-600 dark:text-blue-300">{s.arriveTime ?? "-"}</span>
+                      <span className={`shrink-0 rounded px-1.5 py-0.5 text-[11px] font-black ${dir.cls}`}>{dir.label}</span>
+                      <span className="min-w-0 flex-1 truncate text-[13.5px] font-bold text-gray-900 dark:text-white">{s.stopName}</span>
                       {s.latitude != null && s.longitude != null
                         ? <span title="좌표 있음" className="shrink-0 text-[12px]">📍</span>
-                        : <span title="좌표 없음" className="shrink-0 text-[11px] font-bold text-[var(--doc-warn)]">⚠︎</span>}
-                      {s.classTime && <span className="shrink-0 text-[11px] font-bold text-[var(--doc-ink-3)]">{s.classTime}</span>}
+                        : <span title="좌표 없음" className="shrink-0 text-[11px] font-black text-amber-500">⚠︎</span>}
+                      {s.classTime && <span className="shrink-0 text-[11px] font-bold text-gray-400">{s.classTime}</span>}
                     </div>
                     {(s.studentName || t || tp) && (
                       <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 pl-14 text-[12px]">
-                        {s.studentName && <span className="font-bold text-[var(--doc-ink-2)]">{s.studentName}</span>}
-                        {tp && <a href={tp} className="font-bold text-[var(--doc-ink-2)]">📞 학부모</a>}
-                        {t && <a href={t} className="font-bold text-[var(--doc-accent)]">📞 학생</a>}
-                        {s.note && <span className="text-[var(--doc-ink-3)]">{s.note}</span>}
+                        {s.studentName && <span className="font-bold text-gray-700 dark:text-gray-200">{s.studentName}</span>}
+                        {tp && <a href={tp} className="font-bold text-blue-600 dark:text-blue-300">📞 학부모</a>}
+                        {t && <a href={t} className="font-bold text-green-600 dark:text-green-300">📞 학생</a>}
+                        {s.note && <span className="text-gray-400">{s.note}</span>}
                       </div>
                     )}
                   </li>

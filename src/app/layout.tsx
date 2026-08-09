@@ -52,14 +52,6 @@ export default async function RootLayout({
                 {/* PWA 테마 색상은 ThemeColorUpdater가 현재 테마에 맞게 갱신합니다. */}
                 <meta name="theme-color" content="#ccff00" />
                 {/* 파일명을 버전 처리해 브라우저에 남은 이전 탭 아이콘 캐시를 교체합니다. */}
-                {/* 학적부 서체 — 제목 명조(Nanum Myeongjo) · 본문 고딕(Noto Sans KR).
-                    display=swap 이라 폰트를 기다리는 동안 글자가 사라지지 않는다(대체 서체로 먼저 보이고 교체). */}
-                <link rel="preconnect" href="https://fonts.googleapis.com" />
-                <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />
-                <link
-                    rel="stylesheet"
-                    href="https://fonts.googleapis.com/css2?family=Nanum+Myeongjo:wght@400;700;800&family=Noto+Sans+KR:wght@400;500;600;700&display=swap"
-                />
                 <link rel="icon" href="/favicon-v2.ico" sizes="any" />
                 <link rel="shortcut icon" href="/favicon-v2.ico" />
                 {/* iOS에서 홈 화면 아이콘으로 쓸 이미지 */}

@@ -28,17 +28,17 @@ const MENU_MARGIN = 12;
 
 function getActionClass(tone: AdminQuickAction["tone"]) {
     const base =
-        "flex h-9 w-full items-center justify-between gap-2 rounded-[3px] px-3 text-left text-xs font-bold transition disabled:cursor-not-allowed disabled:opacity-50";
+        "flex h-9 w-full items-center justify-between gap-2 rounded-full px-3 text-left text-xs font-black transition disabled:cursor-not-allowed disabled:opacity-50";
 
     if (tone === "primary") {
-        return `${base} bg-brand-neon-lime text-[var(--doc-ink)]  hover:brightness-95`;
+        return `${base} bg-brand-neon-lime text-brand-navy-900 shadow-sm hover:brightness-95`;
     }
 
     if (tone === "danger") {
-        return `${base} bg-[var(--doc-crit-soft)] text-[var(--doc-crit)] hover:bg-[var(--doc-crit-soft)]   `;
+        return `${base} bg-red-50 text-red-700 hover:bg-red-100 dark:bg-red-950/40 dark:text-red-200 dark:hover:bg-red-900/60`;
     }
 
-    return `${base} bg-[var(--doc-surface)] text-[var(--doc-ink)]    hover:bg-[var(--doc-grid-head)]  dark: `;
+    return `${base} bg-white text-gray-900 shadow-sm ring-1 ring-gray-200 hover:bg-gray-50 dark:bg-gray-900 dark:text-white dark:ring-gray-700 dark:hover:bg-gray-800`;
 }
 
 export default function AdminQuickActionMenu({
@@ -118,7 +118,7 @@ export default function AdminQuickActionMenu({
                     if (!open) placeMenu();
                     setOpen((current) => !current);
                 }}
-                className="inline-flex h-9 w-9 items-center justify-center rounded-[3px] bg-[var(--doc-crit)] text-white transition hover:bg-[var(--doc-crit)] dark:text-[var(--doc-ink)] dark:hover:brightness-95"
+                className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-red-500 text-white shadow-sm transition hover:bg-red-600 dark:bg-brand-neon-lime dark:text-brand-navy-900 dark:hover:brightness-95"
             >
                 <span className="material-symbols-outlined text-[20px]">{icon}</span>
             </button>
@@ -130,7 +130,7 @@ export default function AdminQuickActionMenu({
                         top: position?.top ?? 0,
                         left: position?.left ?? 0,
                     }}
-                    className="fixed z-[90] flex w-[168px] -translate-y-1/2 flex-col gap-2 rounded-[6px] border border-[var(--doc-rule)] bg-[var(--doc-surface)] p-2"
+                    className="fixed z-[90] flex w-[168px] -translate-y-1/2 flex-col gap-2 rounded-2xl border border-gray-200 bg-white p-2 shadow-2xl dark:border-gray-700 dark:bg-gray-950"
                 >
                     {actions.map((action) => (
                         <button

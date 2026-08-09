@@ -329,14 +329,14 @@ function ImportSummaryMetric({
     warning?: boolean;
 }) {
     return (
-        <div className="rounded-[3px] bg-[var(--doc-grid-head)] px-2 py-2">
-            <p className="text-[var(--doc-ink-2)]">{label}</p>
+        <div className="rounded-lg bg-gray-50 px-2 py-2 dark:bg-gray-800">
+            <p className="text-gray-500 dark:text-gray-400">{label}</p>
             <p
-                className={`font-bold ${
- warning
- ? "text-[var(--doc-warn)] "
- : "text-[var(--doc-ink)]"
- }`}
+                className={`font-extrabold ${
+                    warning
+                        ? "text-amber-700 dark:text-amber-200"
+                        : "text-gray-900 dark:text-white"
+                }`}
             >
                 {value.toLocaleString()}
             </p>
@@ -366,22 +366,22 @@ function formatReportList(values: string[] | null | undefined) {
 const ROSTER_STATUS_META: Record<string, { label: string; tone: string; note: string }> = {
     ACTIVE: {
         label: "재원",
-        tone: "border-[var(--doc-accent)] bg-[var(--doc-accent-soft)] text-[var(--doc-accent)]   ",
+        tone: "border-emerald-200 bg-emerald-50 text-emerald-900 dark:border-emerald-300/20 dark:bg-emerald-300/10 dark:text-emerald-100",
         note: "장부 기준 실제 수업 인원",
     },
     PAUSED: {
         label: "휴원",
-        tone: "border-[var(--doc-warn)] bg-[var(--doc-grid-head)] text-[var(--doc-warn)]   ",
+        tone: "border-amber-200 bg-amber-50 text-amber-900 dark:border-amber-300/20 dark:bg-amber-300/10 dark:text-amber-100",
         note: "등록 행이 모두 휴원인 학생",
     },
     WITHDRAWN: {
         label: "퇴원",
-        tone: "border-[var(--doc-crit)] bg-[var(--doc-crit-soft)] text-[var(--doc-crit)]   ",
+        tone: "border-red-200 bg-red-50 text-red-900 dark:border-red-300/20 dark:bg-red-300/10 dark:text-red-100",
         note: "최신 상태가 퇴원인 학생",
     },
     UNKNOWN: {
         label: "확인 필요",
-        tone: "border-[var(--doc-rule)] bg-[var(--doc-grid-head)] text-[var(--doc-ink-2)]   ",
+        tone: "border-gray-200 bg-gray-50 text-gray-700 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-200",
         note: "상태를 계산하지 못한 행",
     },
 };
@@ -411,7 +411,7 @@ function formatSlotList(slotKeys: string[] | string | null | undefined) {
 function CurrentRosterReportBox({ report }: { report: CurrentRosterReport }) {
     if (!report.batch || !report.summary) {
         return (
-            <div className="mt-3 rounded-[3px] border border-[var(--doc-rule)] bg-[var(--doc-surface)] p-3 text-xs text-[var(--doc-ink-2)]">
+            <div className="mt-3 rounded-lg border border-gray-200 bg-white p-3 text-xs text-gray-600 dark:border-gray-700 dark:bg-gray-950 dark:text-gray-300">
                 완료된 수강생 시트 이관 배치가 아직 없습니다.
             </div>
         );
@@ -434,33 +434,33 @@ function CurrentRosterReportBox({ report }: { report: CurrentRosterReport }) {
     const withdrawnSamples = statusSamples.filter((sample) => sample.status === "WITHDRAWN");
 
     return (
-        <div className="mt-3 rounded-[3px] border border-[var(--doc-rule)] bg-[var(--doc-surface)] p-3 text-[var(--doc-ink)]">
+        <div className="mt-3 rounded-lg border border-gray-200 bg-white p-3 text-gray-800 dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100">
             <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                 <div>
                     <div className="flex flex-wrap items-center gap-2">
-                        <span className="rounded-[3px] bg-lime-100 px-2 py-0.5 text-xs font-bold text-lime-800 dark:bg-lime-300/15 dark:text-lime-200">
+                        <span className="rounded-full bg-lime-100 px-2 py-0.5 text-xs font-bold text-lime-800 dark:bg-lime-300/15 dark:text-lime-200">
                             읽기 전용
                         </span>
-                        <p className="text-sm font-bold text-[var(--doc-ink)]">
+                        <p className="text-sm font-extrabold text-gray-900 dark:text-white">
                             {report.targetMonth.label} 최신 원생목록 점검
                         </p>
                     </div>
                 </div>
                 <span
-                    className={`rounded-[3px] px-2 py-1 text-xs font-bold ${
- riskCount > 0
- ? "bg-[var(--doc-grid-head)] text-[var(--doc-warn)] "
- : "bg-[var(--doc-accent-soft)] text-[var(--doc-accent)] "
- }`}
+                    className={`rounded-full px-2 py-1 text-xs font-bold ${
+                        riskCount > 0
+                            ? "bg-amber-100 text-amber-800 dark:bg-amber-300/15 dark:text-amber-100"
+                            : "bg-emerald-100 text-emerald-800 dark:bg-emerald-300/15 dark:text-emerald-100"
+                    }`}
                 >
                     {riskCount > 0 ? `확인 필요 ${riskCount.toLocaleString()}건` : "자동 정리 가능"}
                 </span>
             </div>
 
             <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-                <div className="rounded-[3px] border border-[var(--doc-rule)] bg-[var(--doc-grid-head)] p-3 text-xs">
-                    <p className="text-[var(--doc-ink-2)]">현재 운영 학생</p>
-                    <p className="mt-1 text-2xl font-bold text-gray-950">
+                <div className="rounded-lg border border-gray-200 bg-gray-50 p-3 text-xs dark:border-gray-700 dark:bg-gray-900">
+                    <p className="text-gray-500 dark:text-gray-400">현재 운영 학생</p>
+                    <p className="mt-1 text-2xl font-black text-gray-950 dark:text-white">
                         {operationalStudentCount.toLocaleString()}명
                     </p>
                 </div>
@@ -468,9 +468,9 @@ function CurrentRosterReportBox({ report }: { report: CurrentRosterReport }) {
                     const item = statusByCode.get(status);
                     const meta = getRosterStatusMeta(status);
                     return (
-                        <div key={status} className={`rounded-[3px] border p-3 text-xs ${meta.tone}`}>
+                        <div key={status} className={`rounded-lg border p-3 text-xs ${meta.tone}`}>
                             <p className="font-bold">{meta.label}</p>
-                            <p className="mt-1 text-2xl font-bold">
+                            <p className="mt-1 text-2xl font-black">
                                 {(item?.studentCount ?? 0).toLocaleString()}명
                             </p>
                             <p className="mt-1 opacity-80">
@@ -481,7 +481,7 @@ function CurrentRosterReportBox({ report }: { report: CurrentRosterReport }) {
                 })}
             </div>
 
-            <p className="mt-3 rounded-[3px] bg-[var(--doc-grid-head)] px-3 py-2 text-xs text-[var(--doc-ink-2)]">
+            <p className="mt-3 rounded-lg bg-gray-50 px-3 py-2 text-xs text-gray-600 dark:bg-gray-900 dark:text-gray-300">
                 현재 {report.targetMonth.label} 기준은 재원 {activeCount.toLocaleString()}명, 휴원 {pausedCount.toLocaleString()}명,
                 퇴원 {withdrawnCount.toLocaleString()}명으로 계산됩니다. 한 학생이 여러 반을 들어도 학생 수는 1명으로 봅니다.
             </p>
@@ -502,11 +502,11 @@ function CurrentRosterReportBox({ report }: { report: CurrentRosterReport }) {
                     {report.monthDistribution.map((item) => (
                         <span
                             key={`${item.monthNumber ?? "none"}-${item.label}`}
-                            className={`rounded-[3px] px-2 py-1 font-semibold ${
- item.monthNumber === report.targetMonth.monthNumber
- ? "bg-lime-100 text-lime-900 dark:bg-lime-300/15 dark:text-lime-100 dark:/30"
- : "bg-[var(--doc-grid-head)] text-[var(--doc-ink-2)] dark:"
- }`}
+                            className={`rounded-full px-2 py-1 font-semibold ring-1 ${
+                                item.monthNumber === report.targetMonth.monthNumber
+                                    ? "bg-lime-100 text-lime-900 ring-lime-300 dark:bg-lime-300/15 dark:text-lime-100 dark:ring-lime-300/30"
+                                    : "bg-gray-50 text-gray-600 ring-gray-200 dark:bg-gray-900 dark:text-gray-300 dark:ring-gray-700"
+                            }`}
                         >
                             {item.label} {item.rowCount.toLocaleString()}행 · 연결 {item.linkedRows.toLocaleString()}행
                         </span>
@@ -516,22 +516,22 @@ function CurrentRosterReportBox({ report }: { report: CurrentRosterReport }) {
 
             <div className="mt-3 grid gap-3 lg:grid-cols-2">
                 {(pausedSamples.length > 0 || withdrawnSamples.length > 0) && (
-                    <div className="rounded-[3px] bg-[var(--doc-grid-head)] p-3 text-xs">
-                        <p className="font-bold text-[var(--doc-ink)]">휴원/퇴원 확인 샘플</p>
+                    <div className="rounded-lg bg-gray-50 p-3 text-xs dark:bg-gray-900">
+                        <p className="font-bold text-gray-900 dark:text-white">휴원/퇴원 확인 샘플</p>
                         <div className="mt-2 grid gap-2 md:grid-cols-2">
                             {[
                                 { title: "휴원", rows: pausedSamples },
                                 { title: "퇴원", rows: withdrawnSamples },
                             ].map((group) => (
                                 <div key={group.title} className="space-y-1">
-                                    <p className="font-semibold text-[var(--doc-ink-2)]">{group.title}</p>
+                                    <p className="font-semibold text-gray-700 dark:text-gray-200">{group.title}</p>
                                     {group.rows.length === 0 ? (
-                                        <p className="text-[var(--doc-ink-2)]">대상 없음</p>
+                                        <p className="text-gray-500 dark:text-gray-400">대상 없음</p>
                                     ) : (
                                         group.rows.map((row) => (
                                             <p
                                                 key={`${group.title}-${row.studentId ?? row.studentName}-${row.firstRowNumber}`}
-                                                className="text-[var(--doc-ink-2)]"
+                                                className="text-gray-600 dark:text-gray-300"
                                             >
                                                 #{row.firstRowNumber} {row.studentName} · {formatReportPhone(row.parentPhone)} · {formatSlotList(row.slotKeys)}
                                             </p>
@@ -544,9 +544,9 @@ function CurrentRosterReportBox({ report }: { report: CurrentRosterReport }) {
                 )}
 
                 {report.historySamples.length > 0 && (
-                    <div className="rounded-[3px] bg-[var(--doc-grid-head)] p-3 text-xs">
-                        <p className="font-bold text-[var(--doc-ink)]">이전 월 이력 연결 샘플</p>
-                        <div className="mt-2 space-y-1 text-[var(--doc-ink-2)]">
+                    <div className="rounded-lg bg-gray-50 p-3 text-xs dark:bg-gray-900">
+                        <p className="font-bold text-gray-900 dark:text-white">이전 월 이력 연결 샘플</p>
+                        <div className="mt-2 space-y-1 text-gray-600 dark:text-gray-300">
                             {report.historySamples.map((row) => (
                                 <p key={row.studentId}>
                                     {row.studentName} · 이전 {row.previousRows.toLocaleString()}행 · {formatReportList(row.previousMonths)}
@@ -557,11 +557,11 @@ function CurrentRosterReportBox({ report }: { report: CurrentRosterReport }) {
                 )}
 
                 {report.missingClassSlots.length > 0 && (
-                    <div className="rounded-[3px] bg-[var(--doc-grid-head)] p-3 text-xs text-[var(--doc-warn)]">
+                    <div className="rounded-lg bg-amber-50 p-3 text-xs text-amber-900 dark:bg-amber-300/10 dark:text-amber-100">
                         <p className="font-bold">반/시간표 미매칭</p>
                         <div className="mt-2 flex flex-wrap gap-2">
                             {report.missingClassSlots.map((slot) => (
-                                <span key={slot.slotKey} className="rounded-[3px] bg-[var(--doc-surface)] px-2 py-1 font-semibold dark:/25">
+                                <span key={slot.slotKey} className="rounded-full bg-white px-2 py-1 font-semibold ring-1 ring-amber-200 dark:bg-gray-950 dark:ring-amber-300/25">
                                     {formatSlotLabel(slot.slotKey)} {slot.rowCount.toLocaleString()}행
                                 </span>
                             ))}
@@ -570,7 +570,7 @@ function CurrentRosterReportBox({ report }: { report: CurrentRosterReport }) {
                 )}
 
                 {report.unresolvedRows.length > 0 && (
-                    <div className="rounded-[3px] bg-[var(--doc-crit-soft)] p-3 text-xs text-[var(--doc-crit)]">
+                    <div className="rounded-lg bg-red-50 p-3 text-xs text-red-900 dark:bg-red-500/10 dark:text-red-100">
                         <p className="font-bold">미연결 등록 행</p>
                         <div className="mt-2 space-y-1">
                             {report.unresolvedRows.map((row) => (
@@ -583,7 +583,7 @@ function CurrentRosterReportBox({ report }: { report: CurrentRosterReport }) {
                 )}
 
                 {report.duplicateStudentGroups.length > 0 && (
-                    <div className="rounded-[3px] bg-[var(--doc-grid-head)] p-3 text-xs text-[var(--doc-warn)]">
+                    <div className="rounded-lg bg-amber-50 p-3 text-xs text-amber-900 dark:bg-amber-300/10 dark:text-amber-100">
                         <p className="font-bold">같은 보호자 연락처의 중복 Student 의심</p>
                         <div className="mt-2 space-y-1">
                             {report.duplicateStudentGroups.map((group) => (
@@ -596,8 +596,8 @@ function CurrentRosterReportBox({ report }: { report: CurrentRosterReport }) {
                 )}
 
                 {report.nameConflictGroups.length > 0 && (
-                    <div className="rounded-[3px] bg-[var(--doc-grid-head)] p-3 text-xs text-[var(--doc-ink-2)]">
-                        <p className="font-bold text-[var(--doc-ink)]">이름만으로는 위험한 후보</p>
+                    <div className="rounded-lg bg-gray-50 p-3 text-xs text-gray-700 dark:bg-gray-900 dark:text-gray-300">
+                        <p className="font-bold text-gray-900 dark:text-white">이름만으로는 위험한 후보</p>
                         <div className="mt-2 space-y-1">
                             {report.nameConflictGroups.map((group) => (
                                 <p key={group.studentName}>
@@ -627,7 +627,7 @@ function ReconcilePreviewBox({
         preview.missingEnrollments + preview.reactivations + preview.pauseExtras;
 
     return (
-        <div className="mt-3 rounded-[3px] border border-[var(--doc-rule)] bg-[var(--doc-surface)] p-3 text-[var(--doc-ink)]">
+        <div className="mt-3 rounded-lg border border-gray-200 bg-white p-3 text-gray-800 dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100">
             <div className="grid grid-cols-2 gap-2 text-center text-xs sm:grid-cols-6">
                 <ImportSummaryMetric label="기준" value={preview.expectedActivePairs} />
                 <ImportSummaryMetric label="추가" value={preview.missingEnrollments} warning={preview.missingEnrollments > 0} />
@@ -637,7 +637,7 @@ function ReconcilePreviewBox({
                 <ImportSummaryMetric label="반 없음" value={preview.missingClassSlots} warning={preview.missingClassSlots > 0} />
             </div>
 
-            <p className="mt-3 text-xs text-[var(--doc-ink-2)]">
+            <p className="mt-3 text-xs text-gray-600 dark:text-gray-300">
                 시트 원장에 DB 학생으로 연결된 대상만 적용합니다. 시트에 없는 기존 활성 학생 {preview.outsideScopeActiveStudents}명은 자동 변경하지 않습니다.
             </p>
 
@@ -652,7 +652,7 @@ function ReconcilePreviewBox({
                     type="button"
                     onClick={onApply}
                     disabled={applying || actionCount === 0 || preview.missingClassSlots > 0}
-                    className="rounded-[3px] bg-[var(--doc-grid-head)] px-3 py-2 text-xs font-bold text-white transition hover:bg-[var(--doc-grid-head)] disabled:cursor-not-allowed disabled:opacity-50 dark:hover:bg-lime-200"
+                    className="rounded-lg bg-gray-900 px-3 py-2 text-xs font-bold text-white transition hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-brand-neon-lime dark:text-gray-950 dark:hover:bg-lime-200"
                 >
                     {applying ? "적용 중" : actionCount === 0 ? "적용할 변경 없음" : "시트 기준 적용"}
                 </button>
@@ -664,7 +664,7 @@ function ReconcilePreviewBox({
               아래 전용 버튼으로만 확정하도록 분리했다.
             */}
             {preview.withdrawCandidates > 0 && (
-                <div className="mt-3 rounded-[3px] border border-[var(--doc-crit)] bg-[var(--doc-crit-soft)] p-3 text-xs text-[var(--doc-crit)]">
+                <div className="mt-3 rounded-lg border border-red-200 bg-red-50 p-3 text-xs text-red-900 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-100">
                     <p className="font-bold">
                         퇴원 후보 {preview.withdrawCandidateStudents}명 ({preview.withdrawCandidates}건)
                     </p>
@@ -687,7 +687,7 @@ function ReconcilePreviewBox({
                             type="button"
                             onClick={onApplyWithdrawals}
                             disabled={applying}
-                            className="rounded-[3px] bg-[var(--doc-crit)] px-3 py-2 text-xs font-bold text-white transition hover:bg-[var(--doc-crit)] disabled:cursor-not-allowed disabled:opacity-50"
+                            className="rounded-lg bg-red-700 px-3 py-2 text-xs font-bold text-white transition hover:bg-red-800 disabled:cursor-not-allowed disabled:opacity-50"
                         >
                             {applying ? "적용 중" : `퇴원 후보 ${preview.withdrawCandidateStudents}명 퇴원 처리`}
                         </button>
@@ -700,14 +700,14 @@ function ReconcilePreviewBox({
 
 function ReconcileSampleList({ title, rows }: { title: string; rows: ReconcileSample[] }) {
     return (
-        <div className="rounded-[3px] bg-[var(--doc-grid-head)] p-2">
-            <p className="font-bold text-[var(--doc-ink)]">{title}</p>
+        <div className="rounded-md bg-gray-50 p-2 dark:bg-gray-900">
+            <p className="font-bold text-gray-900 dark:text-white">{title}</p>
             {rows.length === 0 ? (
-                <p className="mt-1 text-[var(--doc-ink-2)]">대상 없음</p>
+                <p className="mt-1 text-gray-500 dark:text-gray-400">대상 없음</p>
             ) : (
                 <div className="mt-1 space-y-1">
                     {rows.map((row) => (
-                        <p key={`${title}-${row.studentId}-${row.slotKey}`} className="text-[var(--doc-ink-2)]">
+                        <p key={`${title}-${row.studentId}-${row.slotKey}`} className="text-gray-600 dark:text-gray-300">
                             {row.studentName} · {formatSlotLabel(row.slotKey)}
                             {row.targetStatus ? ` → ${row.targetStatus}` : ""}
                         </p>
@@ -758,7 +758,7 @@ function RelinkPreviewBox({
     const studentOptionById = new Map(studentOptions.map((student) => [student.id, student]));
 
     return (
-        <div className="mt-3 rounded-[3px] border border-[var(--doc-rule)] bg-[var(--doc-surface)] p-3 text-[var(--doc-ink)]">
+        <div className="mt-3 rounded-lg border border-gray-200 bg-white p-3 text-gray-800 dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100">
             <div className="grid grid-cols-2 gap-2 text-center text-xs sm:grid-cols-3 lg:grid-cols-6">
                 <ImportSummaryMetric label="검토" value={scannedTotal} warning={scannedTotal > 0} />
                 <ImportSummaryMetric label="실제 후보" value={reviewableTotal} warning={reviewableTotal > 0} />
@@ -768,7 +768,7 @@ function RelinkPreviewBox({
                 <ImportSummaryMetric label="검토 제외" value={ignoredTotal} />
             </div>
 
-            <div className="mt-3 flex flex-col gap-2 text-xs text-[var(--doc-ink-2)] sm:flex-row sm:items-center sm:justify-between">
+            <div className="mt-3 flex flex-col gap-2 text-xs text-gray-600 dark:text-gray-300 sm:flex-row sm:items-center sm:justify-between">
                 <span>
                     빈 서식 행은 검토 제외로 분리하고, 이름·연락처·생년월일 등 단서가 있는 행만 연결 후보로 보여줍니다. 후보 없음 {unmatchedTotal}건은 수동 확인이 필요합니다.
                 </span>
@@ -776,19 +776,19 @@ function RelinkPreviewBox({
                     type="button"
                     onClick={onApplyAuto}
                     disabled={applying || applyReadyTotal === 0}
-                    className="rounded-[3px] bg-[var(--doc-grid-head)] px-3 py-2 font-bold text-white transition hover:bg-[var(--doc-grid-head)] disabled:cursor-not-allowed disabled:opacity-50 dark:hover:bg-lime-200"
+                    className="rounded-lg bg-gray-900 px-3 py-2 font-bold text-white transition hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-brand-neon-lime dark:text-gray-950 dark:hover:bg-lime-200"
                 >
                     {applying ? "적용 중" : applyReadyTotal === 0 ? "확정 후보 없음" : "확정 후보 적용"}
                 </button>
             </div>
 
-            <div className="mt-3 overflow-hidden rounded-[3px] border border-[var(--doc-rule)]">
+            <div className="mt-3 overflow-hidden rounded-lg border border-gray-100 dark:border-gray-800">
                 {preview.reviewRows.length === 0 ? (
-                    <div className="bg-[var(--doc-grid-head)] px-3 py-4 text-center text-xs text-[var(--doc-ink-2)]">
+                    <div className="bg-gray-50 px-3 py-4 text-center text-xs text-gray-500 dark:bg-gray-900 dark:text-gray-400">
                         재연결이 필요한 원본 행이 없습니다.
                     </div>
                 ) : (
-                    <div className="divide-y divide-[var(--doc-rule)] text-xs dark:divide-[var(--doc-rule)]">
+                    <div className="divide-y divide-gray-100 text-xs dark:divide-gray-800">
                         {preview.reviewRows.map((row) => {
                             const key = relinkRowKey(row);
                             const selectedStudentId = selections[key] ?? row.match?.studentId ?? "";
@@ -800,34 +800,34 @@ function RelinkPreviewBox({
                                 : "후보 없음";
 
                             return (
-                                <div key={key} className="grid gap-2 bg-[var(--doc-surface)] px-3 py-3 md:grid-cols-[1.1fr_1.1fr_1.5fr_auto] md:items-center">
+                                <div key={key} className="grid gap-2 bg-white px-3 py-3 dark:bg-gray-950 md:grid-cols-[1.1fr_1.1fr_1.5fr_auto] md:items-center">
                                     <div>
-                                        <p className="font-bold text-[var(--doc-ink)]">
+                                        <p className="font-bold text-gray-900 dark:text-white">
                                             {RELINK_KIND_LABELS[row.kind]} · {row.sheetName} {row.rowNumber}행
                                         </p>
-                                        <p className="mt-0.5 text-[var(--doc-ink-2)]">
+                                        <p className="mt-0.5 text-gray-500 dark:text-gray-400">
                                             {row.studentName || "이름 없음"}
                                         </p>
                                     </div>
-                                    <div className="text-[var(--doc-ink-2)]">
+                                    <div className="text-gray-600 dark:text-gray-300">
                                         <p>학생 {formatPhone(row.studentPhone)}</p>
                                         <p>보호자 {formatPhone(row.parentPhone)}</p>
                                     </div>
                                     <div>
                                         <div className="mb-1 flex flex-wrap items-center gap-2">
                                             <span
-                                                className={`rounded-[3px] px-2 py-0.5 font-bold ${
- row.match
- ? row.match.confidence === "weak"
- ? "bg-[var(--doc-grid-head)] text-[var(--doc-warn)] "
- : "bg-lime-100 text-lime-800 dark:bg-lime-300/15 dark:text-lime-100"
- : "bg-[var(--doc-grid-head)] text-[var(--doc-ink-2)] "
- }`}
+                                                className={`rounded-full px-2 py-0.5 font-bold ${
+                                                    row.match
+                                                        ? row.match.confidence === "weak"
+                                                            ? "bg-amber-100 text-amber-800 dark:bg-amber-300/15 dark:text-amber-100"
+                                                            : "bg-lime-100 text-lime-800 dark:bg-lime-300/15 dark:text-lime-100"
+                                                        : "bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-300"
+                                                }`}
                                             >
                                                 {matchLabel}
                                             </span>
                                             {matchedStudent && (
-                                                <span className="text-[var(--doc-ink-2)]">
+                                                <span className="text-gray-500 dark:text-gray-400">
                                                     {matchedStudent.name}
                                                     {matchedStudent.parent?.name ? ` (${matchedStudent.parent.name})` : ""}
                                                 </span>
@@ -837,7 +837,7 @@ function RelinkPreviewBox({
                                             value={selectedStudentId}
                                             onChange={(event) => onSelectionChange(key, event.target.value)}
                                             disabled={studentOptionsLoading}
-                                            className="w-full rounded-[3px] border border-[var(--doc-rule)] bg-[var(--doc-surface)] px-2 py-2 text-xs text-[var(--doc-ink)]"
+                                            className="w-full rounded-lg border border-gray-200 bg-white px-2 py-2 text-xs text-gray-900 dark:border-gray-700 dark:bg-gray-900 dark:text-white"
                                         >
                                             <option value="">
                                                 {studentOptionsLoading ? "학생 목록 불러오는 중" : "연결할 학생 선택"}
@@ -855,7 +855,7 @@ function RelinkPreviewBox({
                                             type="button"
                                             onClick={() => onApplyManual(row, selectedStudentId)}
                                             disabled={!selectedStudentId || manualApplyingId === row.id}
-                                            className="rounded-[3px] border border-[var(--doc-rule)] px-3 py-2 font-bold text-[var(--doc-ink-2)] transition hover:bg-[var(--doc-grid-head)] disabled:cursor-not-allowed disabled:opacity-50"
+                                            className="rounded-lg border border-gray-200 px-3 py-2 font-bold text-gray-700 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-gray-700 dark:text-gray-100 dark:hover:bg-gray-900"
                                         >
                                             {manualApplyingId === row.id ? "처리 중" : "연결"}
                                         </button>
@@ -864,13 +864,13 @@ function RelinkPreviewBox({
                                                 type="button"
                                                 onClick={() => onCreateTeamStudent(row)}
                                                 disabled={manualApplyingId === row.id}
-                                                className="rounded-[3px] bg-lime-100 px-3 py-2 font-bold text-lime-900 transition hover:bg-lime-200 disabled:cursor-not-allowed disabled:opacity-50 dark:hover:bg-lime-200"
+                                                className="rounded-lg bg-lime-100 px-3 py-2 font-bold text-lime-900 transition hover:bg-lime-200 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-brand-neon-lime dark:text-gray-950 dark:hover:bg-lime-200"
                                             >
                                                 {manualApplyingId === row.id ? "생성 중" : "새 학생 생성"}
                                             </button>
                                         )}
                                         {row.kind === "team" && !row.match && !row.canCreateStudent && row.createBlockedReason && (
-                                            <span className="rounded-[3px] bg-[var(--doc-grid-head)] px-3 py-2 text-center text-[11px] font-bold text-[var(--doc-warn)]">
+                                            <span className="rounded-lg bg-amber-50 px-3 py-2 text-center text-[11px] font-bold text-amber-800 dark:bg-amber-300/15 dark:text-amber-100">
                                                 {row.createBlockedReason}
                                             </span>
                                         )}
@@ -992,10 +992,10 @@ function getStatusLabel(status: string | null) {
 }
 
 function getStatusPillClass(status: string | null) {
-    if (status === "ACTIVE") return "bg-[var(--doc-accent-soft)] text-[var(--doc-accent)]    dark:/20";
-    if (status === "PAUSED") return "bg-[var(--doc-grid-head)] text-[var(--doc-warn)]    dark:/20";
-    if (status === "WITHDRAWN") return "bg-[var(--doc-crit-soft)] text-[var(--doc-crit)]    dark:/20";
-    return "bg-[var(--doc-grid-head)] text-[var(--doc-ink-2)]    dark:";
+    if (status === "ACTIVE") return "bg-emerald-50 text-emerald-700 ring-emerald-200 dark:bg-emerald-300/10 dark:text-emerald-100 dark:ring-emerald-300/20";
+    if (status === "PAUSED") return "bg-amber-50 text-amber-700 ring-amber-200 dark:bg-amber-300/10 dark:text-amber-100 dark:ring-amber-300/20";
+    if (status === "WITHDRAWN") return "bg-red-50 text-red-700 ring-red-200 dark:bg-red-300/10 dark:text-red-100 dark:ring-red-300/20";
+    return "bg-gray-50 text-gray-500 ring-gray-200 dark:bg-gray-900 dark:text-gray-300 dark:ring-gray-700";
 }
 
 function getActiveEnrollments(enrollments: Student["enrollments"]) {
@@ -1592,23 +1592,23 @@ export default function StudentManagementClient({
                     {Array.from({ length: 5 }).map((_, index) => (
                         <div
                             key={index}
-                            className="h-20 rounded-[3px] border border-[var(--doc-rule)] bg-[var(--doc-grid-head)]"
+                            className="h-20 rounded-xl border border-gray-200 bg-gray-100 animate-pulse dark:border-gray-700 dark:bg-gray-800"
                         />
                     ))}
                 </div>
                 <div className="flex items-center justify-between">
                     <div className="space-y-2">
-                        <div className="h-7 w-36 rounded bg-[var(--doc-grid-head)]" />
-                        <div className="h-4 w-48 rounded bg-[var(--doc-grid-head)]" />
+                        <div className="h-7 w-36 rounded bg-gray-200 animate-pulse dark:bg-gray-700" />
+                        <div className="h-4 w-48 rounded bg-gray-100 animate-pulse dark:bg-gray-800" />
                     </div>
-                    <div className="h-10 w-28 rounded-[3px] bg-[var(--doc-grid-head)]" />
+                    <div className="h-10 w-28 rounded-lg bg-gray-200 animate-pulse dark:bg-gray-700" />
                 </div>
-                <div className="h-11 w-full max-w-md rounded-[3px] bg-[var(--doc-grid-head)]" />
-                <div className="overflow-hidden rounded-[3px] border border-[var(--doc-rule)] bg-[var(--doc-surface)]">
+                <div className="h-11 w-full max-w-md rounded-lg bg-gray-100 animate-pulse dark:bg-gray-800" />
+                <div className="overflow-hidden rounded-xl border border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-800">
                     {Array.from({ length: 8 }).map((_, index) => (
                         <div
                             key={index}
-                            className="h-12 border-b border-[var(--doc-rule)] bg-[var(--doc-grid-head)]/60 last:border-b-0"
+                            className="h-12 border-b border-gray-100 bg-gray-50/60 animate-pulse last:border-b-0 dark:border-gray-700 dark:bg-gray-900/40"
                         />
                     ))}
                 </div>
@@ -1618,12 +1618,12 @@ export default function StudentManagementClient({
 
     if (dataError && students.length === 0) {
         return (
-            <div className="mx-auto max-w-5xl rounded-[3px] border border-[var(--doc-crit)] bg-[var(--doc-crit-soft)] p-8 text-center">
-                <p className="font-bold text-[var(--doc-crit)]">{dataError}</p>
+            <div className="mx-auto max-w-5xl rounded-xl border border-red-200 bg-red-50 p-8 text-center dark:border-red-900/50 dark:bg-red-950/20">
+                <p className="font-bold text-red-700 dark:text-red-200">{dataError}</p>
                 <button
                     type="button"
                     onClick={() => void loadData()}
-                    className="mt-4 rounded-[3px] bg-[var(--doc-accent)] px-4 py-2 text-sm font-bold text-white transition hover:bg-[var(--doc-grid-head)]"
+                    className="mt-4 rounded-lg bg-brand-orange-500 px-4 py-2 text-sm font-bold text-white transition hover:bg-orange-600 dark:bg-brand-neon-lime dark:text-brand-navy-900"
                 >
                     다시 불러오기
                 </button>
@@ -1634,11 +1634,11 @@ export default function StudentManagementClient({
     return (
         <div className="max-w-5xl mx-auto">
             {!sheetImportSummary && (
-                <div className="mb-5 flex flex-col gap-3 rounded-[3px] border border-[var(--doc-rule)] bg-[var(--doc-surface)] p-4 sm:flex-row sm:items-center sm:justify-between">
+                <div className="mb-5 flex flex-col gap-3 rounded-xl border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-900 sm:flex-row sm:items-center sm:justify-between">
                     <div>
-                        <p className="text-sm font-bold text-[var(--doc-ink)]">운영 데이터 점검</p>
+                        <p className="text-sm font-bold text-gray-900 dark:text-white">운영 데이터 점검</p>
                         {sheetImportSummaryError && (
-                            <p className="mt-2 text-xs font-semibold text-[var(--doc-crit)]">
+                            <p className="mt-2 text-xs font-semibold text-red-600 dark:text-red-300">
                                 {sheetImportSummaryError}
                             </p>
                         )}
@@ -1647,33 +1647,33 @@ export default function StudentManagementClient({
                         type="button"
                         onClick={() => void loadSheetImportSummary()}
                         disabled={sheetImportSummaryLoading}
-                        className="rounded-[3px] border border-[var(--doc-rule)] px-3 py-2 text-xs font-bold text-[var(--doc-ink-2)] transition hover:bg-[var(--doc-grid-head)] disabled:cursor-wait disabled:opacity-60"
+                        className="rounded-lg border border-gray-200 px-3 py-2 text-xs font-bold text-gray-700 transition hover:bg-gray-50 disabled:cursor-wait disabled:opacity-60 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800"
                     >
                         {sheetImportSummaryLoading ? "불러오는 중" : "점검 불러오기"}
                     </button>
                 </div>
             )}
             {sheetImportSummary && (
-                <div className="mb-5 rounded-[3px] border border-lime-300/40 bg-[var(--doc-surface)] p-4 dark:border-lime-300/30">
+                <div className="mb-5 rounded-xl border border-lime-300/40 bg-white p-4 shadow-sm dark:border-lime-300/30 dark:bg-gray-900">
                     <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                         <div>
                             <div className="flex flex-wrap items-center gap-2">
                                 <span
-                                    className={`rounded-[3px] px-2 py-0.5 text-xs font-bold ${
- sheetImportSummary.status === "COMPLETED" && sheetImportSummary.errorRows === 0
- ? "bg-lime-100 text-lime-800 dark:bg-lime-300/15 dark:text-lime-200"
- : "bg-[var(--doc-grid-head)] text-[var(--doc-warn)] "
- }`}
+                                    className={`rounded-full px-2 py-0.5 text-xs font-bold ${
+                                        sheetImportSummary.status === "COMPLETED" && sheetImportSummary.errorRows === 0
+                                            ? "bg-lime-100 text-lime-800 dark:bg-lime-300/15 dark:text-lime-200"
+                                            : "bg-amber-100 text-amber-800 dark:bg-amber-300/15 dark:text-amber-100"
+                                    }`}
                                 >
                                     {sheetImportSummary.status === "COMPLETED" && sheetImportSummary.errorRows === 0
                                         ? "DB 이관 정상"
                                         : `DB 이관 ${sheetImportSummary.status}`}
                                 </span>
-                                <span className="text-sm font-bold text-[var(--doc-ink)]">
+                                <span className="text-sm font-bold text-gray-900 dark:text-white">
                                     최신 운영 데이터
                                 </span>
                             </div>
-                            <p className="mt-1 text-xs text-[var(--doc-ink-2)]">
+                            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
                                 최신 반영:{" "}
                                 {sheetImportSummary.completedAt
                                     ? new Date(sheetImportSummary.completedAt).toLocaleString("ko-KR")
@@ -1683,7 +1683,7 @@ export default function StudentManagementClient({
                         <button
                             type="button"
                             onClick={() => setShowImportTools((current) => !current)}
-                            className="rounded-[3px] border border-[var(--doc-rule)] px-3 py-2 text-xs font-bold text-[var(--doc-ink-2)] transition hover:bg-[var(--doc-grid-head)]"
+                            className="rounded-lg border border-gray-200 px-3 py-2 text-xs font-bold text-gray-700 transition hover:bg-gray-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800"
                         >
                             {showImportTools ? "점검 도구 닫기" : "점검 도구"}
                         </button>
@@ -1709,18 +1709,18 @@ export default function StudentManagementClient({
                     </div>
 
                     {!allStudentsLoaded && (
-                        <p className="mt-3 rounded-[3px] bg-[var(--doc-grid-head)] px-3 py-2 text-xs text-[var(--doc-ink-2)]">
+                        <p className="mt-3 rounded-lg bg-gray-50 px-3 py-2 text-xs text-gray-500 dark:bg-gray-950 dark:text-gray-400">
                             빠른 진입을 위해 먼저 50명을 표시했습니다. 전체 원생 목록과 필터는 백그라운드에서 동기화 중입니다.
                         </p>
                     )}
 
                     {showImportTools && (
-                        <div className="mt-3 space-y-3 border-t border-[var(--doc-rule)] pt-3">
-                            <div className="rounded-[3px] border border-[var(--doc-rule)] bg-[var(--doc-grid-head)] px-3 py-3 text-xs text-[var(--doc-ink)]">
+                        <div className="mt-3 space-y-3 border-t border-gray-100 pt-3 dark:border-gray-800">
+                            <div className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-3 text-xs text-gray-800 dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100">
                                 <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                                     <div>
                                         <p className="font-bold">최신 원생목록 점검</p>
-                                        <p className="mt-1 text-[var(--doc-ink-2)]">
+                                        <p className="mt-1 text-gray-500 dark:text-gray-400">
                                             실제 변경 없이 최신 등록 행의 학생 연결, 이전 이력, 중복 의심 항목을 확인합니다.
                                         </p>
                                     </div>
@@ -1728,13 +1728,13 @@ export default function StudentManagementClient({
                                         type="button"
                                         onClick={() => void loadCurrentRosterReport()}
                                         disabled={currentRosterLoading}
-                                        className="rounded-[3px] bg-[var(--doc-grid-head)] px-3 py-2 font-bold text-white transition hover:bg-[var(--doc-grid-head)] disabled:cursor-wait disabled:opacity-60 dark:hover:bg-lime-200"
+                                        className="rounded-lg bg-gray-900 px-3 py-2 font-bold text-white transition hover:bg-gray-800 disabled:cursor-wait disabled:opacity-60 dark:bg-brand-neon-lime dark:text-gray-950 dark:hover:bg-lime-200"
                                     >
                                         {currentRosterLoading ? "점검 중" : "상세 점검"}
                                     </button>
                                 </div>
                                 {currentRosterError && (
-                                    <div className="mt-3 rounded-[3px] border border-[var(--doc-crit)] bg-[var(--doc-crit-soft)] px-3 py-2 text-xs text-[var(--doc-crit)]">
+                                    <div className="mt-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-100">
                                         {currentRosterError}
                                     </div>
                                 )}
@@ -1742,7 +1742,7 @@ export default function StudentManagementClient({
                             </div>
 
                             {sheetImportSummary.scheduleMismatchCount > 0 && (
-                                <div className="rounded-[3px] border border-[var(--doc-warn)] bg-[var(--doc-grid-head)] px-3 py-2 text-xs text-[var(--doc-warn)] dark:border-lime-300/25 dark:bg-lime-300/10 dark:text-lime-100">
+                                <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:border-lime-300/25 dark:bg-lime-300/10 dark:text-lime-100">
                                     <p className="font-bold">
                                         시트 등록 인원과 DB 활성 수강 인원이 다른 반이 {sheetImportSummary.scheduleMismatchCount}개 있습니다.
                                     </p>
@@ -1750,7 +1750,7 @@ export default function StudentManagementClient({
                                         {sheetImportSummary.topScheduleMismatches.map((item) => (
                                             <span
                                                 key={item.slotKey}
-                                                className="rounded-[3px] bg-[var(--doc-surface)] px-2 py-1 font-semibold text-[var(--doc-warn)] dark:text-lime-100 dark:/25"
+                                                className="rounded-full bg-white px-2 py-1 font-semibold text-amber-900 ring-1 ring-amber-200 dark:bg-gray-950 dark:text-lime-100 dark:ring-lime-300/25"
                                             >
                                                 {formatSlotLabel(item.slotKey)} 시트 {item.sheetCount} / DB {item.dbCount}
                                                 {" "}
@@ -1758,7 +1758,7 @@ export default function StudentManagementClient({
                                             </span>
                                         ))}
                                         {sheetImportSummary.scheduleMismatchCount > sheetImportSummary.topScheduleMismatches.length && (
-                                            <span className="rounded-[3px] px-2 py-1 font-semibold text-[var(--doc-warn)] dark:text-lime-200">
+                                            <span className="rounded-full px-2 py-1 font-semibold text-amber-800 dark:text-lime-200">
                                                 외 {sheetImportSummary.scheduleMismatchCount - sheetImportSummary.topScheduleMismatches.length}개
                                             </span>
                                         )}
@@ -1768,13 +1768,13 @@ export default function StudentManagementClient({
                                             type="button"
                                             onClick={() => void loadReconcilePreview()}
                                             disabled={reconcileLoading}
-                                            className="rounded-[3px] bg-[var(--doc-grid-head)] px-3 py-2 text-xs font-bold text-white transition hover:bg-[var(--doc-grid-head)] disabled:cursor-wait disabled:opacity-60 dark:hover:bg-lime-200"
+                                            className="rounded-lg bg-amber-700 px-3 py-2 text-xs font-bold text-white transition hover:bg-amber-800 disabled:cursor-wait disabled:opacity-60 dark:bg-brand-neon-lime dark:text-gray-950 dark:hover:bg-lime-200"
                                         >
                                             {reconcileLoading ? "점검 중" : "차이 점검"}
                                         </button>
                                     </div>
                                     {reconcileError && (
-                                        <div className="mt-3 rounded-[3px] border border-[var(--doc-crit)] bg-[var(--doc-crit-soft)] px-3 py-2 text-xs text-[var(--doc-crit)]">
+                                        <div className="mt-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-100">
                                             {reconcileError}
                                         </div>
                                     )}
@@ -1789,11 +1789,11 @@ export default function StudentManagementClient({
                                 </div>
                             )}
 
-                            <div className="rounded-[3px] border border-[var(--doc-rule)] bg-[var(--doc-grid-head)] px-3 py-3 text-xs text-[var(--doc-ink)]">
+                            <div className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-3 text-xs text-gray-800 dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100">
                                 <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                                     <div>
                                         <p className="font-bold">차량·대표팀 원본 학생 연결 점검</p>
-                                        <p className="mt-1 text-[var(--doc-ink-2)]">
+                                        <p className="mt-1 text-gray-500 dark:text-gray-400">
                                             시트 원본 중 기존 학생과 아직 연결되지 않은 행을 확인하고, 확정 후보 또는 수동 선택으로 연결합니다.
                                         </p>
                                     </div>
@@ -1801,13 +1801,13 @@ export default function StudentManagementClient({
                                         type="button"
                                         onClick={() => void loadRelinkPreview()}
                                         disabled={relinkLoading}
-                                        className="rounded-[3px] bg-[var(--doc-grid-head)] px-3 py-2 font-bold text-white transition hover:bg-[var(--doc-grid-head)] disabled:cursor-wait disabled:opacity-60 dark:hover:bg-lime-200"
+                                        className="rounded-lg bg-gray-900 px-3 py-2 font-bold text-white transition hover:bg-gray-800 disabled:cursor-wait disabled:opacity-60 dark:bg-brand-neon-lime dark:text-gray-950 dark:hover:bg-lime-200"
                                     >
                                         {relinkLoading ? "점검 중" : "미연결 점검"}
                                     </button>
                                 </div>
                                 {relinkError && (
-                                    <div className="mt-3 rounded-[3px] border border-[var(--doc-crit)] bg-[var(--doc-crit-soft)] px-3 py-2 text-xs text-[var(--doc-crit)]">
+                                    <div className="mt-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-100">
                                         {relinkError}
                                     </div>
                                 )}
@@ -1839,32 +1839,32 @@ export default function StudentManagementClient({
             {/* 상태별 요약 카드 - 클릭하면 해당 필터 적용 */}
             <div className="grid grid-cols-3 sm:grid-cols-5 gap-3 mb-6">
                 {[
-                    { label: "활성", value: "ACTIVE", count: statusCounts.active, color: "bg-[var(--doc-accent-soft)] border-[var(--doc-accent)] text-[var(--doc-accent)]", icon: "person" },
-                    { label: "휴원", value: "PAUSED", count: statusCounts.paused, color: "bg-[var(--doc-grid-head)] border-[var(--doc-warn)] text-[var(--doc-warn)]", icon: "pause_circle" },
-                    { label: "퇴원", value: "WITHDRAWN", count: statusCounts.withdrawn, color: "bg-[var(--doc-crit-soft)] border-[var(--doc-crit)] text-[var(--doc-crit)]", icon: "person_off" },
-                    { label: "미배정", value: "NONE", count: statusCounts.noEnrollment, color: "bg-[var(--doc-grid-head)] border-[var(--doc-rule)] text-[var(--doc-ink-2)]", icon: "help_outline" },
-                    { label: "전체", value: "", count: statusCounts.total, color: "bg-[var(--doc-grid-head)] border-[var(--doc-rule)]  text-[var(--doc-ink-2)] ", icon: "groups" },
+                    { label: "활성", value: "ACTIVE", count: statusCounts.active, color: "bg-emerald-50 border-emerald-200 text-emerald-700", icon: "person" },
+                    { label: "휴원", value: "PAUSED", count: statusCounts.paused, color: "bg-amber-50 border-amber-200 text-amber-700", icon: "pause_circle" },
+                    { label: "퇴원", value: "WITHDRAWN", count: statusCounts.withdrawn, color: "bg-red-50 border-red-200 text-red-700", icon: "person_off" },
+                    { label: "미배정", value: "NONE", count: statusCounts.noEnrollment, color: "bg-purple-50 border-purple-200 text-purple-700", icon: "help_outline" },
+                    { label: "전체", value: "", count: statusCounts.total, color: "bg-gray-50 dark:bg-gray-900 border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-200", icon: "groups" },
                 ].map((card) => (
                     <button
                         key={card.label}
                         onClick={() => applyStatusFilter(card.value)}
-                        className={`rounded-[3px] border p-3 text-left transition hover: ${card.color} ${
- filterStatus === card.value ? " ring-brand-orange-500 dark:focus:ring-brand-neon-lime " : ""
- }`}
+                        className={`rounded-xl border p-3 text-left transition hover:shadow-sm ${card.color} ${
+                            filterStatus === card.value ? "ring-2 ring-brand-orange-500 dark:focus:ring-brand-neon-lime shadow-sm" : ""
+                        }`}
                     >
                         <div className="flex items-center gap-2">
                             <span className="material-symbols-outlined text-lg">{card.icon}</span>
                             <span className="text-xs font-medium opacity-70">{card.label}</span>
                         </div>
-                        <p className="text-2xl font-bold mt-1">{card.count}명</p>
+                        <p className="text-2xl font-extrabold mt-1">{card.count}명</p>
                     </button>
                 ))}
             </div>
 
             <div className="flex justify-between items-center mb-6">
                 <div>
-                    <h1 className="text-2xl font-bold text-[var(--doc-ink)]">원생 관리</h1>
-                    <p className="text-[var(--doc-ink-2)] text-sm mt-1">
+                    <h1 className="text-2xl font-extrabold text-gray-900 dark:text-white">원생 관리</h1>
+                    <p className="text-gray-500 dark:text-gray-400 text-sm mt-1">
                         {filterStatus === "ACTIVE" ? "수강 중인" : filterStatus === "PAUSED" ? "휴원 중인" : filterStatus === "WITHDRAWN" ? "퇴원한" : filterStatus === "NONE" ? "미배정" : "전체"} 표시 목록: {filtered.length}명
                         {!allStudentsLoaded && " (전체 동기화 중)"}
                     </p>
@@ -1875,7 +1875,7 @@ export default function StudentManagementClient({
                             type="button"
                             onClick={() => void loadData({ background: true })}
                             disabled={backgroundLoading}
-                            className="rounded-[3px] border border-[var(--doc-rule)] px-4 py-2 text-sm font-bold text-[var(--doc-ink-2)] transition hover:bg-[var(--doc-grid-head)] disabled:cursor-wait disabled:opacity-60"
+                            className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-bold text-gray-700 transition hover:bg-gray-50 disabled:cursor-wait disabled:opacity-60 dark:border-gray-600 dark:text-gray-200 dark:hover:bg-gray-800"
                         >
                             {backgroundLoading ? "전체 불러오는 중" : "전체 목록 불러오기"}
                         </button>
@@ -1883,14 +1883,14 @@ export default function StudentManagementClient({
                     {/* 엑셀 일괄 업로드 버튼 — 랠리즈 다운로드 파일용 */}
                     <button
                         onClick={() => setShowExcelUpload(true)}
-                        className="bg-[var(--doc-accent)] text-white px-4 py-2 rounded-[3px] font-bold hover:bg-[var(--doc-accent)] transition"
+                        className="bg-emerald-600 text-white px-4 py-2 rounded-lg font-bold hover:bg-emerald-700 transition"
                     >
                         엑셀 업로드
                     </button>
                     {/* 기존 1명씩 수동 등록 버튼 */}
                     <button
                         onClick={() => { resetForm(); setShowForm(true); }}
-                        className="bg-[var(--doc-accent)] text-white px-4 py-2 rounded-[3px] font-bold hover:bg-[var(--doc-grid-head)] transition"
+                        className="bg-brand-orange-500 dark:bg-brand-neon-lime dark:text-brand-navy-900 text-white px-4 py-2 rounded-lg font-bold hover:bg-orange-600 transition"
                     >
                         + 원생 등록
                     </button>
@@ -1907,7 +1907,7 @@ export default function StudentManagementClient({
                         setSearch(e.target.value);
                         if (e.target.value.trim()) requestFullStudentLoad();
                     }}
-                    className="w-full max-w-md border border-[var(--doc-rule)] rounded-[3px] p-2.5 text-sm focus: focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime"
+                    className="w-full max-w-md border border-gray-300 dark:border-gray-600 rounded-lg p-2.5 text-sm dark:bg-gray-800 dark:text-white focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime"
                 />
             </div>
 
@@ -1920,7 +1920,7 @@ export default function StudentManagementClient({
                         setFilterClass(e.target.value);
                         if (e.target.value) requestFullStudentLoad();
                     }}
-                    className="border border-[var(--doc-rule)] rounded-[3px] px-3 py-2 text-sm focus: focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime"
+                    className="border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm dark:bg-gray-800 dark:text-white focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime"
                 >
                     <option value="">전체 반</option>
                     {classes.map((c) => (
@@ -1936,7 +1936,7 @@ export default function StudentManagementClient({
                         setFilterGrade(e.target.value);
                         if (e.target.value) requestFullStudentLoad();
                     }}
-                    className="border border-[var(--doc-rule)] rounded-[3px] px-3 py-2 text-sm focus: focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime"
+                    className="border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm dark:bg-gray-800 dark:text-white focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime"
                 >
                     <option value="">전체 학년</option>
                     {gradeOptions.map((g) => (
@@ -1950,7 +1950,7 @@ export default function StudentManagementClient({
                         setFilterSchool(e.target.value);
                         if (e.target.value) requestFullStudentLoad();
                     }}
-                    className="border border-[var(--doc-rule)] rounded-[3px] px-3 py-2 text-sm focus: focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime"
+                    className="border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm dark:bg-gray-800 dark:text-white focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime"
                 >
                     <option value="">전체 학교</option>
                     {schoolOptions.map((sc) => (
@@ -1961,7 +1961,7 @@ export default function StudentManagementClient({
                 <select
                     value={filterStatus}
                     onChange={(e) => applyStatusFilter(e.target.value)}
-                    className="border border-[var(--doc-rule)] rounded-[3px] px-3 py-2 text-sm focus: focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime"
+                    className="border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm dark:bg-gray-800 dark:text-white focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime"
                 >
                     <option value="">전체 상태</option>
                     <option value="ACTIVE">활성</option>
@@ -1980,7 +1980,7 @@ export default function StudentManagementClient({
                             setFilterStatus("ACTIVE");
                             requestFullStudentLoad();
                         }}
-                        className="text-sm text-[var(--doc-ink-2)] hover:text-[var(--doc-ink-2)] underline"
+                        className="text-sm text-gray-500 hover:text-gray-700 dark:text-gray-200 underline"
                     >
                         초기화
                     </button>
@@ -1989,37 +1989,37 @@ export default function StudentManagementClient({
 
             {/* Form */}
             {showForm && (
-                <form onSubmit={handleSubmit} className="bg-[var(--doc-surface)] border border-[var(--doc-rule)] rounded-[3px] p-6 mb-6 space-y-4">
-                    <h3 className="font-bold text-lg text-[var(--doc-ink)]">{editingId ? "원생 수정" : "새 원생 등록"}</h3>
+                <form onSubmit={handleSubmit} className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-6 mb-6 shadow-sm space-y-4">
+                    <h3 className="font-bold text-lg text-gray-900 dark:text-white">{editingId ? "원생 수정" : "새 원생 등록"}</h3>
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                         <div>
-                            <label className="block text-sm font-bold text-[var(--doc-ink-2)] mb-1">이름 *</label>
+                            <label className="block text-sm font-bold text-gray-700 dark:text-gray-200 mb-1">이름 *</label>
                             <input
                                 value={name}
                                 onChange={(e) => setName(e.target.value)}
                                 required
                                 placeholder="홍길동"
-                                className="w-full border border-[var(--doc-rule)] rounded-[3px] p-2.5 text-sm focus: focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime"
+                                className="w-full border border-gray-300 dark:border-gray-600 rounded-lg p-2.5 text-sm dark:bg-gray-800 dark:text-white focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime"
                             />
                         </div>
                         <div>
-                            <label className="block text-sm font-bold text-[var(--doc-ink-2)] mb-1">생년월일 *</label>
+                            <label className="block text-sm font-bold text-gray-700 dark:text-gray-200 mb-1">생년월일 *</label>
                             <input
                                 type="date"
                                 min="1950-01-01" max="2025-12-31"
                                 value={birthDate}
                                 onChange={(e) => setBirthDate(e.target.value)}
                                 required
-                                className="w-full border border-[var(--doc-rule)] rounded-[3px] p-2.5 text-sm focus: focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime"
+                                className="w-full border border-gray-300 dark:border-gray-600 rounded-lg p-2.5 text-sm dark:bg-gray-800 dark:text-white focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime"
                             />
                         </div>
                         <div>
-                            <label className="block text-sm font-bold text-[var(--doc-ink-2)] mb-1">성별</label>
+                            <label className="block text-sm font-bold text-gray-700 dark:text-gray-200 mb-1">성별</label>
                             <select
                                 value={gender}
                                 onChange={(e) => setGender(e.target.value)}
-                                className="w-full border border-[var(--doc-rule)] rounded-[3px] p-2.5 text-sm focus: focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime"
+                                className="w-full border border-gray-300 dark:border-gray-600 rounded-lg p-2.5 text-sm dark:bg-gray-800 dark:text-white focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime"
                             >
                                 <option value="">선택 안함</option>
                                 <option value="남">남</option>
@@ -2027,33 +2027,33 @@ export default function StudentManagementClient({
                             </select>
                         </div>
                         <div>
-                            <label className="block text-sm font-bold text-[var(--doc-ink-2)] mb-1">학부모 이름 *</label>
+                            <label className="block text-sm font-bold text-gray-700 dark:text-gray-200 mb-1">학부모 이름 *</label>
                             <input
                                 value={parentName}
                                 onChange={(e) => setParentName(e.target.value)}
                                 required
                                 placeholder="보호자 이름"
-                                className="w-full border border-[var(--doc-rule)] rounded-[3px] p-2.5 text-sm focus: focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime"
+                                className="w-full border border-gray-300 dark:border-gray-600 rounded-lg p-2.5 text-sm dark:bg-gray-800 dark:text-white focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime"
                             />
                         </div>
                         <div>
-                            <label className="block text-sm font-bold text-[var(--doc-ink-2)] mb-1">학부모 연락처</label>
+                            <label className="block text-sm font-bold text-gray-700 dark:text-gray-200 mb-1">학부모 연락처</label>
                             <input
                                 value={parentPhone}
                                 onChange={(e) => setParentPhone(e.target.value)}
                                 placeholder="010-0000-0000"
-                                className="w-full border border-[var(--doc-rule)] rounded-[3px] p-2.5 text-sm focus: focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime"
+                                className="w-full border border-gray-300 dark:border-gray-600 rounded-lg p-2.5 text-sm dark:bg-gray-800 dark:text-white focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime"
                             />
                         </div>
                         {!editingId && (
                             <div>
-                                <label className="block text-sm font-bold text-[var(--doc-ink-2)] mb-1">학부모 이메일</label>
+                                <label className="block text-sm font-bold text-gray-700 dark:text-gray-200 mb-1">학부모 이메일</label>
                                 <input
                                     type="email"
                                     value={parentEmail}
                                     onChange={(e) => setParentEmail(e.target.value)}
                                     placeholder="parent@email.com"
-                                    className="w-full border border-[var(--doc-rule)] rounded-[3px] p-2.5 text-sm focus: focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime"
+                                    className="w-full border border-gray-300 dark:border-gray-600 rounded-lg p-2.5 text-sm dark:bg-gray-800 dark:text-white focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime"
                                 />
                             </div>
                         )}
@@ -2061,33 +2061,33 @@ export default function StudentManagementClient({
 
                     {/* 신규 등록 시에만 보호자 동의 확인 체크박스 표시 (수정 시에는 불필요) */}
                     {!editingId && (
-                        <div className="border-t border-[var(--doc-rule)] pt-4">
+                        <div className="border-t border-gray-100 dark:border-gray-800 pt-4">
                             <label className="flex items-start gap-2 cursor-pointer">
                                 <input
                                     type="checkbox"
                                     checked={guardianConsent}
                                     onChange={(e) => setGuardianConsent(e.target.checked)}
-                                    className="mt-0.5 w-4 h-4 rounded border-[var(--doc-rule)] text-[var(--doc-accent)] focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime"
+                                    className="mt-0.5 w-4 h-4 rounded border-gray-300 text-brand-orange-500 dark:text-brand-neon-lime focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime"
                                 />
-                                <span className="text-sm text-[var(--doc-ink-2)]">
+                                <span className="text-sm text-gray-700 dark:text-gray-200">
                                     보호자로부터 <strong>개인정보 수집 및 이용 동의</strong>를 받았음을 확인합니다
-                                    <span className="text-[var(--doc-crit)] ml-1">(필수)</span>
+                                    <span className="text-red-500 ml-1">(필수)</span>
                                 </span>
                             </label>
-                            <p className="text-xs text-[var(--doc-ink-3)] mt-1 ml-6">
+                            <p className="text-xs text-gray-400 mt-1 ml-6">
                                 미성년자 개인정보 수집 시 법정대리인(보호자)의 동의가 필요합니다.
                             </p>
                         </div>
                     )}
 
                     <div className="flex gap-2 justify-end">
-                        <button type="button" onClick={resetForm} className="px-4 py-2 text-sm text-[var(--doc-ink-2)] hover:text-[var(--doc-ink)]">
+                        <button type="button" onClick={resetForm} className="px-4 py-2 text-sm text-gray-600 hover:text-gray-900 dark:text-white dark:hover:text-white">
                             취소
                         </button>
                         <button
                             type="submit"
                             disabled={busy || (!editingId && !guardianConsent)}
-                            className="bg-[var(--doc-accent)] text-white px-6 py-2 rounded-[3px] font-bold hover:bg-[var(--doc-grid-head)] transition disabled:opacity-50"
+                            className="bg-brand-orange-500 dark:bg-brand-neon-lime dark:text-brand-navy-900 text-white px-6 py-2 rounded-lg font-bold hover:bg-orange-600 transition disabled:opacity-50"
                         >
                             {busy ? "저장 중..." : editingId ? "수정" : "등록"}
                         </button>
@@ -2097,48 +2097,48 @@ export default function StudentManagementClient({
 
             {/* Student list */}
             {filtered.length === 0 ? (
-                <div className="bg-[var(--doc-surface)] rounded-[3px] border border-[var(--doc-rule)] p-12 text-center text-[var(--doc-ink-3)]">
+                <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-12 text-center text-gray-400">
                     {emptyStudentsMessage}
                 </div>
             ) : (
-                <div className="bg-[var(--doc-surface)] rounded-[3px] border border-[var(--doc-rule)] overflow-hidden">
+                <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden shadow-sm">
                     <div className="overflow-x-auto">
-                        <table className="min-w-full divide-y divide-[var(--doc-rule)]">
-                            <thead className="bg-[var(--doc-grid-head)]">
+                        <table className="min-w-full divide-y divide-gray-200">
+                            <thead className="bg-gray-50 dark:bg-gray-900">
                                 <tr>
-                                    <th className="px-4 py-2.5 text-left text-xs font-medium text-[var(--doc-ink-2)] uppercase">이름</th>
-                                    <th className="px-4 py-2.5 text-left text-xs font-medium text-[var(--doc-ink-2)] uppercase">학년</th>
+                                    <th className="px-4 py-2.5 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">이름</th>
+                                    <th className="px-4 py-2.5 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">학년</th>
                                     {/* 학교/학부모/연락처: 모바일에서 숨김 */}
-                                    <th className="px-4 py-2.5 text-left text-xs font-medium text-[var(--doc-ink-2)] uppercase hidden md:table-cell">학교</th>
-                                    <th className="px-4 py-2.5 text-left text-xs font-medium text-[var(--doc-ink-2)] uppercase">수강 반</th>
-                                    <th className="px-4 py-2.5 text-left text-xs font-medium text-[var(--doc-ink-2)] uppercase hidden md:table-cell">학부모</th>
-                                    <th className="px-4 py-2.5 text-left text-xs font-medium text-[var(--doc-ink-2)] uppercase hidden md:table-cell">연락처</th>
-                                    <th className="px-4 py-2.5 text-right text-xs font-medium text-[var(--doc-ink-2)] uppercase">관리</th>
+                                    <th className="px-4 py-2.5 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase hidden md:table-cell">학교</th>
+                                    <th className="px-4 py-2.5 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">수강 반</th>
+                                    <th className="px-4 py-2.5 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase hidden md:table-cell">학부모</th>
+                                    <th className="px-4 py-2.5 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase hidden md:table-cell">연락처</th>
+                                    <th className="px-4 py-2.5 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">관리</th>
                                 </tr>
                             </thead>
-                            <tbody className="divide-y divide-[var(--doc-rule)]">
+                            <tbody className="divide-y divide-gray-100">
                                 {visibleStudents.map((s) => (
-                                    <tr key={s.id} className="hover:bg-[var(--doc-grid-head)] transition-colors">
+                                    <tr key={s.id} className="hover:bg-gray-50 dark:bg-gray-900 transition-colors">
                                         {/* 이름: 항상 표시, 클릭하면 상세 페이지로 이동 */}
                                         <td className="px-4 py-2">
                                             <Link
                                                 href={`/admin/students/${s.id}`}
                                                 prefetch={false}
-                                                className="font-bold text-[var(--doc-ink)] hover:text-[var(--doc-accent)] transition-colors text-sm"
+                                                className="font-bold text-gray-900 hover:text-brand-orange-500 dark:text-brand-neon-lime transition-colors text-sm"
                                             >
                                                 {s.name}
                                             </Link>
                                         </td>
                                         {/* 학년: 항상 표시, shortenGrade로 "초4" 형태 */}
-                                        <td className="px-4 py-2 text-sm text-[var(--doc-ink-2)]">
+                                        <td className="px-4 py-2 text-sm text-gray-600 dark:text-gray-300">
                                             {shortenGrade(s.grade)}
                                         </td>
                                         {/* 학교: 모바일 숨김 */}
-                                        <td className="px-4 py-2 text-sm text-[var(--doc-ink-2)] hidden md:table-cell">
+                                        <td className="px-4 py-2 text-sm text-gray-600 dark:text-gray-300 hidden md:table-cell">
                                             {s.school || "-"}
                                         </td>
                                         {/* 수강 반: 활성 수강반만 우선 표시 */}
-                                        <td className="px-4 py-2 text-sm text-[var(--doc-ink-2)]">
+                                        <td className="px-4 py-2 text-sm text-gray-600 dark:text-gray-300">
                                             {(() => {
                                                 const activeEnrollments = getActiveEnrollments(s.enrollments);
                                                 if (activeEnrollments.length > 0) {
@@ -2149,18 +2149,18 @@ export default function StudentManagementClient({
 
                                                 const status = studentStatusById.get(s.id) ?? null;
                                                 return (
-                                                    <span className={`inline-flex rounded-[3px] px-2 py-0.5 text-xs font-bold ${getStatusPillClass(status)}`}>
+                                                    <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-bold ring-1 ${getStatusPillClass(status)}`}>
                                                         {getStatusLabel(status)}
                                                     </span>
                                                 );
                                             })()}
                                         </td>
                                         {/* 학부모: 모바일 숨김, shortenParentName으로 간결화 */}
-                                        <td className="px-4 py-2 text-sm text-[var(--doc-ink-2)] hidden md:table-cell">
+                                        <td className="px-4 py-2 text-sm text-gray-600 dark:text-gray-300 hidden md:table-cell">
                                             {shortenParentName(s.parent.name)}
                                         </td>
                                         {/* 연락처: 모바일 숨김, formatPhone으로 하이픈 포맷 */}
-                                        <td className="px-4 py-2 text-sm text-[var(--doc-ink-2)] hidden md:table-cell">
+                                        <td className="px-4 py-2 text-sm text-gray-600 dark:text-gray-300 hidden md:table-cell">
                                             {formatPhone(s.parent.phone)}
                                         </td>
                                         {/* 관리: 반복 액션은 번개 메뉴 안에 묶어 표를 한 줄로 유지 */}
@@ -2201,7 +2201,7 @@ export default function StudentManagementClient({
                             </tbody>
                         </table>
                     </div>
-                    <div className="flex flex-col gap-3 border-t border-[var(--doc-rule)] px-4 py-3 text-sm text-[var(--doc-ink-2)] sm:flex-row sm:items-center sm:justify-between">
+                    <div className="flex flex-col gap-3 border-t border-gray-100 px-4 py-3 text-sm text-gray-500 dark:border-gray-700 dark:text-gray-400 sm:flex-row sm:items-center sm:justify-between">
                         <span>
                             {filtered.length}명 중 {visibleStudents.length}명 표시
                             {!allStudentsLoaded && " · 전체 동기화 중"}
@@ -2210,7 +2210,7 @@ export default function StudentManagementClient({
                             <button
                                 type="button"
                                 onClick={() => setVisibleLimit((current) => current + STUDENT_PAGE_SIZE)}
-                                className="rounded-[3px] border border-[var(--doc-rule)] px-4 py-2 font-bold text-[var(--doc-ink-2)] transition hover:bg-[var(--doc-grid-head)]"
+                                className="rounded-lg border border-gray-200 px-4 py-2 font-bold text-gray-700 transition hover:bg-gray-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-900"
                             >
                                 50명 더 보기
                             </button>
@@ -2234,22 +2234,22 @@ export default function StudentManagementClient({
             {/* 수강 등록 모달 — 프로그램별 그룹화 + 요일/시간 표시 */}
             {enrollModal && (
                 <AdminModal onClose={() => setEnrollModal(null)} titleId="student-enroll-title" panelClassName="max-w-lg p-6">
-                        <h3 id="student-enroll-title" className="font-bold text-lg text-[var(--doc-ink)] mb-4">
+                        <h3 id="student-enroll-title" className="font-bold text-lg text-gray-900 dark:text-white mb-4">
                             수강 등록 — {students.find(s => s.id === enrollModal)?.name}
                         </h3>
                         {classes.length === 0 ? (
-                            <p className="text-[var(--doc-ink-2)] text-sm">개설된 반이 없습니다. 먼저 반을 개설하세요.</p>
+                            <p className="text-gray-500 dark:text-gray-400 text-sm">개설된 반이 없습니다. 먼저 반을 개설하세요.</p>
                         ) : (
                             <div className="max-h-[60vh] overflow-y-auto space-y-4">
                                 {/* 프로그램별 그룹으로 표시 */}
                                 {groupClassesByProgram(classes).map((group) => (
                                     <div key={group.programName}>
                                         {/* 프로그램명 헤더 */}
-                                        <div className="bg-[var(--doc-grid-head)] rounded-[3px] px-3 py-1.5 mb-2">
-                                            <span className="text-sm font-bold text-[var(--doc-ink-2)]">
+                                        <div className="bg-gray-100 dark:bg-gray-800 rounded-lg px-3 py-1.5 mb-2">
+                                            <span className="text-sm font-bold text-gray-700 dark:text-gray-200">
                                                 {group.programName}
                                             </span>
-                                            <span className="text-xs text-[var(--doc-ink-3)] ml-2">
+                                            <span className="text-xs text-gray-400 ml-2">
                                                 ({group.classes.length}개 반)
                                             </span>
                                         </div>
@@ -2260,14 +2260,14 @@ export default function StudentManagementClient({
                                                     key={c.id}
                                                     onClick={() => handleEnroll(enrollModal!, c.id)}
                                                     disabled={busy}
-                                                    className="w-full text-left px-3 py-2 rounded-[3px] border border-[var(--doc-rule)] hover:border-[var(--doc-accent)] hover:bg-[var(--doc-grid-head)] transition disabled:opacity-50"
+                                                    className="w-full text-left px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-700 hover:border-brand-orange-400 hover:bg-orange-50 transition disabled:opacity-50"
                                                 >
                                                     {/* 요일 + 교시명 + 시간 표시 */}
                                                     <div className="flex items-center justify-between">
-                                                        <span className="font-medium text-[var(--doc-ink)] text-sm">
+                                                        <span className="font-medium text-gray-900 dark:text-white text-sm">
                                                             {c.name}
                                                         </span>
-                                                        <span className="text-xs text-[var(--doc-ink-3)]">
+                                                        <span className="text-xs text-gray-400">
                                                             {c.startTime}~{c.endTime}
                                                         </span>
                                                     </div>
@@ -2281,7 +2281,7 @@ export default function StudentManagementClient({
                         <div className="mt-4 text-right">
                             <button
                                 onClick={() => setEnrollModal(null)}
-                                className="px-4 py-2 text-sm text-[var(--doc-ink-2)] hover:text-[var(--doc-ink)]"
+                                className="px-4 py-2 text-sm text-gray-600 hover:text-gray-900 dark:text-white dark:hover:text-white"
                             >
                                 닫기
                             </button>

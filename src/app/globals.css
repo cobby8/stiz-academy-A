@@ -1,4 +1,6 @@
 @import "tailwindcss";
+/* 학적부 서체(명조 Nanum Myeongjo · 고딕 Noto Sans KR)는 layout.tsx 의 <link> 로 불러온다.
+   여기에 @import 를 쓰면 위의 "tailwindcss" 가 먼저 펼쳐져 순서 규칙을 어겨 빌드가 깨진다. */
 @custom-variant dark (&:where(.dark, .dark *));
 
 
@@ -49,7 +51,10 @@
   --color-doc-accent: var(--doc-accent);
   --color-doc-accent-soft: var(--doc-accent-soft);
   --color-doc-crit: var(--doc-crit);
+  --color-doc-crit-soft: var(--doc-crit-soft);
   --color-doc-warn: var(--doc-warn);
+  --color-doc-grid-head: var(--doc-grid-head);
+  --color-doc-on-accent: var(--doc-on-accent);
 }
 
 :root {
@@ -72,7 +77,10 @@
   --doc-accent: #1d5b47;       /* 링크·선택·주요 동작 */
   --doc-accent-soft: #eaf1ee;  /* 강조 배경 */
   --doc-crit: #9b2c2c;         /* 삭제·미납·오류 */
+  --doc-crit-soft: #f7eded;    /* 위험 동작 hover 바탕 */
   --doc-warn: #8a5a00;         /* 주의 */
+  --doc-grid-head: #f6f5f2;    /* 표 머리행 배경 — 유일한 파생 배경 */
+  --doc-on-accent: #ffffff;    /* 강조 바탕 위 글자 */
 }
 
 .dark {
@@ -87,17 +95,115 @@
   /* 학적부 토큰 — 다크(먹지).
      단순 반전이 아니다. 어두운 배경에서도 '종이에 인쇄된 문서'로 읽히도록
      대비를 낮추고, 강조색은 어두운 바탕에서 보이게 밝은 쪽으로 올린다. */
-  --doc-paper: #15161a;
-  --doc-surface: #1b1d22;
-  --doc-ink: #e9e8e4;
-  --doc-ink-2: #b3b2ad;
-  --doc-ink-3: #82817c;
-  --doc-rule: #2c2e34;
-  --doc-rule-strong: #3d4048;
+  --doc-paper: #121417;
+  --doc-surface: #191c21;
+  --doc-ink: #e8e6e1;
+  --doc-ink-2: #a9aeb6;
+  --doc-ink-3: #7e848d;
+  --doc-rule: #333840;
+  --doc-rule-strong: #454b55;
   --doc-accent: #5fb79b;
-  --doc-accent-soft: #1b2a26;
-  --doc-crit: #e0736b;
+  --doc-accent-soft: #172a25;
+  --doc-crit: #e07a7a;
+  --doc-crit-soft: #2a1c1c;
   --doc-warn: #d9a441;
+  --doc-grid-head: #1f2329;
+  --doc-on-accent: #0e1512;
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   학적부 디자인 시스템 — 전달본(2026.08.09) 토큰
+   ────────────────────────────────────────────────────────────────────
+   전달본은 색을 --color-* 로, 다크를 [data-theme="dark"] 로 부른다.
+   이 프로젝트는 이미 .dark 클래스로 전환하고 있어, 값을 두 벌 쓰는 대신
+   위의 --doc-* 를 **별칭으로 연결**한다. 그래야 테마 토글 로직을 건드리지
+   않고도 전달본 마크업(bg-[var(--color-paper)])을 그대로 붙일 수 있다.
+   ══════════════════════════════════════════════════════════════════ */
+:root {
+  --color-paper: var(--doc-paper);
+  --color-surface: var(--doc-surface);
+  --color-ink: var(--doc-ink);
+  --color-sub: var(--doc-ink-2);
+  --color-label: var(--doc-ink-3);
+  --color-rule: var(--doc-rule);
+  --color-accent: var(--doc-accent);
+  --color-danger: var(--doc-crit);
+  --color-grid-head: var(--doc-grid-head);
+  --color-accent-soft: var(--doc-accent-soft);
+  --color-danger-soft: var(--doc-crit-soft);
+  --color-on-accent: var(--doc-on-accent);
+
+  /* 서체 — 제목은 명조, 본문·숫자는 고딕.
+     ⚠️ --font-heading 은 이미 관리자 폰트 설정이 쓰고 있어 덮어쓰지 않는다.
+        문서 스타일 전용으로 --doc-font-* 를 따로 둔다. */
+  --doc-font-heading: "Nanum Myeongjo", "Batang", serif;
+  --doc-font-body: "Noto Sans KR", "Apple SD Gothic Neo", system-ui, sans-serif;
+
+  /* 타입 스케일 6단계 */
+  --type-doc-title-size: 23px;
+  --type-section-size: 17px;
+  --type-body-size: 13px;
+  --type-table-size: 12.5px;
+  --type-num-size: 12.5px;
+  --type-label-size: 10px;
+  --type-label-tracking: 0.1em;
+
+  /* 모서리 — 12px 이상 금지. 깊이는 그림자가 아니라 선으로 만든다. */
+  --radius: 3px;
+  --radius-card: 6px;
+  --rule-hair: 1px;     /* 괘선 */
+  --rule-table: 1.5px;  /* 표 머리행 아래 */
+  --rule-head: 2px;     /* 문서 머리·구역 제목 */
+
+  --cell-padding-x: 12px;
+  --page-width: 794px;  /* A4 세로 — 본문 폭 검증 기준 */
+
+  /* 밀도 — 네 화면이 색·서체 규칙을 공유하고 밀도만 다르다.
+     선언이 없으면 관리자 밀도다. */
+  --density-body: 13px;
+  --density-touch: 32px;
+  --density-row: 34px;
+  --density-gutter: 16px;
+  --density-line: 1.6;
+  --density-lead-size: 21px;
+}
+
+/* 학부모 — 통지표. 여백을 넓히고 글자를 키운다. */
+[data-density="parent"] {
+  --density-body: 15px;
+  --density-touch: 44px;
+  --density-row: 48px;
+  --density-gutter: 20px;
+  --density-line: 1.7;
+  --density-lead-size: 34px;
+}
+
+/* 선생님 — 클립보드. 서서 한 손으로 쓴다. */
+[data-density="staff"] {
+  --density-body: 15px;
+  --density-touch: 56px;
+  --density-row: 60px;
+  --density-gutter: 16px;
+  --density-line: 1.6;
+  --density-lead-size: 28px;
+}
+
+/* 기사 — 운행 중에 흘깃 본다. 야외 시인성 때문에 강조를 오렌지로 바꾸고
+   대비를 최대로 올린다(다크 미지원, 라이트 고정). */
+[data-density="driver"] {
+  --density-body: 17px;
+  --density-touch: 56px;
+  --density-row: 64px;
+  --density-gutter: 14px;
+  --density-line: 1.5;
+  --density-lead-size: 22px;
+
+  --color-accent: #f2620f;
+  --color-accent-soft: #fdf0e7;
+  --color-on-accent: #ffffff;
+  --color-ink: #0a0a0b;
+  --color-paper: #ffffff;
+  --color-surface: #ffffff;
 }
 
 /* 모바일 기본 폰트 17px — 학부모(30~40대) 스마트폰 가독성 향상 */

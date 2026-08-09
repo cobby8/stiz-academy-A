@@ -31,14 +31,19 @@ export default function ShuttleSectionTabs() {
   const pathname = usePathname();
   const active = resolveActiveKey(pathname);
   return (
-    <div className="mx-auto max-w-6xl px-4 pt-4">
-      <nav className="flex gap-1 overflow-x-auto rounded-2xl border border-gray-200 bg-white p-1.5 dark:border-gray-700 dark:bg-gray-900" aria-label="셔틀 관리 메뉴">
+    <div className="no-print mx-auto max-w-6xl px-4 pt-4">
+      {/* 밑줄 탭 — 채움 없이 선택된 것만 강조색. 아이콘은 nav 글리프 목록에 없어 텍스트만 쓴다. */}
+      <nav className="flex gap-6 overflow-x-auto" style={{ borderBottom: "1px solid var(--doc-rule)" }} aria-label="셔틀 관리 메뉴">
         {ITEMS.map((it) => {
           const on = it.key === active;
           return (
             <Link key={it.key} href={it.href}
-              className={`flex min-h-11 shrink-0 items-center gap-2 rounded-xl px-4 text-sm font-bold ${on ? "bg-[var(--brand-accent-soft)] text-[var(--brand-accent)]" : "text-gray-500 hover:bg-gray-50 dark:hover:bg-gray-800"}`}>
-              <span className="material-symbols-outlined text-xl">{it.icon}</span>
+              className="shrink-0 whitespace-nowrap py-2.5 text-[12.5px] transition-colors"
+              style={{
+                fontWeight: on ? 600 : 500,
+                color: on ? "var(--doc-accent)" : "var(--doc-ink-3)",
+                borderBottom: `2px solid ${on ? "var(--doc-accent)" : "transparent"}`,
+              }}>
               {it.label}
             </Link>
           );

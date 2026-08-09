@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import RouteSection from "@/components/seasonal/RouteSection";
+import { DocHead, DocFoot, issuedAt } from "@/components/doc";
 import type { DispatchSuggestion } from "@/lib/seasonal/shuttle-optimize";
 
 // 정규 셔틀 동적배차 — 요일별로 관리한다. 요일 탭을 고르면 그 요일의 등원 → 하원 노선을 함께 보여준다.
@@ -24,31 +25,41 @@ export default function RegularDispatchClient({ weekdays, initialDay, initialPic
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-4">
-      <div className="rounded-2xl border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-800">
-        <h3 className="text-base font-black text-gray-900 dark:text-white">정규 셔틀 배차 · 하루 타임라인</h3>
+      <DocHead
+        title="《정규 셔틀 배차 명세》"
+        period={`${DOW_LABEL[day] ?? day} 노선`}
+      />
+      <div className="mt-4">
         {/* 조작 설명은 뺐다. 좌표의 출처(학생 신청서)는 데이터 출처 정보라 반드시 남긴다. */}
-        <p className="mt-0.5 text-[12.5px] text-gray-500 dark:text-gray-400">
+        <p className="m-0 text-[12.5px]" style={{ color: "var(--doc-ink-2)" }}>
           좌표는 <b>학생 신청서</b>에서 자동으로 가져옵니다.
         </p>
 
         {/* 요일 탭 — 노선 관리 단위 */}
-        <div className="mt-3 flex flex-wrap items-center gap-1 rounded-xl bg-gray-100 p-1 dark:bg-gray-900">
-          {weekdays.length === 0 && <span className="px-2 py-1 text-sm font-bold text-gray-400">셔틀 이용 학생이 있는 요일이 없습니다.</span>}
-          {weekdays.map((w) => (
-            <button key={w} onClick={() => setDay(w)}
-              className={`min-h-9 rounded-lg px-4 text-sm font-black ${day === w ? "bg-white text-brand-navy-900 shadow dark:bg-gray-700 dark:text-white" : "text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"}`}>
-              {DOW_LABEL[w] ?? w}
-            </button>
-          ))}
+        <div className="no-print mt-3 flex flex-wrap items-center gap-5" style={{ borderBottom: "1px solid var(--doc-rule)" }}>
+          {weekdays.length === 0 && <span className="py-2.5 text-[12.5px]" style={{ color: "var(--doc-ink-3)" }}>셔틀 이용 학생이 있는 요일이 없습니다.</span>}
+          {weekdays.map((w) => {
+            const on = day === w;
+            return (
+              <button key={w} onClick={() => setDay(w)}
+                className="py-2.5 text-[12.5px] transition-colors"
+                style={{
+                  fontWeight: on ? 600 : 500,
+                  color: on ? "var(--doc-accent)" : "var(--doc-ink-3)",
+                  borderBottom: `2px solid ${on ? "var(--doc-accent)" : "transparent"}`,
+                }}>
+                {DOW_LABEL[w] ?? w}
+              </button>
+            );
+          })}
         </div>
-
-        <p className="mt-3 text-[12.5px] font-black text-gray-700 dark:text-gray-200">📅 {DOW_LABEL[day] ?? day} 노선</p>
 
         {/* 하루 타임라인: 등원 → 하원. date prop 자리에 요일 문자열을 넘긴다(RouteSection 은 이를 저장/조회 키로만 쓴다). */}
         <div className="mt-2 space-y-3">
           <RouteSection initial={initialPickup} date={day} refreshKey={0} apiBase={REGULAR_API} rosterEditable={false} />
           <RouteSection initial={initialDropoff} date={day} refreshKey={0} apiBase={REGULAR_API} rosterEditable={false} />
         </div>
+        <DocFoot issued={issuedAt()} />
       </div>
     </div>
   );

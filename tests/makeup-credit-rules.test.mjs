@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   makeSourceKey, calcExpiry, isExpired, isUsable, summarize,
-  recommendClasses, remainingSeats, MAKEUP_OVER_CAPACITY,
+  recommendClasses, remainingSeats, MAKEUP_OVER_CAPACITY, normalizeGrade,
 } from "../src/lib/makeup/credit-rules.ts";
 
 // 보강권은 학부모의 권리다. 만료를 하루 잘못 계산하면 "쓸 수 있던 보강권이 사라졌다"는
@@ -117,6 +117,17 @@ test("여유 많은 반을 먼저 권한다(쏠림 방지)", () => {
 test("원래 다니던 반은 추천하지 않는다", () => {
   const r = recommendClasses(CLASSES, "초5", { excludeClassId: "tue4" });
   assert.ok(!r.some((c) => c.classId === "tue4"));
+});
+
+test("손입력 학년 표기도 알아본다 — 이 학생만 추천 0건이 되면 안 된다", () => {
+  // 2026-08-09 실측: 전체 316명 중 "4학년"·"5학년" 2명이 이 형태로 남아 있다.
+  assert.equal(normalizeGrade("5학년"), "초5");
+  assert.equal(normalizeGrade(" 초5 "), "초5");
+  assert.equal(normalizeGrade("중1"), "중1", "중·고는 그대로 둔다");
+  assert.equal(normalizeGrade("성인"), "성인");
+  assert.equal(normalizeGrade(null), "");
+  // 실제 추천까지 이어지는지
+  assert.ok(recommendClasses(CLASSES, "5학년").some((c) => c.classId === "tue4"));
 });
 
 test("학년이 비어 있으면 추천하지 않는다(임의 배정 금지)", () => {

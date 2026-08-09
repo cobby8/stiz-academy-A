@@ -103,6 +103,22 @@ export type ClassCandidate = {
   booked: number;
 };
 
+/**
+ * 학생 학년 표기를 시간표 학년 구성("초5")과 같은 형태로 맞춘다.
+ *
+ * 대부분 이미 "초5"·"중1" 로 들어 있지만, 손으로 입력하다 "5학년" 처럼 남은 값이 있다.
+ * (2026-08-09 실측: 전체 316명 중 "4학년"·"5학년" 2명) 그대로 두면 이 학생들만
+ * 추천이 0건이 되어 "우리 애는 왜 예약이 안 되냐"는 문의가 된다.
+ * 초등 표기가 생략된 "N학년"은 초등으로 본다 — 중·고는 늘 "중1"처럼 붙여 쓴다.
+ */
+export function normalizeGrade(raw: string | null | undefined): string {
+  const g = (raw ?? "").replace(/\s+/g, "");
+  if (!g) return "";
+  const m = /^(\d)학년$/.exec(g);
+  if (m) return `초${m[1]}`;
+  return g;
+}
+
 /** 보강은 정원 +2 까지 받는다(2026-08-09 개정 약관). */
 export const MAKEUP_OVER_CAPACITY = 2;
 
@@ -124,7 +140,7 @@ export function recommendClasses(
   studentGrade: string | null,
   opts: { excludeClassId?: string | null } = {},
 ): (ClassCandidate & { remaining: number })[] {
-  const grade = (studentGrade ?? "").trim();
+  const grade = normalizeGrade(studentGrade);
   if (!grade) return [];
   return candidates
     .filter((c) => c.classId !== opts.excludeClassId)

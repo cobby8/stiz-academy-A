@@ -1180,6 +1180,20 @@ export default function MyPageClient({ data, gallery = [], notices = [], notific
                 </Link>
             </div>
 
+            {/* 청구서·영수증 — 입금해도 원장이 확인하기 전까지 "미납"으로 보여 문의가 오던 자리. */}
+            <Link href="/mypage/payments" className="block mb-4">
+                <div className="bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-800 rounded-2xl p-4 shadow-sm flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                        <span className="material-symbols-outlined text-2xl text-brand-orange-500 dark:text-brand-neon-lime">receipt_long</span>
+                        <div>
+                            <p className="font-bold text-brand-navy-900">청구서와 영수증</p>
+                            <p className="text-xs text-gray-500 dark:text-gray-400">입금 확인 요청, 영수증 요청을 여기서 하세요.</p>
+                        </div>
+                    </div>
+                    <span className="material-symbols-outlined text-gray-300">chevron_right</span>
+                </div>
+            </Link>
+
             {/* 수강 변경 신청 — 예전에는 "학원에 요청하기" 메모로 받아 사람이 손으로 처리했다.
                 이제 신청하면 원장 승인 후 적용일에 실제로 반이 바뀐다. */}
             <Link href="/mypage/enrollment-change" className="block mb-4">

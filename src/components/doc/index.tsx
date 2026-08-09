@@ -132,20 +132,134 @@ export function DocButton(
   );
 }
 
-/** 상태 뱃지 — 테두리형. 색은 의미가 있을 때만. */
+/**
+ * 상태 뱃지 — 테두리형. 색은 의미가 있을 때만.
+ *
+ * positive/negative 는 옅은 바탕까지 깔아 목록에서 눈에 띄게 하고,
+ * 나머지는 테두리와 글자만 쓴다(파생 배경은 여기와 표 머리행에만 허용된다).
+ */
 export function DocBadge(
   { tone = "ink", children }:
-  { tone?: "ink" | "accent" | "warn" | "crit" | "mute"; children: ReactNode },
+  {
+    tone?: "ink" | "accent" | "warn" | "crit" | "mute" | "positive" | "negative" | "neutral";
+    children: ReactNode;
+  },
 ) {
+  const soft = tone === "positive" || tone === "negative";
   const color =
-    tone === "accent" ? "var(--doc-accent)" :
+    tone === "accent" || tone === "positive" ? "var(--doc-accent)" :
     tone === "warn" ? "var(--doc-warn)" :
-    tone === "crit" ? "var(--doc-crit)" :
-    tone === "mute" ? "var(--doc-ink-3)" : "var(--doc-ink)";
+    tone === "crit" || tone === "negative" ? "var(--doc-crit)" :
+    tone === "mute" || tone === "neutral" ? "var(--doc-ink-3)" : "var(--doc-ink)";
+  const background =
+    tone === "positive" ? "var(--doc-accent-soft)" :
+    tone === "negative" ? "var(--doc-crit-soft)" : "transparent";
   return (
-    <span className="whitespace-nowrap rounded-[3px] px-2 py-0.5 text-[10.5px] font-bold"
-          style={{ border: `1px solid ${color}`, color }}>
+    <span className="inline-flex items-center whitespace-nowrap rounded-[3px] px-2 py-0.5 text-[11px] font-semibold"
+          style={{ border: `1px solid ${soft ? color : color}`, color, background }}>
       {children}
+    </span>
+  );
+}
+
+export type WeekGridCell = {
+  /** 칸의 대표 숫자. 없으면 미운행으로 보고 — 기호를 그린다. */
+  value?: ReactNode;
+  /** 보조 한 줄. 시안 규칙상 칸 안에는 숫자 하나 + 보조 한 줄까지만. */
+  note?: ReactNode;
+  muted?: boolean;
+  onClick?: () => void;
+};
+
+/**
+ * 요일 × 시간 격자 — 이 학원 데이터의 기본형(시간표·운행표·출결 모두 이 모양이다).
+ *
+ * 칸 안에는 숫자 하나와 보조 한 줄까지만 넣는다. 그 이상 담고 싶어지면
+ * 격자가 아니라 표로 가야 한다는 신호다.
+ * 미운행·휴강은 색이 아니라 — 기호와 흐린 글자로 표시한다(흑백 인쇄 대비).
+ */
+export function DocWeekGrid(
+  { columns, rows, cells, minWidth = 680 }:
+  {
+    /** 가로 축 — 보통 요일. 예: ["월","화","수","목","금","토"] */
+    columns: string[];
+    /** 세로 축 — 보통 교시·시각. 예: ["3교시 15:00", "4교시 16:00"] */
+    rows: string[];
+    /** cells[행][열]. 비어 있으면 미운행으로 본다. */
+    cells: (WeekGridCell | null | undefined)[][];
+    minWidth?: number;
+  },
+) {
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full border-collapse" style={{ minWidth }}>
+        <thead>
+          <tr>
+            <th className="h-[30px] px-3 text-left text-[10px] font-extrabold uppercase tracking-[0.1em]"
+                style={{ color: "var(--doc-ink-3)", background: "var(--doc-grid-head)",
+                         borderBottom: "1.5px solid var(--doc-ink)", border: "1px solid var(--doc-rule)" }} />
+            {columns.map((c) => (
+              <th key={c}
+                  className="h-[30px] px-3 text-center text-[10px] font-extrabold uppercase tracking-[0.1em]"
+                  style={{ color: "var(--doc-ink-3)", background: "var(--doc-grid-head)",
+                           border: "1px solid var(--doc-rule)", borderBottom: "1.5px solid var(--doc-ink)" }}>
+                {c}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((r, ri) => (
+            <tr key={r}>
+              <th className="px-3 text-left text-[11px] font-semibold"
+                  style={{ height: "var(--grid-cell-height, 56px)", color: "var(--doc-ink-2)",
+                           background: "var(--doc-grid-head)", border: "1px solid var(--doc-rule)",
+                           whiteSpace: "nowrap" }}>
+                {r}
+              </th>
+              {columns.map((c, ci) => {
+                const cell = cells[ri]?.[ci];
+                const empty = !cell || cell.value == null;
+                return (
+                  <td key={c}
+                      onClick={cell?.onClick}
+                      className={`px-2 text-center align-middle ${cell?.onClick ? "cursor-pointer" : ""}`}
+                      style={{ height: "var(--grid-cell-height, 56px)", border: "1px solid var(--doc-rule)",
+                               opacity: cell?.muted ? 0.55 : 1 }}>
+                    {empty ? (
+                      <span className="text-[13px]" style={{ color: "var(--doc-ink-3)" }}>—</span>
+                    ) : (
+                      <>
+                        <div className="text-[15px] font-semibold tabular-nums" style={{ color: "var(--doc-ink)" }}>
+                          {cell.value}
+                        </div>
+                        {cell.note != null && (
+                          <div className="mt-0.5 text-[10.5px]" style={{ color: "var(--doc-ink-3)" }}>{cell.note}</div>
+                        )}
+                      </>
+                    )}
+                  </td>
+                );
+              })}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+/**
+ * 문서 로고 — 셸 머리와 인쇄 머리에 쓴다.
+ *
+ * 검정 워드마크라 어두운 바탕에서 묻힌다. 색을 반전하면 오렌지 볼이 파랗게 변하므로,
+ * 다크에서는 흰 판(.stiz-logo-plate)을 깔아 브랜드 색을 그대로 지킨다.
+ */
+export function DocLogo({ height = 22 }: { height?: number }) {
+  return (
+    <span className="stiz-logo-plate inline-flex items-center">
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src="/stiz-logo.png" alt="STIZ 농구교실" style={{ height, width: "auto" }} />
     </span>
   );
 }

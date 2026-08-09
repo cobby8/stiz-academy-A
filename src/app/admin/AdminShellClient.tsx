@@ -7,7 +7,7 @@ import { useEffect, useState, useMemo } from "react";
 import { logout } from "@/app/actions/auth";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import FontFreeIcon from "@/components/ui/FontFreeIcon";
-import { DOC_SERIF } from "@/components/doc";
+import { DocLogo } from "@/components/doc";
 import AppBackButton from "@/components/AppBackButton";
 
 const LazyBackupButtons = dynamic(() => import("./AdminBackupButtons"), {
@@ -125,12 +125,11 @@ export default function AdminShellClient({
                 } flex-shrink-0 flex-col md:fixed md:inset-y-0 md:left-0 md:z-10 md:flex md:h-full md:w-64 md:max-w-none`}
                 style={{ background: "var(--doc-surface)", color: "var(--doc-ink)", borderRight: "1px solid var(--doc-rule)" }}
             >
-                {/* 문서 머리 — 로고 이미지 대신 명조 표기(학적부 규칙: 관리자 화면에 이미지를 쓰지 않는다) */}
+                {/* 문서 머리 — 로고 + 지점/역할 라벨 */}
                 <div className="flex-shrink-0 px-5 py-5" style={{ borderBottom: "1px solid var(--doc-rule)" }}>
-                    <p className="m-0 text-[17px] font-bold" style={{ fontFamily: DOC_SERIF }}>STIZ 농구교실</p>
+                    <DocLogo height={24} />
                     <p className="m-0 mt-0.5 text-[10px] font-extrabold uppercase tracking-[0.1em]" style={{ color: "var(--doc-ink-3)" }}>다산점 · 관리자</p>
                 </div>
-                {/* 탭 전환 버튼 — 로고 바로 아래, 메뉴 목록 위 */}
                 {/* 탭 — 채움 버튼 대신 밑줄. 선택된 것만 강조색 */}
                 <div className="flex flex-shrink-0 gap-5 px-5 pt-3" style={{ borderBottom: "1px solid var(--doc-rule)" }}>
                     {(["site", "ops"] as const).map((key) => (

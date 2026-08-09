@@ -1198,3 +1198,52 @@ h1, h2, h3, h4, h5, h6 {
   border: 0;
   border-radius: 0.5rem;
 }
+
+/* ══════════════════════════════════════════════════════════════════════
+   인쇄 — 학적부의 목적 자체가 "화면이 곧 서류"다.
+   운행표·출석부·정산서를 따로 만들지 않으려면 그대로 뽑혀야 한다.
+   ══════════════════════════════════════════════════════════════════ */
+
+/* 조작용 요소(버튼·탭·입력)에 붙인다. 서류에는 남지 않는다. */
+@media print {
+  .no-print { display: none !important; }
+}
+
+/* 화면에서 인쇄 결과를 미리 보는 모드. 토글이 래퍼에 data-print="on" 을 건다. */
+[data-print="on"] .no-print { display: none !important; }
+
+@media print {
+  /* 잉크를 아끼고 흑백 대비를 확보한다 — 회색 종이색·연한 괘선은 인쇄에서 사라진다. */
+  :root,
+  .dark {
+    --doc-paper: #ffffff;
+    --doc-surface: #ffffff;
+    --doc-ink: #000000;
+    --doc-ink-2: #222222;
+    --doc-ink-3: #444444;
+    --doc-rule: #999999;
+    --doc-rule-strong: #666666;
+    --doc-grid-head: #ffffff;
+    --doc-accent: #000000;
+    --doc-accent-soft: #ffffff;
+    --doc-crit: #000000;
+    --doc-crit-soft: #ffffff;
+  }
+
+  html { font-size: 12px; }
+  body { background: #fff !important; }
+
+  /* 표가 여러 장에 걸치면 머리행을 매 장 반복하고, 한 행이 쪼개지지 않게 한다. */
+  thead { display: table-header-group; }
+  tr { break-inside: avoid; }
+
+  @page { size: A4 portrait; margin: 14mm; }
+}
+
+/* 로고 — 검정 워드마크라 어두운 바탕에서 묻힌다.
+   색을 반전하면 오렌지 볼이 파랗게 변하므로, 흰 판 위에 얹어 원래 색을 지킨다. */
+.dark .stiz-logo-plate {
+  background: #ffffff;
+  border-radius: 3px;
+  padding: 3px 6px;
+}

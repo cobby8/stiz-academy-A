@@ -30,7 +30,7 @@ function Summary({ items }: { items: { label: string; value: string }[] }) {
     <div className="flex flex-wrap gap-x-8 gap-y-3">
       {items.map((it) => (
         <div key={it.label}>
-          <div className="text-[9px] font-extrabold uppercase tracking-[0.11em]" style={{ color: "var(--doc-ink-3)" }}>
+          <div className="text-[9px] font-bold uppercase tracking-[0.11em]" style={{ color: "var(--doc-ink-3)" }}>
             {it.label}
           </div>
           <div className="text-[22px] font-bold leading-tight tabular-nums"
@@ -45,7 +45,7 @@ function Summary({ items }: { items: { label: string; value: string }[] }) {
 
 function Label({ children }: { children: React.ReactNode }) {
   return (
-    <p className="mb-2 text-[9px] font-extrabold uppercase tracking-[0.11em]" style={{ color: "var(--doc-ink-3)" }}>
+    <p className="mb-2 text-[9px] font-bold uppercase tracking-[0.11em]" style={{ color: "var(--doc-ink-3)" }}>
       {children}
     </p>
   );
@@ -126,7 +126,7 @@ export default function DesignPreviewClient() {
                 <div className="grid min-w-[420px] overflow-hidden rounded-[3px]"
                      style={{ gridTemplateColumns: "44px repeat(5, 1fr)", border: "1px solid var(--doc-rule)" }}>
                   {["", "월", "화", "수", "목", "금"].map((d, i) => (
-                    <div key={`h${i}`} className="px-1 py-1.5 text-center text-[10px] font-extrabold tracking-wide"
+                    <div key={`h${i}`} className="px-1 py-1.5 text-center text-[10px] font-bold tracking-wide"
                          style={{ background: "var(--doc-accent-soft)", color: "var(--doc-ink-3)",
                                   borderRight: i === 5 ? "none" : "1px solid var(--doc-rule)",
                                   borderBottom: "1px solid var(--doc-rule)" }}>{d}</div>
@@ -159,7 +159,7 @@ export default function DesignPreviewClient() {
                 <thead>
                   <tr>
                     {["시각", "정류장", "학생", "인원"].map((h, i) => (
-                      <th key={h} className={`px-3 py-2 text-[10px] font-extrabold uppercase tracking-[0.09em] ${i === 3 ? "text-right" : "text-left"}`}
+                      <th key={h} className={`px-3 py-2 text-[10px] font-bold uppercase tracking-[0.09em] ${i === 3 ? "text-right" : "text-left"}`}
                           style={{ borderBottom: "1.5px solid var(--doc-ink)", color: "var(--doc-ink)" }}>{h}</th>
                     ))}
                   </tr>

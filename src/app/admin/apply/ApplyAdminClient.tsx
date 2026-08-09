@@ -21,7 +21,7 @@ const WaitlistClient = dynamic(() => import("@/app/admin/waitlist/WaitlistClient
 
 const ApplySettingsTab = dynamic(() => import("./ApplySettingsTab"), {
     loading: () => (
-        <div className="rounded-xl border border-gray-200 bg-white p-6 text-center text-sm text-gray-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-400">
+        <div className="rounded-[3px] border border-[var(--doc-rule)] bg-[var(--doc-surface)] p-6 text-center text-sm text-[var(--doc-ink-2)]">
             신청 안내 설정을 불러오는 중...
         </div>
     ),
@@ -222,10 +222,10 @@ type ContactModalState = { app: EnrollApplication; defaultAction: ContactActionT
 // ── 상태별 설정 ──────────────────────────────────────────────────────────────────
 
 const STATUS_CONFIG: Record<string, { label: string; color: string; icon: string }> = {
-    PENDING: { label: "대기중", color: "bg-yellow-100 text-yellow-800 dark:bg-yellow-950/50 dark:text-yellow-200", icon: "hourglass_top" },
-    APPROVED: { label: "승인완료", color: "bg-green-100 text-green-800 dark:bg-green-950/50 dark:text-green-200", icon: "check_circle" },
-    REJECTED: { label: "반려", color: "bg-red-100 text-red-800 dark:bg-red-950/50 dark:text-red-200", icon: "cancel" },
-    CANCELLED: { label: "취소", color: "bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400", icon: "block" },
+    PENDING: { label: "대기중", color: "bg-[var(--doc-grid-head)] text-[var(--doc-warn)]  ", icon: "hourglass_top" },
+    APPROVED: { label: "승인완료", color: "bg-[var(--doc-accent-soft)] text-[var(--doc-accent)]  ", icon: "check_circle" },
+    REJECTED: { label: "반려", color: "bg-[var(--doc-crit-soft)] text-[var(--doc-crit)]  ", icon: "cancel" },
+    CANCELLED: { label: "취소", color: "bg-[var(--doc-grid-head)]  text-[var(--doc-ink-2)] ", icon: "block" },
 };
 
 // 유입경로 라벨 (9개 + 레거시 호환)
@@ -248,10 +248,10 @@ const SOURCE_LABELS: Record<string, string> = {
 
 const STATUS_ORDER = ["PENDING", "APPROVED", "REJECTED", "CANCELLED"] as const;
 const APPLICATION_PAGE_SIZE = 50;
-const LIST_ACTION_TRIGGER_CLASS = "inline-flex size-8 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-700 shadow-sm transition hover:border-brand-orange-300 hover:bg-brand-orange-50 hover:text-brand-orange-700 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100 dark:hover:border-brand-neon-lime dark:hover:bg-brand-neon-lime/10 dark:hover:text-brand-neon-lime";
-const LIST_ACTION_MENU_CLASS = "absolute right-2 top-9 z-50 w-44 rounded-xl border border-gray-200 bg-white p-1.5 text-left shadow-xl dark:border-gray-700 dark:bg-gray-950";
-const LIST_ACTION_ITEM_CLASS = "flex min-h-9 w-full items-center gap-2 rounded-lg px-3 text-left text-xs font-bold text-gray-700 transition hover:bg-gray-50 dark:text-gray-100 dark:hover:bg-gray-800";
-const LIST_ACTION_PRIMARY_CLASS = "flex min-h-9 w-full items-center gap-2 rounded-lg bg-lime-500 px-3 text-left text-xs font-black text-brand-navy-900 transition hover:bg-lime-400 disabled:opacity-50";
+const LIST_ACTION_TRIGGER_CLASS = "inline-flex size-8 items-center justify-center rounded-[3px] border border-[var(--doc-rule)] bg-[var(--doc-surface)] text-[var(--doc-ink-2)]  transition hover:border-[var(--doc-accent)] hover:bg-[var(--doc-accent)] hover:text-[var(--doc-accent)]      ";
+const LIST_ACTION_MENU_CLASS = "absolute right-2 top-9 z-50 w-44 rounded-[3px] border border-[var(--doc-rule)] bg-[var(--doc-surface)] p-1.5 text-left   ";
+const LIST_ACTION_ITEM_CLASS = "flex min-h-9 w-full items-center gap-2 rounded-[3px] px-3 text-left text-xs font-bold text-[var(--doc-ink-2)] transition hover:bg-[var(--doc-grid-head)]  ";
+const LIST_ACTION_PRIMARY_CLASS = "flex min-h-9 w-full items-center gap-2 rounded-[3px] bg-lime-500 px-3 text-left text-xs font-bold text-[var(--doc-ink)] transition hover:bg-lime-400 disabled:opacity-50";
 
 const APPLICATION_WORK_FILTERS: Array<{ value: ApplicationWorkFilter; label: string; icon: string }> = [
     { value: "ALL", label: "운영 전체", icon: "view_list" },
@@ -375,17 +375,17 @@ function ApplyLoadingFallback() {
         <div className="space-y-6">
             <div className="flex items-start justify-between gap-4">
                 <div className="space-y-2">
-                    <div className="h-8 w-52 rounded bg-gray-200 dark:bg-gray-700 animate-pulse" />
-                    <div className="h-4 w-64 rounded bg-gray-100 dark:bg-gray-800 animate-pulse" />
+                    <div className="h-8 w-52 rounded bg-[var(--doc-grid-head)]" />
+                    <div className="h-4 w-64 rounded bg-[var(--doc-grid-head)]" />
                 </div>
-                <div className="h-10 w-36 rounded-lg bg-gray-100 dark:bg-gray-800 animate-pulse" />
+                <div className="h-10 w-36 rounded-[3px] bg-[var(--doc-grid-head)]" />
             </div>
-            <div className="h-12 rounded-xl bg-gray-100 dark:bg-gray-800 animate-pulse" />
+            <div className="h-12 rounded-[3px] bg-[var(--doc-grid-head)]" />
             <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
                 {Array.from({ length: 5 }).map((_, index) => (
                     <div
                         key={index}
-                        className="h-28 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 animate-pulse"
+                        className="h-28 rounded-[3px] border border-[var(--doc-rule)] bg-[var(--doc-surface)]"
                     />
                 ))}
             </div>
@@ -393,7 +393,7 @@ function ApplyLoadingFallback() {
                 {Array.from({ length: 4 }).map((_, index) => (
                     <div
                         key={index}
-                        className="h-36 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 animate-pulse"
+                        className="h-36 rounded-[3px] border border-[var(--doc-rule)] bg-[var(--doc-surface)]"
                     />
                 ))}
             </div>
@@ -403,13 +403,13 @@ function ApplyLoadingFallback() {
 
 function ApplyErrorState({ onRetry }: { onRetry: () => void }) {
     return (
-        <div className="rounded-2xl border border-red-100 bg-white p-8 text-center shadow-sm dark:border-red-900/40 dark:bg-gray-800">
-            <span className="material-symbols-outlined mb-3 text-4xl text-red-500">error</span>
-            <p className="font-bold text-gray-900 dark:text-white">수강 신청 정보를 불러오지 못했습니다.</p>
+        <div className="rounded-[6px] border border-[var(--doc-crit)] bg-[var(--doc-surface)] p-8 text-center">
+            <span className="material-symbols-outlined mb-3 text-4xl text-[var(--doc-crit)]">error</span>
+            <p className="font-bold text-[var(--doc-ink)]">수강 신청 정보를 불러오지 못했습니다.</p>
             <button
                 type="button"
                 onClick={onRetry}
-                className="mt-4 rounded-xl bg-brand-orange-500 px-4 py-2 text-sm font-bold text-white transition hover:bg-orange-600 dark:bg-brand-neon-lime dark:text-brand-navy-900"
+                className="mt-4 rounded-[3px] bg-[var(--doc-accent)] px-4 py-2 text-sm font-bold text-white transition hover:bg-[var(--doc-grid-head)] dark:text-[var(--doc-ink)]"
             >
                 다시 시도
             </button>
@@ -646,17 +646,17 @@ export default function ApplyAdminClient({
 
         return (
             <div className="space-y-4">
-                <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-800">
+                <div className="rounded-[3px] border border-[var(--doc-rule)] bg-[var(--doc-surface)] p-4">
                     <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
                         <div>
-                            <h2 className="text-lg font-black text-gray-900 dark:text-white">유입경로 통계</h2>
-                            <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">체험 문의와 수강신청이 어떤 경로에서 들어오는지 확인합니다.</p>
+                            <h2 className="text-lg font-bold text-[var(--doc-ink)]">유입경로 통계</h2>
+                            <p className="mt-1 text-sm text-[var(--doc-ink-2)]">체험 문의와 수강신청이 어떤 경로에서 들어오는지 확인합니다.</p>
                         </div>
                         <div className="flex items-center gap-2">
                             <select
                                 value={sourceStatsRange}
                                 onChange={(event) => setSourceStatsRange(event.target.value as SourceStatsRange)}
-                                className="min-h-10 rounded-lg border border-gray-200 bg-white px-3 text-sm font-bold text-gray-900 dark:border-gray-700 dark:bg-gray-900 dark:text-white"
+                                className="min-h-10 rounded-[3px] border border-[var(--doc-rule)] bg-[var(--doc-surface)] px-3 text-sm font-bold text-[var(--doc-ink)]"
                             >
                                 {SOURCE_STATS_RANGES.map((range) => (
                                     <option key={range.value} value={range.value}>
@@ -668,7 +668,7 @@ export default function ApplyAdminClient({
                                 type="button"
                                 onClick={() => void loadSourceStats(sourceStatsRange)}
                                 disabled={sourceStatsLoading}
-                                className="inline-flex min-h-10 items-center gap-1.5 rounded-lg border border-gray-200 px-3 text-sm font-bold text-gray-700 transition hover:bg-gray-50 disabled:opacity-60 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-900"
+                                className="inline-flex min-h-10 items-center gap-1.5 rounded-[3px] border border-[var(--doc-rule)] px-3 text-sm font-bold text-[var(--doc-ink-2)] transition hover:bg-[var(--doc-grid-head)] disabled:opacity-60"
                             >
                                 <span className="material-symbols-outlined text-base">refresh</span>
                                 새로고침
@@ -678,16 +678,16 @@ export default function ApplyAdminClient({
                 </div>
 
                 {sourceStatsLoading && !payload ? (
-                    <div className="rounded-xl border border-gray-200 bg-white p-8 text-center text-sm font-bold text-gray-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-400">
+                    <div className="rounded-[3px] border border-[var(--doc-rule)] bg-[var(--doc-surface)] p-8 text-center text-sm font-bold text-[var(--doc-ink-2)]">
                         유입경로 통계를 불러오는 중입니다.
                     </div>
                 ) : sourceStatsError && !payload ? (
-                    <div className="rounded-xl border border-red-200 bg-red-50 p-6 text-center text-sm font-bold text-red-700 dark:border-red-900 dark:bg-red-950/30 dark:text-red-200">
+                    <div className="rounded-[3px] border border-[var(--doc-crit)] bg-[var(--doc-crit-soft)] p-6 text-center text-sm font-bold text-[var(--doc-crit)]">
                         통계를 불러오지 못했습니다.
                         <button
                             type="button"
                             onClick={() => void loadSourceStats(sourceStatsRange)}
-                            className="ml-3 rounded-lg bg-red-600 px-3 py-1.5 text-white"
+                            className="ml-3 rounded-[3px] bg-[var(--doc-crit)] px-3 py-1.5 text-white"
                         >
                             다시 시도
                         </button>
@@ -701,7 +701,7 @@ export default function ApplyAdminClient({
                             <SourceMetricCard label="등록 전환" value={`${totals?.conversionRate ?? 0}%`} icon="trending_up" />
                         </div>
 
-                        <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800">
+                        <div className="overflow-x-auto rounded-[3px] border border-[var(--doc-rule)] bg-[var(--doc-surface)]">
                             <table className="w-full min-w-[860px] table-fixed border-collapse text-left text-sm">
                                 <colgroup>
                                     <col className="w-[24%]" />
@@ -712,8 +712,8 @@ export default function ApplyAdminClient({
                                     <col className="w-[12%]" />
                                     <col className="w-[16%]" />
                                 </colgroup>
-                                <thead className="bg-gray-50 text-xs font-black uppercase text-gray-500 dark:bg-gray-900 dark:text-gray-400">
-                                    <tr className="divide-x divide-gray-200 dark:divide-gray-700">
+                                <thead className="bg-[var(--doc-grid-head)] text-xs font-bold uppercase text-[var(--doc-ink-2)]">
+                                    <tr className="divide-x divide-[var(--doc-rule)] dark:divide-[var(--doc-rule)]">
                                         <th className="px-3 py-2">유입경로</th>
                                         <th className="px-3 py-2">전체</th>
                                         <th className="px-3 py-2">체험</th>
@@ -723,10 +723,10 @@ export default function ApplyAdminClient({
                                         <th className="px-3 py-2">최근 접수</th>
                                     </tr>
                                 </thead>
-                                <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
+                                <tbody className="divide-y divide-[var(--doc-rule)]">
                                     {rows.length === 0 ? (
                                         <tr>
-                                            <td colSpan={7} className="px-3 py-8 text-center text-sm font-bold text-gray-500 dark:text-gray-400">
+                                            <td colSpan={7} className="px-3 py-8 text-center text-sm font-bold text-[var(--doc-ink-2)]">
                                                 선택한 기간에 접수된 신청이 없습니다.
                                             </td>
                                         </tr>
@@ -734,30 +734,30 @@ export default function ApplyAdminClient({
                                         rows.map((row) => {
                                             const width = maxTotal > 0 ? Math.max(8, Math.round((row.total / maxTotal) * 100)) : 0;
                                             return (
-                                                <tr key={row.source} className="divide-x divide-gray-100 dark:divide-gray-700">
+                                                <tr key={row.source} className="divide-x divide-[var(--doc-rule)]">
                                                     <td className="px-3 py-2 align-middle">
                                                         <div className="min-w-0">
                                                             <div className="flex items-center justify-between gap-3">
-                                                                <span className="truncate font-black text-gray-900 dark:text-white">{sourceLabel(row.source)}</span>
-                                                                <span className="shrink-0 text-xs font-bold text-gray-400">{row.source}</span>
+                                                                <span className="truncate font-bold text-[var(--doc-ink)]">{sourceLabel(row.source)}</span>
+                                                                <span className="shrink-0 text-xs font-bold text-[var(--doc-ink-3)]">{row.source}</span>
                                                             </div>
-                                                            <div className="mt-2 h-2 overflow-hidden rounded-full bg-gray-100 dark:bg-gray-900">
-                                                                <div className="h-full rounded-full bg-brand-orange-500 dark:bg-brand-neon-lime" style={{ width: `${width}%` }} />
+                                                            <div className="mt-2 h-2 overflow-hidden rounded-[3px] bg-[var(--doc-grid-head)]">
+                                                                <div className="h-full rounded-[3px] bg-[var(--doc-accent)]" style={{ width: `${width}%` }} />
                                                             </div>
                                                         </div>
                                                     </td>
-                                                    <td className="px-3 py-2 font-black text-gray-900 dark:text-white">{row.total}</td>
-                                                    <td className="px-3 py-2 text-gray-700 dark:text-gray-200">
-                                                        <span className="font-black">{row.trialTotal}</span>
-                                                        <span className="ml-1 text-xs text-gray-400">완료 {row.trialAttended}</span>
+                                                    <td className="px-3 py-2 font-bold text-[var(--doc-ink)]">{row.total}</td>
+                                                    <td className="px-3 py-2 text-[var(--doc-ink-2)]">
+                                                        <span className="font-bold">{row.trialTotal}</span>
+                                                        <span className="ml-1 text-xs text-[var(--doc-ink-3)]">완료 {row.trialAttended}</span>
                                                     </td>
-                                                    <td className="px-3 py-2 text-gray-700 dark:text-gray-200">
-                                                        <span className="font-black">{row.enrollTotal}</span>
-                                                        <span className="ml-1 text-xs text-gray-400">대기 {row.enrollPending}</span>
+                                                    <td className="px-3 py-2 text-[var(--doc-ink-2)]">
+                                                        <span className="font-bold">{row.enrollTotal}</span>
+                                                        <span className="ml-1 text-xs text-[var(--doc-ink-3)]">대기 {row.enrollPending}</span>
                                                     </td>
-                                                    <td className="px-3 py-2 text-gray-700 dark:text-gray-200">{row.trialConverted + row.enrollApproved}</td>
-                                                    <td className="px-3 py-2 font-black text-gray-900 dark:text-white">{row.conversionRate}%</td>
-                                                    <td className="px-3 py-2 text-xs font-bold text-gray-500 dark:text-gray-400">{formatDate(row.latestAt)}</td>
+                                                    <td className="px-3 py-2 text-[var(--doc-ink-2)]">{row.trialConverted + row.enrollApproved}</td>
+                                                    <td className="px-3 py-2 font-bold text-[var(--doc-ink)]">{row.conversionRate}%</td>
+                                                    <td className="px-3 py-2 text-xs font-bold text-[var(--doc-ink-2)]">{formatDate(row.latestAt)}</td>
                                                 </tr>
                                             );
                                         })
@@ -773,7 +773,7 @@ export default function ApplyAdminClient({
 
     function renderApplicationList() {
         return (
-            <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800">
+            <div className="overflow-x-auto rounded-[3px] border border-[var(--doc-rule)] bg-[var(--doc-surface)]">
                 <table className="w-full min-w-[960px] table-fixed border-collapse text-left text-sm">
                     <colgroup>
                         <col className="w-[12%]" />
@@ -782,8 +782,8 @@ export default function ApplyAdminClient({
                         <col className="w-[22%]" />
                         <col className="w-[8%]" />
                     </colgroup>
-                    <thead className="sticky top-0 z-10 bg-gray-50 text-xs font-black uppercase text-gray-500 dark:bg-gray-900 dark:text-gray-400">
-                        <tr className="divide-x divide-gray-200 dark:divide-gray-700">
+                    <thead className="sticky top-0 z-10 bg-[var(--doc-grid-head)] text-xs font-bold uppercase text-[var(--doc-ink-2)]">
+                        <tr className="divide-x divide-[var(--doc-rule)] dark:divide-[var(--doc-rule)]">
                             <th className="px-3 py-2">상태</th>
                             <th className="px-3 py-2">학생/연락처</th>
                             <th className="px-3 py-2">신청/희망수업</th>
@@ -791,7 +791,7 @@ export default function ApplyAdminClient({
                             <th className="px-3 py-2 text-right">액션</th>
                         </tr>
                     </thead>
-                    <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
+                    <tbody className="divide-y divide-[var(--doc-rule)]">
                         {visibleApps.map((app) => {
                             const cfg = STATUS_CONFIG[app.status] || STATUS_CONFIG.PENDING;
                             const age = calcAge(app.childBirthDate);
@@ -820,26 +820,26 @@ export default function ApplyAdminClient({
                                             setShowDetailModal(app);
                                         }
                                     }}
-                                    className="cursor-pointer divide-x divide-gray-100 transition hover:bg-gray-50/80 focus:bg-brand-orange-50 focus:outline-none dark:divide-gray-700 dark:hover:bg-gray-900/50 dark:focus:bg-brand-neon-lime/10"
+                                    className="cursor-pointer divide-x divide-[var(--doc-rule)] transition hover:bg-[var(--doc-grid-head)]/80 focus:bg-[var(--doc-accent)] focus:outline-none dark:divide-[var(--doc-rule)] dark:focus:bg-brand-neon-lime/10"
                                 >
                                     <td className="px-3 py-1.5 align-middle">
-                                        <span className={`inline-flex max-w-full items-center gap-1 rounded-full px-2 py-0.5 text-xs font-bold ${cfg.color}`}>
+                                        <span className={`inline-flex max-w-full items-center gap-1 rounded-[3px] px-2 py-0.5 text-xs font-bold ${cfg.color}`}>
                                             <span className="material-symbols-outlined text-sm">{cfg.icon}</span>
                                             <span className="truncate">{cfg.label}{app.trialLeadId ? " · 체험후" : ""}</span>
                                         </span>
                                     </td>
                                     <td className="px-3 py-1.5 align-middle">
-                                        <span className="block truncate font-black text-gray-900 dark:text-white" title={studentSummary}>
+                                        <span className="block truncate font-bold text-[var(--doc-ink)]" title={studentSummary}>
                                             {studentSummary}
                                         </span>
                                     </td>
                                     <td className="px-3 py-1.5 align-middle">
-                                        <span className="block truncate font-bold text-gray-800 dark:text-gray-100" title={applySummary}>
+                                        <span className="block truncate font-bold text-[var(--doc-ink)]" title={applySummary}>
                                             {applySummary}
                                         </span>
                                     </td>
                                     <td className="px-3 py-1.5 align-middle">
-                                        <span className="block truncate text-xs font-bold text-gray-600 dark:text-gray-300" title={`${classSummary} · 셔틀 ${shuttleLabel}`}>
+                                        <span className="block truncate text-xs font-bold text-[var(--doc-ink-2)]" title={`${classSummary} · 셔틀 ${shuttleLabel}`}>
                                             {classSummary} · 셔틀 {shuttleLabel}
                                         </span>
                                     </td>
@@ -921,75 +921,75 @@ export default function ApplyAdminClient({
     return (
         <div className="space-y-6">
             <div>
-                <h1 className="flex items-center gap-2 text-2xl font-bold text-gray-900 dark:text-white">
-                    <span className="material-symbols-outlined text-3xl text-brand-orange-500 dark:text-brand-neon-lime">how_to_reg</span>
+                <h1 className="flex items-center gap-2 text-2xl font-bold text-[var(--doc-ink)]">
+                    <span className="material-symbols-outlined text-3xl text-[var(--doc-accent)]">how_to_reg</span>
                     체험/수강신청 관리
                 </h1>
-                <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">체험 문의와 수강신청을 한 화면에서 확인하고 처리합니다.</p>
+                <p className="mt-1 text-sm text-[var(--doc-ink-2)]">체험 문의와 수강신청을 한 화면에서 확인하고 처리합니다.</p>
             </div>
 
-            <div className="flex gap-1 rounded-xl bg-gray-100 p-1 dark:bg-gray-800">
+            <div className="flex gap-1 rounded-[3px] bg-[var(--doc-grid-head)] p-1">
                 <button
                     onClick={() => setActiveTab("trial")}
-                    className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition ${
-                        activeTab === "trial"
-                            ? "bg-white dark:bg-gray-900 text-gray-900 dark:text-white shadow-sm"
-                            : "text-gray-500 hover:text-gray-700 dark:text-gray-200"
-                    }`}
+                    className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-[3px] text-sm font-medium transition ${
+ activeTab === "trial"
+ ? "bg-[var(--doc-surface)] text-[var(--doc-ink)] "
+ : "text-[var(--doc-ink-2)] hover:text-[var(--doc-ink-2)] "
+ }`}
                 >
                     <span className="material-symbols-outlined text-lg">diversity_3</span>
                     체험 문의
                     {(initialTrialStats?.NEW ?? 0) > 0 && (
-                        <span className="bg-red-500 text-white text-xs font-bold px-1.5 py-0.5 rounded-full">
+                        <span className="bg-[var(--doc-crit)] text-white text-xs font-bold px-1.5 py-0.5 rounded-[3px]">
                             {initialTrialStats?.NEW}
                         </span>
                     )}
                 </button>
                 <button
                     onClick={() => setActiveTab("applications")}
-                    className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition ${
-                        activeTab === "applications"
-                            ? "bg-white dark:bg-gray-900 text-gray-900 dark:text-white shadow-sm"
-                            : "text-gray-500 hover:text-gray-700 dark:text-gray-200"
-                    }`}
+                    className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-[3px] text-sm font-medium transition ${
+ activeTab === "applications"
+ ? "bg-[var(--doc-surface)] text-[var(--doc-ink)] "
+ : "text-[var(--doc-ink-2)] hover:text-[var(--doc-ink-2)] "
+ }`}
                 >
                     <span className="material-symbols-outlined text-lg">assignment</span>
                     수강신청
                     {stats.PENDING > 0 && (
-                        <span className="bg-red-500 text-white text-xs font-bold px-1.5 py-0.5 rounded-full">
+                        <span className="bg-[var(--doc-crit)] text-white text-xs font-bold px-1.5 py-0.5 rounded-[3px]">
                             {stats.PENDING}
                         </span>
                     )}
                 </button>
                 <button
                     onClick={() => setActiveTab("waitlist")}
-                    className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition ${
-                        activeTab === "waitlist"
-                            ? "bg-white dark:bg-gray-900 text-gray-900 dark:text-white shadow-sm"
-                            : "text-gray-500 hover:text-gray-700 dark:text-gray-200"
-                    }`}
+                    className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-[3px] text-sm font-medium transition ${
+ activeTab === "waitlist"
+ ? "bg-[var(--doc-surface)] text-[var(--doc-ink)] "
+ : "text-[var(--doc-ink-2)] hover:text-[var(--doc-ink-2)] "
+ }`}
                 >
                     <span className="material-symbols-outlined text-lg">hourglass_top</span>
                     대기자
                 </button>
                 <button
                     onClick={() => setActiveTab("sources")}
-                    className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition ${
-                        activeTab === "sources"
-                            ? "bg-white dark:bg-gray-900 text-gray-900 dark:text-white shadow-sm"
-                            : "text-gray-500 hover:text-gray-700 dark:text-gray-200"
-                    }`}
+                    className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-[3px] text-sm font-medium transition ${
+ activeTab === "sources"
+ ? "bg-[var(--doc-surface)] text-[var(--doc-ink)] "
+ : "text-[var(--doc-ink-2)] hover:text-[var(--doc-ink-2)] "
+ }`}
                 >
                     <span className="material-symbols-outlined text-lg">query_stats</span>
                     유입 통계
                 </button>
                 <button
                     onClick={() => setActiveTab("settings")}
-                    className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition ${
-                        activeTab === "settings"
-                            ? "bg-white dark:bg-gray-900 text-gray-900 dark:text-white shadow-sm"
-                            : "text-gray-500 hover:text-gray-700 dark:text-gray-200"
-                    }`}
+                    className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-[3px] text-sm font-medium transition ${
+ activeTab === "settings"
+ ? "bg-[var(--doc-surface)] text-[var(--doc-ink)] "
+ : "text-[var(--doc-ink-2)] hover:text-[var(--doc-ink-2)] "
+ }`}
                 >
                     <span className="material-symbols-outlined text-lg">settings</span>
                     안내 설정
@@ -998,11 +998,11 @@ export default function ApplyAdminClient({
 
             {feedback && (
                 <div
-                    className={`flex items-center gap-2 rounded-xl border px-4 py-3 text-sm font-semibold ${
-                        feedback.type === "success"
-                            ? "border-green-200 bg-green-50 text-green-700 dark:border-green-800 dark:bg-green-950/40 dark:text-green-200"
-                            : "border-red-200 bg-red-50 text-red-700 dark:border-red-800 dark:bg-red-950/40 dark:text-red-200"
-                    }`}
+                    className={`flex items-center gap-2 rounded-[3px] border px-4 py-3 text-sm font-semibold ${
+ feedback.type === "success"
+ ? "border-[var(--doc-accent)] bg-[var(--doc-accent-soft)] text-[var(--doc-accent)] "
+ : "border-[var(--doc-crit)] bg-[var(--doc-crit-soft)] text-[var(--doc-crit)] "
+ }`}
                     role="status"
                 >
                     <span className="material-symbols-outlined text-lg">
@@ -1025,34 +1025,34 @@ export default function ApplyAdminClient({
                     loadError ? <ApplyErrorState onRetry={loadApplyData} /> : <ApplyLoadingFallback />
                 ) : (
                 <>
-                    <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-800">
+                    <div className="rounded-[3px] border border-[var(--doc-rule)] bg-[var(--doc-surface)] p-4">
                         <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
-                            <label className="flex min-w-0 flex-1 items-center gap-2 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2.5 text-sm text-gray-600 focus-within:border-brand-orange-400 focus-within:bg-white dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 dark:focus-within:border-brand-neon-lime">
-                                <span className="material-symbols-outlined text-lg text-gray-400">search</span>
+                            <label className="flex min-w-0 flex-1 items-center gap-2 rounded-[3px] border border-[var(--doc-rule)] bg-[var(--doc-grid-head)] px-3 py-2.5 text-sm text-[var(--doc-ink-2)] focus-within:border-[var(--doc-accent)] focus-within:bg-[var(--doc-surface)] dark:focus-within:border-brand-neon-lime">
+                                <span className="material-symbols-outlined text-lg text-[var(--doc-ink-3)]">search</span>
                                 <input
                                     type="search"
                                     value={searchQuery}
                                     onChange={(event) => setSearchQuery(event.target.value)}
                                     placeholder="학생, 보호자, 전화번호로 검색"
-                                    className="min-w-0 flex-1 bg-transparent outline-none placeholder:text-gray-400"
+                                    className="min-w-0 flex-1 bg-transparent outline-none placeholder:text-[var(--doc-ink-3)]"
                                 />
                                 {searchQuery && (
                                     <button
                                         type="button"
                                         onClick={() => setSearchQuery("")}
-                                        className="rounded-full p-1 text-gray-400 hover:bg-gray-200 hover:text-gray-700 dark:hover:bg-gray-700 dark:hover:text-gray-100"
+                                        className="rounded-[3px] p-1 text-[var(--doc-ink-3)] hover:bg-[var(--doc-grid-head)] hover:text-[var(--doc-ink-2)]"
                                         title="검색어 지우기"
                                     >
                                         <span className="material-symbols-outlined text-base">close</span>
                                     </button>
                                 )}
                             </label>
-                            <label className="flex items-center gap-2 text-sm font-bold text-gray-600 dark:text-gray-300">
+                            <label className="flex items-center gap-2 text-sm font-bold text-[var(--doc-ink-2)]">
                                 상태
                                 <select
                                     value={filter}
                                     onChange={(event) => setFilter(event.target.value)}
-                                    className="min-h-10 rounded-lg border border-gray-200 bg-white px-3 text-sm font-bold text-gray-900 dark:border-gray-700 dark:bg-gray-900 dark:text-white"
+                                    className="min-h-10 rounded-[3px] border border-[var(--doc-rule)] bg-[var(--doc-surface)] px-3 text-sm font-bold text-[var(--doc-ink)]"
                                 >
                                     <option value="ALL">전체 {stats.total}</option>
                                     {STATUS_ORDER.map((s) => {
@@ -1073,15 +1073,15 @@ export default function ApplyAdminClient({
                                     key={item.value}
                                     type="button"
                                     onClick={() => setWorkFilter(item.value)}
-                                    className={`inline-flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-bold transition ${
-                                        workFilter === item.value
-                                            ? "bg-gray-900 text-white dark:bg-brand-neon-lime dark:text-brand-navy-900"
-                                            : "bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-gray-900 dark:text-gray-300 dark:hover:bg-gray-700"
-                                    }`}
+                                    className={`inline-flex shrink-0 items-center gap-1.5 rounded-[3px] px-3 py-1.5 text-xs font-bold transition ${
+ workFilter === item.value
+ ? "bg-[var(--doc-grid-head)] text-white dark:text-[var(--doc-ink)]"
+ : "bg-[var(--doc-grid-head)] text-[var(--doc-ink-2)] hover:bg-[var(--doc-grid-head)] "
+ }`}
                                 >
                                     <span className="material-symbols-outlined text-sm">{item.icon}</span>
                                     {item.label}
-                                    <span className="font-black">{workFilterCounts[item.value]}</span>
+                                    <span className="font-bold">{workFilterCounts[item.value]}</span>
                                 </button>
                             ))}
                         </div>
@@ -1089,9 +1089,9 @@ export default function ApplyAdminClient({
 
                     {/* 신청서 목록 */}
                     {filteredApps.length === 0 ? (
-                        <div className="text-center py-16 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700">
-                            <span className="material-symbols-outlined text-5xl text-gray-300">inbox</span>
-                            <p className="text-gray-500 dark:text-gray-400 mt-3">
+                        <div className="text-center py-16 bg-[var(--doc-surface)] rounded-[3px] border border-[var(--doc-rule)]">
+                            <span className="material-symbols-outlined text-5xl text-[var(--doc-ink-3)]">inbox</span>
+                            <p className="text-[var(--doc-ink-2)] mt-3">
                                 {searchQuery || workFilter !== "ALL"
                                     ? "조건에 맞는 수강신청이 없습니다"
                                     : filter === "ALL"
@@ -1103,7 +1103,7 @@ export default function ApplyAdminClient({
                                     type="button"
                                     onClick={handleShowMoreApps}
                                     disabled={loadingMore}
-                                    className="mt-4 rounded-lg border border-gray-200 px-4 py-2 text-sm font-bold text-gray-700 transition hover:bg-gray-50 disabled:opacity-60 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-900"
+                                    className="mt-4 rounded-[3px] border border-[var(--doc-rule)] px-4 py-2 text-sm font-bold text-[var(--doc-ink-2)] transition hover:bg-[var(--doc-grid-head)] disabled:opacity-60"
                                 >
                                     {loadingMore ? "불러오는 중..." : "다음 50건에서 더 찾아보기"}
                                 </button>
@@ -1112,7 +1112,7 @@ export default function ApplyAdminClient({
                     ) : (
                         <div className="grid gap-2.5">
                             {renderApplicationList()}
-                            <div className="flex flex-col gap-3 rounded-xl border border-gray-100 bg-white px-4 py-3 text-sm text-gray-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-400 sm:flex-row sm:items-center sm:justify-between">
+                            <div className="flex flex-col gap-3 rounded-[3px] border border-[var(--doc-rule)] bg-[var(--doc-surface)] px-4 py-3 text-sm text-[var(--doc-ink-2)] sm:flex-row sm:items-center sm:justify-between">
                                 <span>
                                     {filteredApps.length}건 중 {visibleApps.length}건 표시
                                 </span>
@@ -1121,7 +1121,7 @@ export default function ApplyAdminClient({
                                         type="button"
                                         onClick={handleShowMoreApps}
                                         disabled={loadingMore}
-                                        className="rounded-lg border border-gray-200 px-4 py-2 font-bold text-gray-700 transition hover:bg-gray-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-900"
+                                        className="rounded-[3px] border border-[var(--doc-rule)] px-4 py-2 font-bold text-[var(--doc-ink-2)] transition hover:bg-[var(--doc-grid-head)]"
                                     >
                                         {loadingMore ? "불러오는 중..." : "50건 더 보기"}
                                     </button>
@@ -1177,13 +1177,13 @@ export default function ApplyAdminClient({
 
 function SourceMetricCard({ label, value, icon }: { label: string; value: string; icon: string }) {
     return (
-        <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-800">
+        <div className="rounded-[3px] border border-[var(--doc-rule)] bg-[var(--doc-surface)] p-4">
             <div className="flex items-center justify-between gap-3">
                 <div>
-                    <p className="text-xs font-bold text-gray-500 dark:text-gray-400">{label}</p>
-                    <p className="mt-1 text-2xl font-black text-gray-900 dark:text-white">{value}</p>
+                    <p className="text-xs font-bold text-[var(--doc-ink-2)]">{label}</p>
+                    <p className="mt-1 text-2xl font-bold text-[var(--doc-ink)]">{value}</p>
                 </div>
-                <span className="inline-flex size-10 items-center justify-center rounded-xl bg-brand-orange-50 text-brand-orange-600 dark:bg-brand-neon-lime/10 dark:text-brand-neon-lime">
+                <span className="inline-flex size-10 items-center justify-center rounded-[3px] bg-[var(--doc-accent)] text-[var(--doc-accent)]">
                     <span className="material-symbols-outlined">{icon}</span>
                 </span>
             </div>
@@ -1229,11 +1229,11 @@ function ApplicationContactModal({
                 onSubmit={handleSubmit}
                 className="w-full p-6 pb-[max(1.5rem,env(safe-area-inset-bottom))]"
             >
-                <h2 id="application-contact-modal-title" className="flex items-center gap-2 text-lg font-black text-gray-900 dark:text-white">
-                    <span className="material-symbols-outlined text-brand-orange-500 dark:text-brand-neon-lime">phone_callback</span>
+                <h2 id="application-contact-modal-title" className="flex items-center gap-2 text-lg font-bold text-[var(--doc-ink)]">
+                    <span className="material-symbols-outlined text-[var(--doc-accent)]">phone_callback</span>
                     후속 연락 기록
                 </h2>
-                <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                <p className="mt-1 text-sm text-[var(--doc-ink-2)]">
                     {app.childName} · {app.parentName} {app.parentPhone}
                 </p>
 
@@ -1243,11 +1243,11 @@ function ApplicationContactModal({
                             key={option}
                             type="button"
                             onClick={() => setAction(option)}
-                            className={`rounded-xl border px-3 py-2 text-sm font-black transition ${
-                                action === option
-                                    ? "border-brand-orange-500 bg-brand-orange-50 text-brand-orange-700 dark:border-brand-neon-lime dark:bg-brand-neon-lime/10 dark:text-brand-neon-lime"
-                                    : "border-gray-200 text-gray-600 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-900"
-                            }`}
+                            className={`rounded-[3px] border px-3 py-2 text-sm font-bold transition ${
+ action === option
+ ? "border-[var(--doc-accent)] bg-[var(--doc-accent)] text-[var(--doc-accent)]  "
+ : "border-[var(--doc-rule)] text-[var(--doc-ink-2)] hover:bg-[var(--doc-grid-head)] "
+ }`}
                         >
                             {CONTACT_ACTION_LABELS[option]}
                         </button>
@@ -1255,29 +1255,29 @@ function ApplicationContactModal({
                 </div>
 
                 {action === "FOLLOW_UP" && (
-                    <label className="mt-4 block text-sm font-bold text-gray-700 dark:text-gray-200">
+                    <label className="mt-4 block text-sm font-bold text-[var(--doc-ink-2)]">
                         다음 연락 예정
                         <input
                             type="datetime-local"
                             value={nextFollowUpAt}
                             onChange={(event) => setNextFollowUpAt(event.target.value)}
-                            className="mt-1 w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:border-brand-orange-500 dark:border-gray-700 dark:bg-gray-900 dark:focus:border-brand-neon-lime"
+                            className="mt-1 w-full rounded-[3px] border border-[var(--doc-rule)] bg-[var(--doc-surface)] px-3 py-2 text-sm outline-none focus:border-[var(--doc-accent)] dark:focus:border-brand-neon-lime"
                         />
                     </label>
                 )}
 
-                <label className="mt-4 block text-sm font-bold text-gray-700 dark:text-gray-200">
+                <label className="mt-4 block text-sm font-bold text-[var(--doc-ink-2)]">
                     상담 메모
                     <textarea
                         value={note}
                         onChange={(event) => setNote(event.target.value)}
                         rows={4}
-                        className="mt-1 w-full resize-none rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:border-brand-orange-500 dark:border-gray-700 dark:bg-gray-900 dark:focus:border-brand-neon-lime"
+                        className="mt-1 w-full resize-none rounded-[3px] border border-[var(--doc-rule)] bg-[var(--doc-surface)] px-3 py-2 text-sm outline-none focus:border-[var(--doc-accent)] dark:focus:border-brand-neon-lime"
                     />
                 </label>
 
                 {formError && (
-                    <p className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-sm font-bold text-red-700 dark:bg-red-950/40 dark:text-red-200">
+                    <p className="mt-3 rounded-[3px] bg-[var(--doc-crit-soft)] px-3 py-2 text-sm font-bold text-[var(--doc-crit)]">
                         {formError}
                     </p>
                 )}
@@ -1286,14 +1286,14 @@ function ApplicationContactModal({
                     <button
                         type="button"
                         onClick={onClose}
-                        className="rounded-xl px-4 py-2 text-sm font-bold text-gray-500 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-900"
+                        className="rounded-[3px] px-4 py-2 text-sm font-bold text-[var(--doc-ink-2)] hover:bg-[var(--doc-grid-head)]"
                     >
                         닫기
                     </button>
                     <button
                         type="submit"
                         disabled={busy}
-                        className="rounded-xl bg-brand-orange-500 px-5 py-2 text-sm font-black text-white transition hover:bg-brand-orange-600 disabled:opacity-50 dark:bg-brand-neon-lime dark:text-brand-navy-900 dark:hover:bg-lime-400"
+                        className="rounded-[3px] bg-[var(--doc-accent)] px-5 py-2 text-sm font-bold text-white transition hover:bg-[var(--doc-accent)] disabled:opacity-50 dark:text-[var(--doc-ink)] dark:hover:bg-lime-400"
                     >
                         {busy ? "저장 중..." : "저장"}
                     </button>

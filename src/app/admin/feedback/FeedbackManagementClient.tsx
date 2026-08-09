@@ -5,10 +5,10 @@ import { createFeedback, updateFeedback, deleteFeedback } from "@/app/actions/ad
 
 // 카테고리 정의: 피드백을 4가지 유형으로 분류
 const CATEGORIES: Record<string, { label: string; color: string }> = {
-    SKILL: { label: "기술", color: "bg-blue-100 text-blue-700" },
-    ATTITUDE: { label: "태도", color: "bg-green-100 text-green-700" },
-    PHYSICAL: { label: "체력", color: "bg-orange-100 text-orange-700" },
-    GENERAL: { label: "종합", color: "bg-purple-100 text-purple-700" },
+    SKILL: { label: "기술", color: "bg-[var(--doc-grid-head)] text-[var(--doc-ink-2)]" },
+    ATTITUDE: { label: "태도", color: "bg-[var(--doc-accent-soft)] text-[var(--doc-accent)]" },
+    PHYSICAL: { label: "체력", color: "bg-[var(--doc-grid-head)] text-[var(--doc-warn)]" },
+    GENERAL: { label: "종합", color: "bg-[var(--doc-grid-head)] text-[var(--doc-ink-2)]" },
 };
 
 // 피드백 데이터 타입 (getAllFeedbacks 반환값 기준)
@@ -50,31 +50,31 @@ function FeedbackLoadingFallback() {
         <div className="space-y-6">
             <div className="flex items-center justify-between gap-4">
                 <div>
-                    <div className="h-8 w-40 animate-pulse rounded bg-gray-200 dark:bg-gray-700" />
-                    <div className="mt-2 h-4 w-80 max-w-full animate-pulse rounded bg-gray-100 dark:bg-gray-800" />
+                    <div className="h-8 w-40 rounded bg-[var(--doc-grid-head)]" />
+                    <div className="mt-2 h-4 w-80 max-w-full rounded bg-[var(--doc-grid-head)]" />
                 </div>
-                <div className="h-11 w-28 animate-pulse rounded-xl bg-gray-200 dark:bg-gray-700" />
+                <div className="h-11 w-28 rounded-[3px] bg-[var(--doc-grid-head)]" />
             </div>
             <div className="space-y-3">
                 {Array.from({ length: 5 }).map((_, index) => (
                     <div
                         key={index}
-                        className="overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm dark:border-gray-800 dark:bg-gray-800"
+                        className="overflow-hidden rounded-[6px] border border-[var(--doc-rule)] bg-[var(--doc-surface)]"
                     >
                         <div className="p-5">
                             <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
                                 <div className="min-w-0 flex-1 space-y-3">
                                     <div className="flex gap-2">
-                                        <div className="h-6 w-16 animate-pulse rounded-full bg-gray-100 dark:bg-gray-700" />
-                                        <div className="h-6 w-20 animate-pulse rounded-full bg-gray-100 dark:bg-gray-700" />
+                                        <div className="h-6 w-16 rounded-[3px] bg-[var(--doc-grid-head)]" />
+                                        <div className="h-6 w-20 rounded-[3px] bg-[var(--doc-grid-head)]" />
                                     </div>
-                                    <div className="h-5 w-2/3 animate-pulse rounded bg-gray-200 dark:bg-gray-700" />
-                                    <div className="h-4 w-full animate-pulse rounded bg-gray-100 dark:bg-gray-700" />
-                                    <div className="h-4 w-3/4 animate-pulse rounded bg-gray-100 dark:bg-gray-700" />
+                                    <div className="h-5 w-2/3 rounded bg-[var(--doc-grid-head)]" />
+                                    <div className="h-4 w-full rounded bg-[var(--doc-grid-head)]" />
+                                    <div className="h-4 w-3/4 rounded bg-[var(--doc-grid-head)]" />
                                 </div>
                                 <div className="hidden gap-2 sm:flex">
-                                    <div className="h-8 w-16 animate-pulse rounded-lg bg-gray-100 dark:bg-gray-700" />
-                                    <div className="h-8 w-16 animate-pulse rounded-lg bg-gray-100 dark:bg-gray-700" />
+                                    <div className="h-8 w-16 rounded-[3px] bg-[var(--doc-grid-head)]" />
+                                    <div className="h-8 w-16 rounded-[3px] bg-[var(--doc-grid-head)]" />
                                 </div>
                             </div>
                         </div>
@@ -87,12 +87,12 @@ function FeedbackLoadingFallback() {
 
 function FeedbackErrorState({ onRetry }: { onRetry: () => void }) {
     return (
-        <div className="rounded-2xl border border-red-200 bg-red-50 p-6 text-center dark:border-red-800 dark:bg-red-950/30">
-            <p className="text-sm font-bold text-red-700 dark:text-red-200">피드백 목록을 불러오지 못했습니다.</p>
+        <div className="rounded-[6px] border border-[var(--doc-crit)] bg-[var(--doc-crit-soft)] p-6 text-center">
+            <p className="text-sm font-bold text-[var(--doc-crit)]">피드백 목록을 불러오지 못했습니다.</p>
             <button
                 type="button"
                 onClick={onRetry}
-                className="mt-4 rounded-lg bg-red-600 px-4 py-2 text-sm font-bold text-white transition hover:bg-red-700"
+                className="mt-4 rounded-[3px] bg-[var(--doc-crit)] px-4 py-2 text-sm font-bold text-white transition hover:bg-[var(--doc-crit)]"
             >
                 다시 불러오기
             </button>
@@ -294,9 +294,9 @@ export default function FeedbackManagementClient({ feedbacks: initialFeedbacks }
 
     // 별점 렌더링 (1~5)
     function renderStars(rating: number | null) {
-        if (!rating) return <span className="text-gray-400 text-sm">평점 없음</span>;
+        if (!rating) return <span className="text-[var(--doc-ink-3)] text-sm">평점 없음</span>;
         return (
-            <span className="text-yellow-400">
+            <span className="text-[var(--doc-warn)]">
                 {Array.from({ length: 5 }, (_, i) => (
                     <span key={i}>{i < rating ? "\u2605" : "\u2606"}</span>
                 ))}
@@ -314,14 +314,14 @@ export default function FeedbackManagementClient({ feedbacks: initialFeedbacks }
                         type="button"
                         onClick={() => setForm({ ...form, rating: form.rating === star ? 0 : star })}
                         className={`text-2xl transition-colors ${
-                            star <= form.rating ? "text-yellow-400" : "text-gray-300"
-                        } hover:text-yellow-400`}
+ star <= form.rating ? "text-[var(--doc-warn)]" : "text-[var(--doc-ink-3)]"
+ } hover:text-[var(--doc-warn)]`}
                     >
                         {star <= form.rating ? "\u2605" : "\u2606"}
                     </button>
                 ))}
                 {form.rating > 0 && (
-                    <span className="text-sm text-gray-500 dark:text-gray-400 ml-2 self-center">{form.rating}점</span>
+                    <span className="text-sm text-[var(--doc-ink-2)] ml-2 self-center">{form.rating}점</span>
                 )}
             </div>
         );
@@ -340,9 +340,9 @@ export default function FeedbackManagementClient({ feedbacks: initialFeedbacks }
             {/* 헤더: 제목 + 피드백 작성 버튼 */}
             <div className="flex items-center justify-between">
                 <div>
-                    <h1 className="text-2xl font-bold text-gray-800 dark:text-gray-100">학습 피드백 관리</h1>
+                    <h1 className="text-2xl font-bold text-[var(--doc-ink)]">학습 피드백 관리</h1>
                     {/* 설명문구는 제거하고 실무에 쓰이는 건수 표시만 유지 */}
-                    <p className="text-gray-500 dark:text-gray-400 text-sm mt-1">
+                    <p className="text-[var(--doc-ink-2)] text-sm mt-1">
                         총 {feedbacks.length}건
                     </p>
                 </div>
@@ -360,7 +360,7 @@ export default function FeedbackManagementClient({ feedbacks: initialFeedbacks }
                             void loadCoaches();
                         }
                     }}
-                    className="px-5 py-2.5 bg-brand-orange-500 dark:bg-brand-neon-lime dark:text-brand-navy-900 text-white rounded-xl font-medium hover:bg-brand-orange-600 dark:hover:bg-lime-400 transition-colors"
+                    className="px-5 py-2.5 bg-[var(--doc-accent)] dark:text-[var(--doc-ink)] text-white rounded-[3px] font-medium hover:bg-[var(--doc-accent)] dark:hover:bg-lime-400 transition-colors"
                 >
                     {showForm && !editingId ? "닫기" : "피드백 작성"}
                 </button>
@@ -370,9 +370,9 @@ export default function FeedbackManagementClient({ feedbacks: initialFeedbacks }
             {showForm && (
                 <form
                     onSubmit={handleSubmit}
-                    className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800 p-6 space-y-4"
+                    className="bg-[var(--doc-surface)] rounded-[6px] border border-[var(--doc-rule)] p-6 space-y-4"
                 >
-                    <h2 className="text-lg font-bold text-gray-800 dark:text-gray-100">
+                    <h2 className="text-lg font-bold text-[var(--doc-ink)]">
                         {editingId ? "피드백 수정" : "새 피드백 작성"}
                     </h2>
 
@@ -380,14 +380,14 @@ export default function FeedbackManagementClient({ feedbacks: initialFeedbacks }
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         {/* 학생 드롭다운 - 수정 시에는 변경 불가 */}
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">
-                                학생 <span className="text-red-500">*</span>
+                            <label className="block text-sm font-medium text-[var(--doc-ink-2)] mb-1">
+                                학생 <span className="text-[var(--doc-crit)]">*</span>
                             </label>
                             <select
                                 value={form.studentId}
                                 onChange={(e) => setForm({ ...form, studentId: e.target.value })}
                                 disabled={!!editingId || studentsLoading || Boolean(studentsError)}
-                                className="w-full border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime disabled:bg-gray-100 dark:bg-gray-800"
+                                className="w-full border border-[var(--doc-rule)] rounded-[3px] px-4 py-2.5 text-sm focus:outline-none focus: focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime disabled:bg-[var(--doc-grid-head)]"
                             >
                                 <option value="">
                                     {studentsLoading ? "학생 목록 로딩 중..." : "학생을 선택하세요"}
@@ -397,19 +397,19 @@ export default function FeedbackManagementClient({ feedbacks: initialFeedbacks }
                                 ))}
                             </select>
                             {studentsError && (
-                                <div className="mt-2 flex items-center justify-between gap-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-950/30 dark:text-red-200">
+                                <div className="mt-2 flex items-center justify-between gap-3 rounded-[3px] bg-[var(--doc-crit-soft)] px-3 py-2 text-sm text-[var(--doc-crit)]">
                                     <span>{studentsError}</span>
                                     <button
                                         type="button"
                                         onClick={() => void loadStudents()}
-                                        className="shrink-0 rounded-md border border-red-200 px-2 py-1 text-xs font-medium text-red-700 hover:bg-red-100 dark:border-red-800 dark:text-red-200 dark:hover:bg-red-900/40"
+                                        className="shrink-0 rounded-[3px] border border-[var(--doc-crit)] px-2 py-1 text-xs font-medium text-[var(--doc-crit)] hover:bg-[var(--doc-crit-soft)]"
                                     >
                                         다시 시도
                                     </button>
                                 </div>
                             )}
                             {!studentsLoading && !studentsError && students.length === 0 && (
-                                <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
+                                <p className="mt-2 text-sm text-[var(--doc-ink-2)]">
                                     등록된 학생이 없습니다.
                                 </p>
                             )}
@@ -417,14 +417,14 @@ export default function FeedbackManagementClient({ feedbacks: initialFeedbacks }
 
                         {/* 코치 드롭다운 - 수정 시에는 변경 불가 */}
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">
-                                코치 <span className="text-red-500">*</span>
+                            <label className="block text-sm font-medium text-[var(--doc-ink-2)] mb-1">
+                                코치 <span className="text-[var(--doc-crit)]">*</span>
                             </label>
                             <select
                                 value={form.coachId}
                                 onChange={(e) => setForm({ ...form, coachId: e.target.value })}
                                 disabled={!!editingId || coachesLoading || Boolean(coachesError)}
-                                className="w-full border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime disabled:bg-gray-100 dark:bg-gray-800"
+                                className="w-full border border-[var(--doc-rule)] rounded-[3px] px-4 py-2.5 text-sm focus:outline-none focus: focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime disabled:bg-[var(--doc-grid-head)]"
                             >
                                 <option value="">
                                     {coachesLoading ? "코치 목록 로딩 중..." : "코치를 선택하세요"}
@@ -434,19 +434,19 @@ export default function FeedbackManagementClient({ feedbacks: initialFeedbacks }
                                 ))}
                             </select>
                             {coachesError && (
-                                <div className="mt-2 flex items-center justify-between gap-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-950/30 dark:text-red-200">
+                                <div className="mt-2 flex items-center justify-between gap-3 rounded-[3px] bg-[var(--doc-crit-soft)] px-3 py-2 text-sm text-[var(--doc-crit)]">
                                     <span>{coachesError}</span>
                                     <button
                                         type="button"
                                         onClick={() => void loadCoaches()}
-                                        className="shrink-0 rounded-md border border-red-200 px-2 py-1 text-xs font-medium text-red-700 hover:bg-red-100 dark:border-red-800 dark:text-red-200 dark:hover:bg-red-900/40"
+                                        className="shrink-0 rounded-[3px] border border-[var(--doc-crit)] px-2 py-1 text-xs font-medium text-[var(--doc-crit)] hover:bg-[var(--doc-crit-soft)]"
                                     >
                                         다시 시도
                                     </button>
                                 </div>
                             )}
                             {!coachesLoading && !coachesError && coaches.length === 0 && (
-                                <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
+                                <p className="mt-2 text-sm text-[var(--doc-ink-2)]">
                                     등록된 코치가 없습니다.
                                 </p>
                             )}
@@ -456,21 +456,21 @@ export default function FeedbackManagementClient({ feedbacks: initialFeedbacks }
                     {/* 날짜 + 카테고리 (2열) */}
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">수업 날짜</label>
+                            <label className="block text-sm font-medium text-[var(--doc-ink-2)] mb-1">수업 날짜</label>
                             <input
                                 type="date"
                                 min="2020-01-01" max="2030-12-31"
                                 value={form.sessionDate}
                                 onChange={(e) => setForm({ ...form, sessionDate: e.target.value })}
-                                className="w-full border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime"
+                                className="w-full border border-[var(--doc-rule)] rounded-[3px] px-4 py-2.5 text-sm focus:outline-none focus: focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime"
                             />
                         </div>
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">카테고리</label>
+                            <label className="block text-sm font-medium text-[var(--doc-ink-2)] mb-1">카테고리</label>
                             <select
                                 value={form.category}
                                 onChange={(e) => setForm({ ...form, category: e.target.value })}
-                                className="w-full border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime"
+                                className="w-full border border-[var(--doc-rule)] rounded-[3px] px-4 py-2.5 text-sm focus:outline-none focus: focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime"
                             >
                                 {Object.entries(CATEGORIES).map(([key, { label }]) => (
                                     <option key={key} value={key}>{label}</option>
@@ -481,34 +481,34 @@ export default function FeedbackManagementClient({ feedbacks: initialFeedbacks }
 
                     {/* 제목 */}
                     <div>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">
-                            제목 <span className="text-red-500">*</span>
+                        <label className="block text-sm font-medium text-[var(--doc-ink-2)] mb-1">
+                            제목 <span className="text-[var(--doc-crit)]">*</span>
                         </label>
                         <input
                             type="text"
                             value={form.title}
                             onChange={(e) => setForm({ ...form, title: e.target.value })}
-                            className="w-full border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime"
+                            className="w-full border border-[var(--doc-rule)] rounded-[3px] px-4 py-2.5 text-sm focus:outline-none focus: focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime"
                         />
                     </div>
 
                     {/* 내용 */}
                     <div>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">
-                            내용 <span className="text-red-500">*</span>
+                        <label className="block text-sm font-medium text-[var(--doc-ink-2)] mb-1">
+                            내용 <span className="text-[var(--doc-crit)]">*</span>
                         </label>
                         <textarea
                             value={form.content}
                             onChange={(e) => setForm({ ...form, content: e.target.value })}
                             rows={4}
-                            className="w-full border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime resize-none"
+                            className="w-full border border-[var(--doc-rule)] rounded-[3px] px-4 py-2.5 text-sm focus:outline-none focus: focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime resize-none"
                         />
                     </div>
 
                     {/* 평점 + 공개여부 */}
                     <div className="flex items-center justify-between flex-wrap gap-4">
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">평점</label>
+                            <label className="block text-sm font-medium text-[var(--doc-ink-2)] mb-1">평점</label>
                             {renderStarInput()}
                         </div>
                         <label className="flex items-center gap-2 cursor-pointer">
@@ -516,9 +516,9 @@ export default function FeedbackManagementClient({ feedbacks: initialFeedbacks }
                                 type="checkbox"
                                 checked={form.isPublic}
                                 onChange={(e) => setForm({ ...form, isPublic: e.target.checked })}
-                                className="w-4 h-4 rounded border-gray-300 text-brand-orange-500 dark:text-brand-neon-lime focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime"
+                                className="w-4 h-4 rounded border-[var(--doc-rule)] text-[var(--doc-accent)] focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime"
                             />
-                            <span className="text-sm text-gray-700 dark:text-gray-200">학부모에게 공개</span>
+                            <span className="text-sm text-[var(--doc-ink-2)]">학부모에게 공개</span>
                         </label>
                     </div>
 
@@ -527,7 +527,7 @@ export default function FeedbackManagementClient({ feedbacks: initialFeedbacks }
                         <button
                             type="submit"
                             disabled={isPending}
-                            className="px-6 py-2.5 bg-brand-orange-500 dark:bg-brand-neon-lime dark:text-brand-navy-900 text-white rounded-xl font-medium hover:bg-brand-orange-600 dark:hover:bg-lime-400 transition-colors disabled:opacity-50"
+                            className="px-6 py-2.5 bg-[var(--doc-accent)] dark:text-[var(--doc-ink)] text-white rounded-[3px] font-medium hover:bg-[var(--doc-accent)] dark:hover:bg-lime-400 transition-colors disabled:opacity-50"
                         >
                             {isPending ? "저장 중..." : editingId ? "수정 완료" : "피드백 저장"}
                         </button>
@@ -537,7 +537,7 @@ export default function FeedbackManagementClient({ feedbacks: initialFeedbacks }
                                 setShowForm(false);
                                 resetForm();
                             }}
-                            className="px-6 py-2.5 bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-200 rounded-xl font-medium hover:bg-gray-200 transition-colors"
+                            className="px-6 py-2.5 bg-[var(--doc-grid-head)] text-[var(--doc-ink-2)] rounded-[3px] font-medium hover:bg-[var(--doc-grid-head)] transition-colors"
                         >
                             취소
                         </button>
@@ -547,8 +547,8 @@ export default function FeedbackManagementClient({ feedbacks: initialFeedbacks }
 
             {/* 피드백 목록 (카드형) */}
             {feedbacks.length === 0 ? (
-                <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800 p-12 text-center">
-                    <p className="text-gray-400 text-lg">아직 작성된 피드백이 없습니다.</p>
+                <div className="bg-[var(--doc-surface)] rounded-[6px] border border-[var(--doc-rule)] p-12 text-center">
+                    <p className="text-[var(--doc-ink-3)] text-lg">아직 작성된 피드백이 없습니다.</p>
                 </div>
             ) : (
                 <div className="space-y-3">
@@ -564,32 +564,32 @@ export default function FeedbackManagementClient({ feedbacks: initialFeedbacks }
                         return (
                             <div
                                 key={fb.id}
-                                className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800 overflow-hidden"
+                                className="bg-[var(--doc-surface)] rounded-[6px] border border-[var(--doc-rule)] overflow-hidden"
                             >
                                 {/* 카드 헤더 (클릭하면 펼치기/접기) */}
                                 <button
                                     type="button"
                                     onClick={() => setExpandedId(isExpanded ? null : fb.id)}
-                                    className="grid w-full min-w-0 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 px-4 py-4 text-left transition-colors hover:bg-gray-50 dark:hover:bg-gray-900 sm:flex sm:gap-4 sm:px-6"
+                                    className="grid w-full min-w-0 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 px-4 py-4 text-left transition-colors hover:bg-[var(--doc-grid-head)] sm:flex sm:gap-4 sm:px-6"
                                 >
                                     {/* 카테고리 뱃지 */}
-                                    <span className={`px-2.5 py-1 rounded-full text-xs font-medium ${cat.color}`}>
+                                    <span className={`px-2.5 py-1 rounded-[3px] text-xs font-medium ${cat.color}`}>
                                         {cat.label}
                                     </span>
 
                                     {/* 학생 이름 */}
-                                    <span className="min-w-0 truncate font-bold text-gray-800 dark:text-gray-100" title={fb.studentName}>
+                                    <span className="min-w-0 truncate font-bold text-[var(--doc-ink)]" title={fb.studentName}>
                                         {fb.studentName}
                                     </span>
 
                                     {/* 제목 */}
-                                    <span className="col-span-2 min-w-0 truncate text-gray-700 dark:text-gray-200 sm:col-span-1 sm:flex-1" title={fb.title}>{fb.title}</span>
+                                    <span className="col-span-2 min-w-0 truncate text-[var(--doc-ink-2)] sm:col-span-1 sm:flex-1" title={fb.title}>{fb.title}</span>
 
                                     {/* 코치 이름 */}
-                                    <span className="hidden max-w-32 truncate text-sm text-gray-500 dark:text-gray-400 md:inline" title={`${fb.coachName} 코치`}>{fb.coachName} 코치</span>
+                                    <span className="hidden max-w-32 truncate text-sm text-[var(--doc-ink-2)] md:inline" title={`${fb.coachName} 코치`}>{fb.coachName} 코치</span>
 
                                     {/* 날짜 */}
-                                    <span className="hidden min-w-[80px] text-right text-sm text-gray-400 sm:inline">
+                                    <span className="hidden min-w-[80px] text-right text-sm text-[var(--doc-ink-3)] sm:inline">
                                         {dateStr || createdStr}
                                     </span>
 
@@ -598,38 +598,38 @@ export default function FeedbackManagementClient({ feedbacks: initialFeedbacks }
 
                                     {/* 공개/비공개 */}
                                     {!fb.isPublic && (
-                                        <span className="text-xs text-red-400 border border-red-200 rounded-full px-2 py-0.5">
+                                        <span className="text-xs text-[var(--doc-crit)] border border-[var(--doc-crit)] rounded-[3px] px-2 py-0.5">
                                             비공개
                                         </span>
                                     )}
 
                                     {/* 펼침 아이콘 */}
-                                    <span className={`text-gray-400 transition-transform ${isExpanded ? "rotate-180" : ""}`}>
+                                    <span className={`text-[var(--doc-ink-3)] transition-transform ${isExpanded ? "rotate-180" : ""}`}>
                                         &#9660;
                                     </span>
                                 </button>
 
                                 {/* 펼쳐진 내용 */}
                                 {isExpanded && (
-                                    <div className="px-6 pb-5 border-t border-gray-100 dark:border-gray-800">
+                                    <div className="px-6 pb-5 border-t border-[var(--doc-rule)]">
                                         {/* 피드백 내용 (줄바꿈 유지) */}
-                                        <p className="text-gray-700 dark:text-gray-200 text-sm leading-relaxed whitespace-pre-wrap mt-4">
+                                        <p className="text-[var(--doc-ink-2)] text-sm leading-relaxed whitespace-pre-wrap mt-4">
                                             {fb.content}
                                         </p>
 
                                         {/* 수정/삭제 버튼 */}
-                                        <div className="flex gap-2 mt-4 pt-3 border-t border-gray-100 dark:border-gray-800">
+                                        <div className="flex gap-2 mt-4 pt-3 border-t border-[var(--doc-rule)]">
                                             <button
                                                 onClick={() => handleEdit(fb)}
                                                 disabled={isPending}
-                                                className="px-4 py-2 text-sm bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-200 rounded-lg hover:bg-gray-200 transition-colors disabled:opacity-50"
+                                                className="px-4 py-2 text-sm bg-[var(--doc-grid-head)] text-[var(--doc-ink-2)] rounded-[3px] hover:bg-[var(--doc-grid-head)] transition-colors disabled:opacity-50"
                                             >
                                                 수정
                                             </button>
                                             <button
                                                 onClick={() => handleDelete(fb.id)}
                                                 disabled={isPending}
-                                                className="px-4 py-2 text-sm bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-colors disabled:opacity-50"
+                                                className="px-4 py-2 text-sm bg-[var(--doc-crit-soft)] text-[var(--doc-crit)] rounded-[3px] hover:bg-[var(--doc-crit-soft)] transition-colors disabled:opacity-50"
                                             >
                                                 삭제
                                             </button>

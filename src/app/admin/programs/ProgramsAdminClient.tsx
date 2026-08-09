@@ -80,48 +80,48 @@ function ProgramsLoadingFallback() {
         <div className="space-y-8">
             <div className="flex items-center justify-between gap-4">
                 <div>
-                    <div className="h-8 w-44 animate-pulse rounded bg-gray-200 dark:bg-gray-700" />
-                    <div className="mt-2 h-4 w-96 max-w-full animate-pulse rounded bg-gray-100 dark:bg-gray-800" />
+                    <div className="h-8 w-44 rounded bg-[var(--doc-grid-head)]" />
+                    <div className="mt-2 h-4 w-96 max-w-full rounded bg-[var(--doc-grid-head)]" />
                 </div>
                 <div className="flex items-center gap-2">
-                    <div className="h-10 w-28 animate-pulse rounded-xl bg-gray-100 dark:bg-gray-700" />
-                    <div className="h-10 w-32 animate-pulse rounded-xl bg-gray-200 dark:bg-gray-700" />
+                    <div className="h-10 w-28 rounded-[3px] bg-[var(--doc-grid-head)]" />
+                    <div className="h-10 w-32 rounded-[3px] bg-[var(--doc-grid-head)]" />
                 </div>
             </div>
-            <div className="rounded-xl border border-blue-200 bg-blue-50 p-4">
-                <div className="h-5 w-64 animate-pulse rounded bg-blue-100" />
+            <div className="rounded-[3px] border border-[var(--doc-rule)] bg-[var(--doc-grid-head)] p-4">
+                <div className="h-5 w-64 rounded bg-[var(--doc-grid-head)]" />
                 <div className="mt-3 flex flex-wrap gap-3">
                     {Array.from({ length: 4 }).map((_, index) => (
-                        <div key={index} className="h-8 w-36 animate-pulse rounded-lg bg-white" />
+                        <div key={index} className="h-8 w-36 rounded-[3px] bg-[var(--doc-surface)]" />
                     ))}
                 </div>
             </div>
-            <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800">
-                <div className="flex items-center justify-between gap-4 border-b border-gray-100 bg-gray-50 px-6 py-4 dark:border-gray-800 dark:bg-gray-900/50">
-                    <div className="h-6 w-44 animate-pulse rounded bg-gray-200 dark:bg-gray-700" />
-                    <div className="h-4 w-44 animate-pulse rounded bg-gray-100 dark:bg-gray-700" />
+            <div className="overflow-hidden rounded-[3px] border border-[var(--doc-rule)] bg-[var(--doc-surface)]">
+                <div className="flex items-center justify-between gap-4 border-b border-[var(--doc-rule)] bg-[var(--doc-grid-head)] px-6 py-4">
+                    <div className="h-6 w-44 rounded bg-[var(--doc-grid-head)]" />
+                    <div className="h-4 w-44 rounded bg-[var(--doc-grid-head)]" />
                 </div>
-                <div className="divide-y divide-gray-100 dark:divide-gray-800">
+                <div className="divide-y divide-[var(--doc-rule)] dark:divide-[var(--doc-rule)]">
                     {Array.from({ length: 5 }).map((_, index) => (
                         <div key={index} className="flex">
-                            <div className="w-10 border-r border-gray-100 dark:border-gray-800">
-                                <div className="mx-auto mt-6 h-5 w-5 animate-pulse rounded bg-gray-100 dark:bg-gray-700" />
+                            <div className="w-10 border-r border-[var(--doc-rule)]">
+                                <div className="mx-auto mt-6 h-5 w-5 rounded bg-[var(--doc-grid-head)]" />
                             </div>
                             <div className="flex-1 p-5">
                                 <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-start">
                                     <div className="min-w-0 flex-1 space-y-3">
                                         <div className="flex flex-wrap items-center gap-2">
-                                            <div className="h-6 w-6 animate-pulse rounded-full bg-gray-200 dark:bg-gray-700" />
-                                            <div className="h-6 w-40 animate-pulse rounded bg-gray-200 dark:bg-gray-700" />
-                                            <div className="h-5 w-16 animate-pulse rounded-full bg-gray-100 dark:bg-gray-700" />
-                                            <div className="h-5 w-16 animate-pulse rounded-full bg-gray-100 dark:bg-gray-700" />
+                                            <div className="h-6 w-6 rounded-[3px] bg-[var(--doc-grid-head)]" />
+                                            <div className="h-6 w-40 rounded bg-[var(--doc-grid-head)]" />
+                                            <div className="h-5 w-16 rounded-[3px] bg-[var(--doc-grid-head)]" />
+                                            <div className="h-5 w-16 rounded-[3px] bg-[var(--doc-grid-head)]" />
                                         </div>
-                                        <div className="h-4 w-3/4 animate-pulse rounded bg-gray-100 dark:bg-gray-700" />
-                                        <div className="h-4 w-1/2 animate-pulse rounded bg-gray-100 dark:bg-gray-700" />
+                                        <div className="h-4 w-3/4 rounded bg-[var(--doc-grid-head)]" />
+                                        <div className="h-4 w-1/2 rounded bg-[var(--doc-grid-head)]" />
                                     </div>
                                     <div className="flex gap-2">
-                                        <div className="h-8 w-14 animate-pulse rounded-lg bg-gray-100 dark:bg-gray-700" />
-                                        <div className="h-8 w-14 animate-pulse rounded-lg bg-gray-100 dark:bg-gray-700" />
+                                        <div className="h-8 w-14 rounded-[3px] bg-[var(--doc-grid-head)]" />
+                                        <div className="h-8 w-14 rounded-[3px] bg-[var(--doc-grid-head)]" />
                                     </div>
                                 </div>
                             </div>
@@ -135,12 +135,12 @@ function ProgramsLoadingFallback() {
 
 function ProgramsErrorState({ onRetry }: { onRetry: () => void }) {
     return (
-        <div className="rounded-xl border border-red-200 bg-red-50 p-6 text-center dark:border-red-800 dark:bg-red-950/30">
-            <p className="text-sm font-bold text-red-700 dark:text-red-200">프로그램 목록을 불러오지 못했습니다.</p>
+        <div className="rounded-[3px] border border-[var(--doc-crit)] bg-[var(--doc-crit-soft)] p-6 text-center">
+            <p className="text-sm font-bold text-[var(--doc-crit)]">프로그램 목록을 불러오지 못했습니다.</p>
             <button
                 type="button"
                 onClick={onRetry}
-                className="mt-4 rounded-lg bg-red-600 px-4 py-2 text-sm font-bold text-white hover:bg-red-700"
+                className="mt-4 rounded-[3px] bg-[var(--doc-crit)] px-4 py-2 text-sm font-bold text-white hover:bg-[var(--doc-crit)]"
             >
                 다시 불러오기
             </button>
@@ -257,13 +257,13 @@ export default function ProgramsAdminClient({
         <div className="space-y-8">
             <div className="flex items-center justify-between gap-4">
                 <div>
-                    <h1 className="text-2xl font-bold text-gray-900 dark:text-white">프로그램 관리</h1>
+                    <h1 className="text-2xl font-bold text-[var(--doc-ink)]">프로그램 관리</h1>
                 </div>
                 {/* 시드 내보내기 버튼 제거: 사이드바 백업 메뉴에 동일 기능이 이미 있다 */}
                 <div className="flex items-center gap-2">
                     <button
                         onClick={() => setShowAddModal(true)}
-                        className="flex-shrink-0 flex items-center gap-2 bg-brand-orange-500 dark:bg-brand-neon-lime dark:text-brand-navy-900 hover:bg-orange-600 text-white font-bold text-sm px-4 py-2.5 rounded-xl transition shadow-sm"
+                        className="flex-shrink-0 flex items-center gap-2 bg-[var(--doc-accent)] dark:text-[var(--doc-ink)] hover:bg-[var(--doc-grid-head)] text-white font-bold text-sm px-4 py-2.5 rounded-[3px] transition"
                     >
                         <span className="text-lg leading-none">+</span>
                         프로그램 등록
@@ -281,13 +281,13 @@ export default function ProgramsAdminClient({
                 >
                     {/* Dialog */}
                     <div className="w-full">
-                        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 dark:border-gray-800 sticky top-0 bg-white dark:bg-gray-800 z-10 rounded-t-2xl">
-                            <h2 id="add-program-title" className="text-lg font-bold text-gray-900 dark:text-white">새 프로그램 등록</h2>
+                        <div className="flex items-center justify-between px-6 py-4 border-b border-[var(--doc-rule)] sticky top-0 bg-[var(--doc-surface)] z-10 rounded-t-2xl">
+                            <h2 id="add-program-title" className="text-lg font-bold text-[var(--doc-ink)]">새 프로그램 등록</h2>
                             <button
                                 type="button"
                                 onClick={() => setShowAddModal(false)}
                                 disabled={formPending}
-                                className="text-gray-400 hover:text-gray-600 dark:text-gray-300 transition text-xl leading-none px-1"
+                                className="text-[var(--doc-ink-3)] hover:text-[var(--doc-ink-2)] transition text-xl leading-none px-1"
                             >
                                 ✕
                             </button>
@@ -310,13 +310,13 @@ export default function ProgramsAdminClient({
             {/* 셔틀 요금 기준 박스 제거: 같은 안내가 프로그램 등록/수정 폼 안에 이미 있어 목록 화면 상시 노출은 불필요 */}
 
             {/* Program List */}
-            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
-                <div className="px-6 py-4 border-b border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-900/50 flex items-center justify-between gap-4">
-                    <h2 className="text-lg font-bold text-gray-900 dark:text-white">등록된 프로그램 목록</h2>
+            <div className="bg-[var(--doc-surface)] rounded-[3px] border border-[var(--doc-rule)] overflow-hidden">
+                <div className="px-6 py-4 border-b border-[var(--doc-rule)] bg-[var(--doc-grid-head)] flex items-center justify-between gap-4">
+                    <h2 className="text-lg font-bold text-[var(--doc-ink)]">등록된 프로그램 목록</h2>
                 </div>
-                <ul className="divide-y divide-gray-100">
+                <ul className="divide-y divide-[var(--doc-rule)]">
                     {programs.length === 0 && (
-                        <li className="p-8 text-center text-gray-500 dark:text-gray-400">등록된 프로그램이 없습니다.</li>
+                        <li className="p-8 text-center text-[var(--doc-ink-2)]">등록된 프로그램이 없습니다.</li>
                     )}
                     {programs.map((program, i) => (
                         <li
@@ -326,11 +326,11 @@ export default function ProgramsAdminClient({
                             onDragOver={(e) => handleDragOver(e, program.id)}
                             onDrop={(e) => handleDrop(e, program.id)}
                             onDragEnd={handleDragEnd}
-                            className={`transition ${dragOverId === program.id ? "bg-blue-50 border-blue-300" : "hover:bg-gray-50 dark:bg-gray-900/50"}`}
+                            className={`transition ${dragOverId === program.id ? "bg-[var(--doc-grid-head)] border-[var(--doc-rule)]" : "hover:bg-[var(--doc-grid-head)]"}`}
                         >
                             {editId === program.id ? (
                                 <div className="p-6">
-                                    <p className="text-sm font-bold text-blue-700 mb-3">수정 중...</p>
+                                    <p className="text-sm font-bold text-[var(--doc-ink-2)] mb-3">수정 중...</p>
                                     <ProgramFormPanel
                                         mode="edit"
                                         program={program}
@@ -346,7 +346,7 @@ export default function ProgramsAdminClient({
                                 <div className="flex items-start gap-0">
                                     {/* Drag handle */}
                                     <div
-                                        className="flex-shrink-0 w-10 flex items-center justify-center self-stretch cursor-grab text-gray-300 hover:text-gray-500 dark:text-gray-400 select-none border-r border-gray-100 dark:border-gray-800"
+                                        className="flex-shrink-0 w-10 flex items-center justify-center self-stretch cursor-grab text-[var(--doc-ink-3)] hover:text-[var(--doc-ink-2)] select-none border-r border-[var(--doc-rule)]"
                                         title="드래그하여 순서 변경"
                                     >
                                         <span className="text-xl leading-none">⠿</span>
@@ -397,25 +397,25 @@ function ProgramCardInline({
             <div className="flex-1 min-w-0">
                 {/* Title row */}
                 <div className="flex flex-wrap items-center gap-2 mb-2">
-                    <span className="bg-brand-navy-900 text-white text-xs font-black w-6 h-6 rounded-full flex items-center justify-center shrink-0">
+                    <span className="bg-[var(--doc-ink)] text-white text-xs font-bold w-6 h-6 rounded-[3px] flex items-center justify-center shrink-0">
                         {index + 1}
                     </span>
-                    <h3 className="font-bold text-gray-900 dark:text-white text-lg">{program.name}</h3>
+                    <h3 className="font-bold text-[var(--doc-ink)] text-lg">{program.name}</h3>
                     {/* Frequency badges */}
                     {tiers.length === 0 && freq && (
-                        <span className="bg-blue-100 text-blue-700 text-xs font-bold px-2.5 py-0.5 rounded-full">{freq}</span>
+                        <span className="bg-[var(--doc-grid-head)] text-[var(--doc-ink-2)] text-xs font-bold px-2.5 py-0.5 rounded-[3px]">{freq}</span>
                     )}
                     {tiers.map((t) => (
-                        <span key={t.key} className="bg-blue-100 text-blue-700 text-xs font-bold px-2.5 py-0.5 rounded-full">{t.label}</span>
+                        <span key={t.key} className="bg-[var(--doc-grid-head)] text-[var(--doc-ink-2)] text-xs font-bold px-2.5 py-0.5 rounded-[3px]">{t.label}</span>
                     ))}
                     {program.targetAge && (
-                        <span className="bg-orange-50 text-orange-600 text-xs font-bold px-2.5 py-0.5 rounded-full border border-orange-200">
+                        <span className="bg-[var(--doc-grid-head)] text-[var(--doc-warn)] text-xs font-bold px-2.5 py-0.5 rounded-[3px] border border-[var(--doc-warn)]">
                             {program.targetAge}
                         </span>
                     )}
                     {/* Day badges */}
                     {days.length > 0 && days.map((d) => (
-                        <span key={d} className={`text-xs font-bold px-2 py-0.5 rounded-full ${WEEKEND.has(d) ? "bg-orange-100 text-orange-700" : "bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300"}`}>
+                        <span key={d} className={`text-xs font-bold px-2 py-0.5 rounded-[3px] ${WEEKEND.has(d) ? "bg-[var(--doc-grid-head)] text-[var(--doc-warn)]" : "bg-[var(--doc-grid-head)] text-[var(--doc-ink-2)] "}`}>
                             {DAY_OPTIONS.find((o) => o.key === d)?.label || d}
                         </span>
                     ))}
@@ -427,52 +427,52 @@ function ProgramCardInline({
                         {tiers.map((t) => {
                             const fee = displayShuttleFee(program.shuttleFeeOverride, t.key, weekend);
                             return (
-                                <span key={t.key} className="text-gray-600 dark:text-gray-300">
-                                    <span className="text-gray-400 text-xs">{t.label}</span>{" "}
-                                    <strong className="text-brand-navy-900">{Number(program[t.key]).toLocaleString()}원</strong>
+                                <span key={t.key} className="text-[var(--doc-ink-2)]">
+                                    <span className="text-[var(--doc-ink-3)] text-xs">{t.label}</span>{" "}
+                                    <strong className="text-[var(--doc-ink)]">{Number(program[t.key]).toLocaleString()}원</strong>
                                     {fee && (
-                                        <span className="text-blue-500 ml-1 text-xs">+ 셔틀 {fee}</span>
+                                        <span className="text-[var(--doc-ink-2)] ml-1 text-xs">+ 셔틀 {fee}</span>
                                     )}
                                 </span>
                             );
                         })}
                         {weekend && (
-                            <span className="text-xs text-orange-600 font-medium">🚌 셔틀 운행 없음</span>
+                            <span className="text-xs text-[var(--doc-warn)] font-medium">🚌 셔틀 운행 없음</span>
                         )}
                         {!weekend && (program.runsShuttle === false || program.shuttleFeeOverride === 0) && (
-                            <span className="text-xs text-gray-500 font-medium">🚫 셔틀 미운행</span>
+                            <span className="text-xs text-[var(--doc-ink-2)] font-medium">🚫 셔틀 미운행</span>
                         )}
                     </div>
                 ) : (
-                    <div className="flex flex-wrap gap-x-6 gap-y-1 text-sm text-gray-600 dark:text-gray-300 mt-1">
+                    <div className="flex flex-wrap gap-x-6 gap-y-1 text-sm text-[var(--doc-ink-2)] mt-1">
                         <span>
-                            <span className="text-gray-400">수강료</span>{" "}
-                            <strong className="text-brand-navy-900">{program.price.toLocaleString()}원 / 월</strong>
+                            <span className="text-[var(--doc-ink-3)]">수강료</span>{" "}
+                            <strong className="text-[var(--doc-ink)]">{program.price.toLocaleString()}원 / 월</strong>
                         </span>
                     </div>
                 )}
 
                 {program.description && (
-                    <p className="text-sm text-gray-500 dark:text-gray-400 mt-2 whitespace-pre-line">{program.description}</p>
+                    <p className="text-sm text-[var(--doc-ink-2)] mt-2 whitespace-pre-line">{program.description}</p>
                 )}
             </div>
 
             <div className="flex shrink-0 items-center gap-2">
                 <button onClick={onEdit}
-                    className="text-sm text-blue-600 hover:text-blue-800 font-medium px-3 py-1.5 rounded hover:bg-blue-50 transition">
+                    className="text-sm text-[var(--doc-ink-2)] hover:text-[var(--doc-ink-2)] font-medium px-3 py-1.5 rounded hover:bg-[var(--doc-grid-head)] transition">
                     수정
                 </button>
                 {isDeleting ? (
                     <span className="flex items-center gap-1.5">
                         <button onClick={onDelete} disabled={deletePending}
-                            className="text-sm text-red-600 hover:text-red-800 font-bold px-2 py-1">확인</button>
-                        <span className="text-gray-300">/</span>
+                            className="text-sm text-[var(--doc-crit)] hover:text-[var(--doc-crit)] font-bold px-2 py-1">확인</button>
+                        <span className="text-[var(--doc-ink-3)]">/</span>
                         <button onClick={onCancelDelete}
-                            className="text-sm text-gray-500 hover:text-gray-700 dark:text-gray-200 px-2 py-1">취소</button>
+                            className="text-sm text-[var(--doc-ink-2)] hover:text-[var(--doc-ink-2)] px-2 py-1">취소</button>
                     </span>
                 ) : (
                     <button onClick={onSetDeleting}
-                        className="text-sm text-red-500 hover:text-red-700 font-medium px-3 py-1.5 rounded hover:bg-red-50 transition">
+                        className="text-sm text-[var(--doc-crit)] hover:text-[var(--doc-crit)] font-medium px-3 py-1.5 rounded hover:bg-[var(--doc-crit-soft)] transition">
                         삭제
                     </button>
                 )}

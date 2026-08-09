@@ -58,15 +58,15 @@ function AttendanceLoadingFallback() {
         <div className="max-w-4xl mx-auto">
             <div className="mb-6 flex items-center justify-between">
                 <div className="space-y-2">
-                    <div className="h-8 w-32 animate-pulse rounded bg-gray-200 dark:bg-gray-700" />
-                    <div className="h-4 w-72 animate-pulse rounded bg-gray-100 dark:bg-gray-800" />
+                    <div className="h-8 w-32 rounded bg-[var(--doc-grid-head)]" />
+                    <div className="h-4 w-72 rounded bg-[var(--doc-grid-head)]" />
                 </div>
-                <div className="h-10 w-28 animate-pulse rounded-lg bg-gray-200 dark:bg-gray-700" />
+                <div className="h-10 w-28 rounded-[3px] bg-[var(--doc-grid-head)]" />
             </div>
-            <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-700 dark:bg-gray-800">
+            <div className="rounded-[3px] border border-[var(--doc-rule)] bg-[var(--doc-surface)] p-5">
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                    <div className="h-16 animate-pulse rounded-lg bg-gray-100 dark:bg-gray-800" />
-                    <div className="h-16 animate-pulse rounded-lg bg-gray-100 dark:bg-gray-800" />
+                    <div className="h-16 rounded-[3px] bg-[var(--doc-grid-head)]" />
+                    <div className="h-16 rounded-[3px] bg-[var(--doc-grid-head)]" />
                 </div>
             </div>
         </div>
@@ -75,12 +75,12 @@ function AttendanceLoadingFallback() {
 
 function AttendanceErrorState({ onRetry }: { onRetry: () => void }) {
     return (
-        <div className="mx-auto max-w-4xl rounded-xl border border-red-200 bg-red-50 p-6 text-center dark:border-red-800 dark:bg-red-950/30">
-            <p className="text-sm font-bold text-red-700 dark:text-red-200">출석 관리 데이터를 불러오지 못했습니다.</p>
+        <div className="mx-auto max-w-4xl rounded-[3px] border border-[var(--doc-crit)] bg-[var(--doc-crit-soft)] p-6 text-center">
+            <p className="text-sm font-bold text-[var(--doc-crit)]">출석 관리 데이터를 불러오지 못했습니다.</p>
             <button
                 type="button"
                 onClick={onRetry}
-                className="mt-4 rounded-lg bg-red-600 px-4 py-2 text-sm font-bold text-white hover:bg-red-700"
+                className="mt-4 rounded-[3px] bg-[var(--doc-crit)] px-4 py-2 text-sm font-bold text-white hover:bg-[var(--doc-crit)]"
             >
                 다시 불러오기
             </button>
@@ -230,7 +230,7 @@ export default function AttendanceClient({ classes: initialClasses }: { classes?
             {/* 대상 선택 */}
             <div className="no-print mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <label className="block">
-                    <span className="mb-1 block text-[10px] font-extrabold uppercase tracking-[0.1em]" style={{ color: "var(--doc-ink-3)" }}>날짜</span>
+                    <span className="mb-1 block text-[10px] font-bold uppercase tracking-[0.1em]" style={{ color: "var(--doc-ink-3)" }}>날짜</span>
                     <input
                         type="date"
                         min="2020-01-01" max="2030-12-31"
@@ -241,7 +241,7 @@ export default function AttendanceClient({ classes: initialClasses }: { classes?
                     />
                 </label>
                 <label className="block">
-                    <span className="mb-1 block text-[10px] font-extrabold uppercase tracking-[0.1em]" style={{ color: "var(--doc-ink-3)" }}>반</span>
+                    <span className="mb-1 block text-[10px] font-bold uppercase tracking-[0.1em]" style={{ color: "var(--doc-ink-3)" }}>반</span>
                     <select
                         value={selectedClass}
                         onChange={(e) => setSelectedClass(e.target.value)}
@@ -271,9 +271,9 @@ export default function AttendanceClient({ classes: initialClasses }: { classes?
                                 <table className="w-full border-collapse" style={{ minWidth: 520 }}>
                                     <thead>
                                         <tr style={{ borderBottom: "1.5px solid var(--doc-ink)" }}>
-                                            <th className="h-[30px] px-3 text-left text-[10px] font-extrabold uppercase tracking-[0.1em]" style={{ color: "var(--doc-ink-3)" }}>번호</th>
-                                            <th className="h-[30px] px-3 text-left text-[10px] font-extrabold uppercase tracking-[0.1em]" style={{ color: "var(--doc-ink-3)" }}>성명</th>
-                                            <th className="h-[30px] px-3 text-right text-[10px] font-extrabold uppercase tracking-[0.1em]" style={{ color: "var(--doc-ink-3)" }}>출결</th>
+                                            <th className="h-[30px] px-3 text-left text-[10px] font-bold uppercase tracking-[0.1em]" style={{ color: "var(--doc-ink-3)" }}>번호</th>
+                                            <th className="h-[30px] px-3 text-left text-[10px] font-bold uppercase tracking-[0.1em]" style={{ color: "var(--doc-ink-3)" }}>성명</th>
+                                            <th className="h-[30px] px-3 text-right text-[10px] font-bold uppercase tracking-[0.1em]" style={{ color: "var(--doc-ink-3)" }}>출결</th>
                                         </tr>
                                     </thead>
                                     <tbody>

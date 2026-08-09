@@ -12,13 +12,13 @@ import AppBackButton from "@/components/AppBackButton";
 
 const LazyBackupButtons = dynamic(() => import("./AdminBackupButtons"), {
     ssr: false,
-    loading: () => <div className="px-8 py-3 text-xs text-gray-500">도구 준비 중...</div>,
+    loading: () => <div className="px-8 py-3 text-xs text-[var(--doc-ink-2)]">도구 준비 중...</div>,
 });
 
 const LazyNotificationBell = dynamic(() => import("./AdminNotificationBell"), {
     ssr: false,
     loading: () => (
-        <div className="h-10 w-10 rounded-lg bg-gray-100 dark:bg-gray-800" aria-hidden="true" />
+        <div className="h-10 w-10 rounded-[3px] bg-[var(--doc-grid-head)]" aria-hidden="true" />
     ),
 });
 
@@ -119,16 +119,16 @@ export default function AdminShellClient({
             {/* Sidebar */}
             <aside
                 className={`${
-                    mobileMenuOpen
-                        ? "fixed inset-y-0 left-0 z-40 flex h-dvh w-72 max-w-[85vw]"
-                        : "hidden"
-                } flex-shrink-0 flex-col md:fixed md:inset-y-0 md:left-0 md:z-10 md:flex md:h-full md:w-64 md:max-w-none`}
+ mobileMenuOpen
+ ? "fixed inset-y-0 left-0 z-40 flex h-dvh w-72 max-w-[85vw]"
+ : "hidden"
+ } flex-shrink-0 flex-col md:fixed md:inset-y-0 md:left-0 md:z-10 md:flex md:h-full md:w-64 md:max-w-none`}
                 style={{ background: "var(--doc-surface)", color: "var(--doc-ink)", borderRight: "1px solid var(--doc-rule)" }}
             >
                 {/* 문서 머리 — 로고 + 지점/역할 라벨 */}
                 <div className="flex-shrink-0 px-5 py-5" style={{ borderBottom: "1px solid var(--doc-rule)" }}>
                     <DocLogo height={24} />
-                    <p className="m-0 mt-0.5 text-[10px] font-extrabold uppercase tracking-[0.1em]" style={{ color: "var(--doc-ink-3)" }}>다산점 · 관리자</p>
+                    <p className="m-0 mt-0.5 text-[10px] font-bold uppercase tracking-[0.1em]" style={{ color: "var(--doc-ink-3)" }}>다산점 · 관리자</p>
                 </div>
                 {/* 탭 — 채움 버튼 대신 밑줄. 선택된 것만 강조색 */}
                 <div className="flex flex-shrink-0 gap-5 px-5 pt-3" style={{ borderBottom: "1px solid var(--doc-rule)" }}>
@@ -153,19 +153,19 @@ export default function AdminShellClient({
                     {activeTab === "site" && (
                         <>
                             {/* 학원 소개 */}
-                            <p className="px-4 py-2 mt-1 text-[10px] font-extrabold uppercase tracking-[0.1em]" style={{ color: "var(--doc-ink-3)" }}>학원 소개</p>
+                            <p className="px-4 py-2 mt-1 text-[10px] font-bold uppercase tracking-[0.1em]" style={{ color: "var(--doc-ink-3)" }}>학원 소개</p>
                             <NavItem href="/admin/settings" active={pathname.startsWith("/admin/settings")} icon="🏫" label="학원 소개 관리" />
                             <NavItem href="/admin/coaches" active={pathname.startsWith("/admin/coaches")} icon="👤" label="코치/강사진 관리" />
 
                             {/* 수업 안내 */}
-                            <p className="px-4 py-2 mt-3 text-[10px] font-extrabold uppercase tracking-[0.1em]" style={{ color: "var(--doc-ink-3)" }}>수업 안내</p>
+                            <p className="px-4 py-2 mt-3 text-[10px] font-bold uppercase tracking-[0.1em]" style={{ color: "var(--doc-ink-3)" }}>수업 안내</p>
                             {/* 선생님(수업 진행) 화면으로 바로 가기 — 관리자도 오늘 수업을 시작·출결할 수 있다. */}
                             <NavItem href="/staff" active={false} icon="🧑‍🏫" label="선생님 수업 화면" />
                             <NavItem href="/admin/programs" active={pathname.startsWith("/admin/programs")} icon="📋" label="프로그램 관리" />
                             <NavItem href="/admin/schedule" active={pathname.startsWith("/admin/schedule")} icon="📅" label="수업시간표 관리" />
 
                             {/* 소식/안내 */}
-                            <p className="px-4 py-2 mt-3 text-[10px] font-extrabold uppercase tracking-[0.1em]" style={{ color: "var(--doc-ink-3)" }}>소식/안내</p>
+                            <p className="px-4 py-2 mt-3 text-[10px] font-bold uppercase tracking-[0.1em]" style={{ color: "var(--doc-ink-3)" }}>소식/안내</p>
                             <NavItem href="/admin/notices" active={pathname.startsWith("/admin/notices")} icon="📢" label="공지사항 관리" />
                             <NavItem href="/admin/gallery" active={pathname.startsWith("/admin/gallery")} icon="📸" label="사진/영상 갤러리" />
                             <NavItem href="/staff/quick-post" active={pathname.startsWith("/staff/quick-post")} icon="⚡" label="사진 빠른 업로드" />
@@ -178,7 +178,7 @@ export default function AdminShellClient({
                                 <Link
                                     href="/"
                                     prefetch={false}
-                                    className="flex items-center justify-center gap-2 rounded-lg border border-white/20 bg-white/10 px-4 py-3 text-sm font-bold text-white transition-colors hover:bg-white hover:text-brand-navy-900"
+                                    className="flex items-center justify-center gap-2 rounded-[3px] border border-white/20 bg-[var(--doc-surface)]/10 px-4 py-3 text-sm font-bold text-white transition-colors hover:bg-[var(--doc-surface)] hover:text-[var(--doc-ink)]"
                                 >
                                     <FontFreeIcon name="home" size={18} />
                                     <span>홈페이지 보기</span>
@@ -191,7 +191,7 @@ export default function AdminShellClient({
                     {/* ===== 학원운영 탭 메뉴 ===== */}
                     {activeTab === "ops" && (
                         <>
-                            <p className="text-gray-500 dark:text-gray-400 text-xs font-bold uppercase px-4 py-2">주요 업무</p>
+                            <p className="text-[var(--doc-ink-2)] text-xs font-bold uppercase px-4 py-2">주요 업무</p>
                             <NavItem href="/admin" active={pathname === "/admin"} icon="📊" label="대시보드" />
                             <NavItem href="/admin/apply" active={pathname.startsWith("/admin/apply")} icon="📝" label="신청 관리" />
                             <NavItem href="/admin/students" active={pathname.startsWith("/admin/students")} icon="🧑‍🎓" label="원생 관리" />

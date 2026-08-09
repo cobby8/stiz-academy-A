@@ -74,10 +74,10 @@ const DAY_LABELS: Record<string, string> = {
 
 // 상태 라벨 + 색상
 const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string }> = {
-    BOOKED:    { label: "예약", color: "text-blue-700", bg: "bg-blue-100" },
-    ATTENDED:  { label: "출석", color: "text-green-700", bg: "bg-green-100" },
-    CANCELLED: { label: "취소", color: "text-gray-500 dark:text-gray-400", bg: "bg-gray-100 dark:bg-gray-800" },
-    NO_SHOW:   { label: "노쇼", color: "text-red-700", bg: "bg-red-100" },
+    BOOKED:    { label: "예약", color: "text-[var(--doc-ink-2)]", bg: "bg-[var(--doc-grid-head)]" },
+    ATTENDED:  { label: "출석", color: "text-[var(--doc-accent)]", bg: "bg-[var(--doc-accent-soft)]" },
+    CANCELLED: { label: "취소", color: "text-[var(--doc-ink-2)] ", bg: "bg-[var(--doc-grid-head)] " },
+    NO_SHOW:   { label: "노쇼", color: "text-[var(--doc-crit)]", bg: "bg-[var(--doc-crit-soft)]" },
 };
 
 // 상태 필터 탭 목록
@@ -94,25 +94,25 @@ function MakeupLoadingFallback() {
         <div className="space-y-6">
             <div className="flex items-center justify-between">
                 <div className="space-y-2">
-                    <div className="h-8 w-32 rounded bg-gray-200 dark:bg-gray-700 animate-pulse" />
-                    <div className="h-4 w-72 rounded bg-gray-100 dark:bg-gray-800 animate-pulse" />
+                    <div className="h-8 w-32 rounded bg-[var(--doc-grid-head)]" />
+                    <div className="h-4 w-72 rounded bg-[var(--doc-grid-head)]" />
                 </div>
-                <div className="h-10 w-28 rounded-lg bg-gray-200 dark:bg-gray-700 animate-pulse" />
+                <div className="h-10 w-28 rounded-[3px] bg-[var(--doc-grid-head)]" />
             </div>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 {Array.from({ length: 4 }).map((_, index) => (
                     <div
                         key={index}
-                        className="h-24 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 animate-pulse"
+                        className="h-24 rounded-[3px] border border-[var(--doc-rule)] bg-[var(--doc-surface)]"
                     />
                 ))}
             </div>
-            <div className="h-10 w-80 rounded-lg bg-gray-100 dark:bg-gray-800 animate-pulse" />
-            <div className="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 overflow-hidden">
+            <div className="h-10 w-80 rounded-[3px] bg-[var(--doc-grid-head)]" />
+            <div className="rounded-[3px] border border-[var(--doc-rule)] bg-[var(--doc-surface)] overflow-hidden">
                 {Array.from({ length: 8 }).map((_, index) => (
                     <div
                         key={index}
-                        className="h-14 border-b border-gray-100 dark:border-gray-700 last:border-b-0 bg-gray-50/60 dark:bg-gray-900/40 animate-pulse"
+                        className="h-14 border-b border-[var(--doc-rule)] last:border-b-0 bg-[var(--doc-grid-head)]/60"
                     />
                 ))}
             </div>
@@ -122,13 +122,13 @@ function MakeupLoadingFallback() {
 
 function MakeupErrorState({ onRetry }: { onRetry: () => void }) {
     return (
-        <div className="rounded-2xl border border-red-100 bg-white p-8 text-center shadow-sm dark:border-red-900/40 dark:bg-gray-800">
-            <span className="material-symbols-outlined mb-3 text-4xl text-red-500">error</span>
-            <p className="font-bold text-gray-900 dark:text-white">보강 예약 정보를 불러오지 못했습니다.</p>
+        <div className="rounded-[6px] border border-[var(--doc-crit)] bg-[var(--doc-surface)] p-8 text-center">
+            <span className="material-symbols-outlined mb-3 text-4xl text-[var(--doc-crit)]">error</span>
+            <p className="font-bold text-[var(--doc-ink)]">보강 예약 정보를 불러오지 못했습니다.</p>
             <button
                 type="button"
                 onClick={onRetry}
-                className="mt-4 rounded-xl bg-brand-orange-500 px-4 py-2 text-sm font-bold text-white transition hover:bg-orange-600 dark:bg-brand-neon-lime dark:text-brand-navy-900"
+                className="mt-4 rounded-[3px] bg-[var(--doc-accent)] px-4 py-2 text-sm font-bold text-white transition hover:bg-[var(--doc-grid-head)] dark:text-[var(--doc-ink)]"
             >
                 다시 시도
             </button>
@@ -274,14 +274,14 @@ export default function MakeupClient({
             {/* 페이지 제목 + 예약 버튼 */}
             <div className="flex items-center justify-between">
                 <div>
-                    <h1 className="text-2xl font-bold text-gray-900 dark:text-white">보강 관리</h1>
+                    <h1 className="text-2xl font-bold text-[var(--doc-ink)]">보강 관리</h1>
                 </div>
                 <button
                     onClick={() => {
                         setShowBookModal(true);
                         void loadStudents();
                     }}
-                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
+                    className="px-4 py-2 bg-[var(--doc-grid-head)] text-white rounded-[3px] hover:bg-[var(--doc-grid-head)] transition-colors flex items-center gap-2"
                 >
                     <span className="material-symbols-outlined text-[20px]">event_repeat</span>
                     보강 예약
@@ -293,29 +293,29 @@ export default function MakeupClient({
                 {Object.entries(STATUS_CONFIG).map(([key, cfg]) => (
                     <div
                         key={key}
-                        className="p-4 rounded-xl border border-gray-200 dark:border-gray-700"
+                        className="p-4 rounded-[3px] border border-[var(--doc-rule)]"
                     >
-                        <p className="text-sm text-gray-500 dark:text-gray-400">{cfg.label}</p>
+                        <p className="text-sm text-[var(--doc-ink-2)]">{cfg.label}</p>
                         <p className="text-2xl font-bold mt-1">{statusCounts[key] ?? 0}</p>
                     </div>
                 ))}
             </div>
 
             {/* 상태 필터 탭 */}
-            <div className="flex gap-1 bg-gray-100 dark:bg-gray-800 p-1 rounded-lg w-fit">
+            <div className="flex gap-1 bg-[var(--doc-grid-head)] p-1 rounded-[3px] w-fit">
                 {STATUS_TABS.map((tab) => (
                     <button
                         key={tab.key}
                         onClick={() => setStatusFilter(tab.key)}
-                        className={`px-4 py-1.5 text-sm font-medium rounded-md transition-colors ${
-                            statusFilter === tab.key
-                                ? "bg-white dark:bg-gray-800 text-gray-900 dark:text-white shadow-sm"
-                                : "text-gray-500 hover:text-gray-700 dark:text-gray-200"
-                        }`}
+                        className={`px-4 py-1.5 text-sm font-medium rounded-[3px] transition-colors ${
+ statusFilter === tab.key
+ ? "bg-[var(--doc-surface)] text-[var(--doc-ink)] "
+ : "text-[var(--doc-ink-2)] hover:text-[var(--doc-ink-2)] "
+ }`}
                     >
                         {tab.label}
                         {tab.key !== "ALL" && (
-                            <span className="ml-1 text-xs text-gray-400">
+                            <span className="ml-1 text-xs text-[var(--doc-ink-3)]">
                                 {statusCounts[tab.key] ?? 0}
                             </span>
                         )}
@@ -325,51 +325,51 @@ export default function MakeupClient({
 
             {/* 보강 목록 테이블 */}
             {filteredSessions.length === 0 ? (
-                <div className="text-center py-16 text-gray-400">
+                <div className="text-center py-16 text-[var(--doc-ink-3)]">
                     <span className="material-symbols-outlined text-5xl mb-3 block">event_busy</span>
                     <p>보강 예약이 없습니다</p>
                 </div>
             ) : (
-                <div className="overflow-x-auto bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700">
+                <div className="overflow-x-auto bg-[var(--doc-surface)] rounded-[3px] border border-[var(--doc-rule)]">
                     <table className="w-full text-sm">
-                        <thead className="bg-gray-50 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700">
+                        <thead className="bg-[var(--doc-grid-head)] border-b border-[var(--doc-rule)]">
                             <tr>
-                                <th className="text-left px-4 py-3 font-semibold text-gray-600 dark:text-gray-300">원생</th>
-                                <th className="text-left px-4 py-3 font-semibold text-gray-600 dark:text-gray-300">원래 반</th>
-                                <th className="text-left px-4 py-3 font-semibold text-gray-600 dark:text-gray-300">결석일</th>
-                                <th className="text-left px-4 py-3 font-semibold text-gray-600 dark:text-gray-300">보강 반</th>
-                                <th className="text-left px-4 py-3 font-semibold text-gray-600 dark:text-gray-300">보강일</th>
-                                <th className="text-left px-4 py-3 font-semibold text-gray-600 dark:text-gray-300">상태</th>
-                                <th className="text-right px-4 py-3 font-semibold text-gray-600 dark:text-gray-300">관리</th>
+                                <th className="text-left px-4 py-3 font-semibold text-[var(--doc-ink-2)]">원생</th>
+                                <th className="text-left px-4 py-3 font-semibold text-[var(--doc-ink-2)]">원래 반</th>
+                                <th className="text-left px-4 py-3 font-semibold text-[var(--doc-ink-2)]">결석일</th>
+                                <th className="text-left px-4 py-3 font-semibold text-[var(--doc-ink-2)]">보강 반</th>
+                                <th className="text-left px-4 py-3 font-semibold text-[var(--doc-ink-2)]">보강일</th>
+                                <th className="text-left px-4 py-3 font-semibold text-[var(--doc-ink-2)]">상태</th>
+                                <th className="text-right px-4 py-3 font-semibold text-[var(--doc-ink-2)]">관리</th>
                             </tr>
                         </thead>
-                        <tbody className="divide-y divide-gray-100">
+                        <tbody className="divide-y divide-[var(--doc-rule)]">
                             {filteredSessions.map((item) => {
                                 const cfg = STATUS_CONFIG[item.status] ?? STATUS_CONFIG.BOOKED;
                                 return (
-                                    <tr key={item.id} className="hover:bg-gray-50 dark:bg-gray-900">
-                                        <td className="px-4 py-3 font-medium text-gray-900 dark:text-white">
+                                    <tr key={item.id} className="hover:bg-[var(--doc-grid-head)]">
+                                        <td className="px-4 py-3 font-medium text-[var(--doc-ink)]">
                                             {item.studentName}
                                         </td>
-                                        <td className="px-4 py-3 text-gray-600 dark:text-gray-300">
+                                        <td className="px-4 py-3 text-[var(--doc-ink-2)]">
                                             {item.originalClassName}
-                                            <span className="text-gray-400 ml-1">
+                                            <span className="text-[var(--doc-ink-3)] ml-1">
                                                 ({DAY_LABELS[item.originalDay] ?? item.originalDay})
                                             </span>
                                         </td>
-                                        <td className="px-4 py-3 text-gray-600 dark:text-gray-300">{fmtDate(item.originalDate)}</td>
-                                        <td className="px-4 py-3 text-gray-600 dark:text-gray-300">
+                                        <td className="px-4 py-3 text-[var(--doc-ink-2)]">{fmtDate(item.originalDate)}</td>
+                                        <td className="px-4 py-3 text-[var(--doc-ink-2)]">
                                             {item.makeupClassName}
-                                            <span className="text-gray-400 ml-1">
+                                            <span className="text-[var(--doc-ink-3)] ml-1">
                                                 ({DAY_LABELS[item.makeupDay] ?? item.makeupDay})
                                             </span>
                                         </td>
-                                        <td className="px-4 py-3 text-gray-600 dark:text-gray-300">{fmtDate(item.makeupDate)}</td>
+                                        <td className="px-4 py-3 text-[var(--doc-ink-2)]">{fmtDate(item.makeupDate)}</td>
                                         <td className="px-4 py-3">
                                             {/* 상태 드롭다운: BOOKED일 때만 변경 가능 */}
                                             {item.status === "BOOKED" ? (
                                                 <select
-                                                    className={`text-xs font-semibold px-2 py-1 rounded-full border-0 ${cfg.bg} ${cfg.color}`}
+                                                    className={`text-xs font-semibold px-2 py-1 rounded-[3px] border-0 ${cfg.bg} ${cfg.color}`}
                                                     value={item.status}
                                                     onChange={(e) => handleStatusChange(item.id, e.target.value)}
                                                     disabled={busy}
@@ -380,7 +380,7 @@ export default function MakeupClient({
                                                     <option value="CANCELLED">취소</option>
                                                 </select>
                                             ) : (
-                                                <span className={`text-xs font-semibold px-2 py-1 rounded-full ${cfg.bg} ${cfg.color}`}>
+                                                <span className={`text-xs font-semibold px-2 py-1 rounded-[3px] ${cfg.bg} ${cfg.color}`}>
                                                     {cfg.label}
                                                 </span>
                                             )}
@@ -390,7 +390,7 @@ export default function MakeupClient({
                                                 <button
                                                     onClick={() => handleCancel(item.id)}
                                                     disabled={busy}
-                                                    className="text-xs text-red-600 hover:text-red-800 font-medium"
+                                                    className="text-xs text-[var(--doc-crit)] hover:text-[var(--doc-crit)] font-medium"
                                                 >
                                                     취소
                                                 </button>
@@ -580,11 +580,11 @@ function BookMakeupModal({
         >
             <div className="w-full">
                 {/* 모달 헤더 */}
-                <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700">
-                    <h2 id="book-makeup-title" className="text-lg font-bold text-gray-900 dark:text-white">
+                <div className="flex items-center justify-between p-6 border-b border-[var(--doc-rule)]">
+                    <h2 id="book-makeup-title" className="text-lg font-bold text-[var(--doc-ink)]">
                         {step === 1 ? "보강 예약 - 원생/결석 정보" : "보강 예약 - 보강 반 선택"}
                     </h2>
-                    <button onClick={onClose} className="text-gray-400 hover:text-gray-600 dark:text-gray-300">
+                    <button onClick={onClose} className="text-[var(--doc-ink-3)] hover:text-[var(--doc-ink-2)]">
                         <span className="material-symbols-outlined">close</span>
                     </button>
                 </div>
@@ -594,20 +594,20 @@ function BookMakeupModal({
                         <>
                             {/* 원생 선택 */}
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">원생 선택</label>
+                                <label className="block text-sm font-medium text-[var(--doc-ink-2)] mb-1">원생 선택</label>
                                 <input
                                     type="text"
                                     placeholder="이름 검색..."
                                     value={studentSearch}
                                     onChange={(e) => setStudentSearch(e.target.value)}
                                     disabled={studentsLoading || Boolean(studentsError)}
-                                    className="w-full border border-gray-300 dark:border-gray-600 dark:text-white dark:bg-gray-800 rounded-lg px-3 py-2 text-sm mb-2"
+                                    className="w-full border border-[var(--doc-rule)] rounded-[3px] px-3 py-2 text-sm mb-2"
                                 />
                                 <select
                                     value={studentId}
                                     onChange={(e) => setStudentId(e.target.value)}
                                     disabled={studentsLoading || Boolean(studentsError)}
-                                    className="w-full border border-gray-300 dark:border-gray-600 dark:text-white dark:bg-gray-800 rounded-lg px-3 py-2 text-sm"
+                                    className="w-full border border-[var(--doc-rule)] rounded-[3px] px-3 py-2 text-sm"
                                     size={5}
                                 >
                                     <option value="">
@@ -620,19 +620,19 @@ function BookMakeupModal({
                                     ))}
                                 </select>
                                 {studentsError && (
-                                    <div className="mt-2 flex items-center justify-between gap-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-950/30 dark:text-red-200">
+                                    <div className="mt-2 flex items-center justify-between gap-3 rounded-[3px] bg-[var(--doc-crit-soft)] px-3 py-2 text-sm text-[var(--doc-crit)]">
                                         <span>{studentsError}</span>
                                         <button
                                             type="button"
                                             onClick={() => void onRetryLoadStudents()}
-                                            className="shrink-0 rounded-md border border-red-200 px-2 py-1 text-xs font-medium text-red-700 hover:bg-red-100 dark:border-red-800 dark:text-red-200 dark:hover:bg-red-900/40"
+                                            className="shrink-0 rounded-[3px] border border-[var(--doc-crit)] px-2 py-1 text-xs font-medium text-[var(--doc-crit)] hover:bg-[var(--doc-crit-soft)]"
                                         >
                                             다시 시도
                                         </button>
                                     </div>
                                 )}
                                 {!studentsLoading && !studentsError && students.length === 0 && (
-                                    <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
+                                    <p className="mt-2 text-sm text-[var(--doc-ink-2)]">
                                         등록된 원생이 없습니다.
                                     </p>
                                 )}
@@ -640,11 +640,11 @@ function BookMakeupModal({
 
                             {/* 원래 반 선택 */}
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">원래 반 (결석한 반)</label>
+                                <label className="block text-sm font-medium text-[var(--doc-ink-2)] mb-1">원래 반 (결석한 반)</label>
                                 <select
                                     value={originalClassId}
                                     onChange={(e) => setOriginalClassId(e.target.value)}
-                                    className="w-full border border-gray-300 dark:border-gray-600 dark:text-white dark:bg-gray-800 rounded-lg px-3 py-2 text-sm"
+                                    className="w-full border border-[var(--doc-rule)] rounded-[3px] px-3 py-2 text-sm"
                                 >
                                     <option value="">-- 반 선택 --</option>
                                     {classes.map((c) => (
@@ -658,19 +658,19 @@ function BookMakeupModal({
 
                             {/* 결석일 */}
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">결석일</label>
+                                <label className="block text-sm font-medium text-[var(--doc-ink-2)] mb-1">결석일</label>
                                 <input
                                     type="date"
                                     min="2020-01-01" max="2030-12-31"
                                     value={originalDate}
                                     onChange={(e) => setOriginalDate(e.target.value)}
-                                    className="w-full border border-gray-300 dark:border-gray-600 dark:text-white dark:bg-gray-800 rounded-lg px-3 py-2 text-sm"
+                                    className="w-full border border-[var(--doc-rule)] rounded-[3px] px-3 py-2 text-sm"
                                 />
                             </div>
 
                             <button
                                 onClick={goToStep2}
-                                className="w-full py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium transition-colors"
+                                className="w-full py-2.5 bg-[var(--doc-grid-head)] text-white rounded-[3px] hover:bg-[var(--doc-grid-head)] font-medium transition-colors"
                             >
                                 다음: 보강 반 선택
                             </button>
@@ -680,38 +680,38 @@ function BookMakeupModal({
                     {step === 2 && (
                         <>
                             {/* 선택된 정보 요약 */}
-                            <div className="bg-gray-50 dark:bg-gray-900 rounded-lg p-3 text-sm space-y-1">
+                            <div className="bg-[var(--doc-grid-head)] rounded-[3px] p-3 text-sm space-y-1">
                                 <p>
-                                    <span className="text-gray-500 dark:text-gray-400">원생:</span>{" "}
+                                    <span className="text-[var(--doc-ink-2)]">원생:</span>{" "}
                                     <span className="font-medium">{students.find((s) => s.id === studentId)?.name}</span>
                                 </p>
                                 <p>
-                                    <span className="text-gray-500 dark:text-gray-400">원래 반:</span>{" "}
+                                    <span className="text-[var(--doc-ink-2)]">원래 반:</span>{" "}
                                     <span className="font-medium">
                                         {selectedClass?.name} ({DAY_LABELS[selectedClass?.dayOfWeek ?? ""] ?? selectedClass?.dayOfWeek})
                                     </span>
                                 </p>
                                 <p>
-                                    <span className="text-gray-500 dark:text-gray-400">결석일:</span>{" "}
+                                    <span className="text-[var(--doc-ink-2)]">결석일:</span>{" "}
                                     <span className="font-medium">{originalDate}</span>
                                 </p>
                             </div>
 
                             {/* 보강 반 선택 */}
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">
+                                <label className="block text-sm font-medium text-[var(--doc-ink-2)] mb-1">
                                     보강 반 선택 (같은 프로그램: {selectedClass?.program?.name ?? "미지정"})
                                 </label>
                                 {loading ? (
-                                    <p className="text-sm text-gray-400 py-4 text-center">조회 중...</p>
+                                    <p className="text-sm text-[var(--doc-ink-3)] py-4 text-center">조회 중...</p>
                                 ) : availableSlots.length === 0 ? (
-                                    <p className="text-sm text-gray-400 py-4 text-center">
+                                    <p className="text-sm text-[var(--doc-ink-3)] py-4 text-center">
                                         같은 프로그램의 다른 반이 없습니다
                                     </p>
                                 ) : (
                                     <div className="space-y-2">
                                         {!seatsLoaded && (
-                                            <p className="text-xs text-gray-500 dark:text-gray-400">
+                                            <p className="text-xs text-[var(--doc-ink-2)]">
                                                 아래 &quot;보강 수업일&quot;을 선택하면 그 날짜의 실제 잔여석이 표시됩니다.
                                             </p>
                                         )}
@@ -721,13 +721,13 @@ function BookMakeupModal({
                                             return (
                                             <label
                                                 key={slot.id}
-                                                className={`flex items-center gap-3 p-3 border rounded-lg transition-all ${
-                                                    full
-                                                        ? "border-gray-200 dark:border-gray-700 opacity-60 cursor-not-allowed"
-                                                        : makeupClassId === slot.id
-                                                            ? "border-blue-500 bg-blue-50 cursor-pointer"
-                                                            : "border-gray-200 dark:border-gray-700 hover:border-gray-300 cursor-pointer"
-                                                }`}
+                                                className={`flex items-center gap-3 p-3 border rounded-[3px] transition-all ${
+ full
+ ? "border-[var(--doc-rule)] opacity-60 cursor-not-allowed"
+ : makeupClassId === slot.id
+ ? "border-[var(--doc-rule)] bg-[var(--doc-grid-head)] cursor-pointer"
+ : "border-[var(--doc-rule)] hover:border-[var(--doc-rule)] cursor-pointer"
+ }`}
                                             >
                                                 <input
                                                     type="radio"
@@ -740,11 +740,11 @@ function BookMakeupModal({
                                                 />
                                                 <div className="flex-1">
                                                     <p className="font-medium text-sm">{slot.name}</p>
-                                                    <p className="text-xs text-gray-500 dark:text-gray-400">
+                                                    <p className="text-xs text-[var(--doc-ink-2)]">
                                                         {DAY_LABELS[slot.dayOfWeek] ?? slot.dayOfWeek}요일 {slot.startTime}~{slot.endTime}
                                                         {" / "}
                                                         {/* 잔여 N석 · 정원 M명 (아직 모르면 "잔여석 확인 중") */}
-                                                        <span className={full ? "font-semibold text-red-600" : ""}>
+                                                        <span className={full ? "font-semibold text-[var(--doc-crit)]" : ""}>
                                                             {formatSeatLabel(slot, seatsLoaded)}
                                                         </span>
                                                     </p>
@@ -758,27 +758,27 @@ function BookMakeupModal({
 
                             {/* 보강일 */}
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">보강 수업일</label>
+                                <label className="block text-sm font-medium text-[var(--doc-ink-2)] mb-1">보강 수업일</label>
                                 <input
                                     type="date"
                                     min="2020-01-01" max="2030-12-31"
                                     value={makeupDate}
                                     onChange={(e) => setMakeupDate(e.target.value)}
-                                    className="w-full border border-gray-300 dark:border-gray-600 dark:text-white dark:bg-gray-800 rounded-lg px-3 py-2 text-sm"
+                                    className="w-full border border-[var(--doc-rule)] rounded-[3px] px-3 py-2 text-sm"
                                 />
                             </div>
 
                             <div className="flex gap-3">
                                 <button
                                     onClick={() => setStep(1)}
-                                    className="flex-1 py-2.5 border border-gray-300 text-gray-700 dark:text-gray-200 rounded-lg hover:bg-gray-50 dark:bg-gray-900 font-medium transition-colors"
+                                    className="flex-1 py-2.5 border border-[var(--doc-rule)] text-[var(--doc-ink-2)] rounded-[3px] hover:bg-[var(--doc-grid-head)] font-medium transition-colors"
                                 >
                                     이전
                                 </button>
                                 <button
                                     onClick={handleBook}
                                     disabled={busy || !makeupClassId || !makeupDate}
-                                    className="flex-1 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium transition-colors disabled:opacity-50"
+                                    className="flex-1 py-2.5 bg-[var(--doc-grid-head)] text-white rounded-[3px] hover:bg-[var(--doc-grid-head)] font-medium transition-colors disabled:opacity-50"
                                 >
                                     {busy ? "처리 중..." : "보강 예약"}
                                 </button>

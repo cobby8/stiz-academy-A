@@ -122,9 +122,9 @@ interface ImportDetailState {
 // ──────────────────────────────────────────────
 
 const STATUS_LABEL: Record<string, { text: string; color: string }> = {
-  ACTIVE: { text: "재원", color: "bg-green-100 text-green-800" },
-  PAUSED: { text: "휴원", color: "bg-yellow-100 text-yellow-800" },
-  WITHDRAWN: { text: "퇴원", color: "bg-red-100 text-red-800" },
+  ACTIVE: { text: "재원", color: "bg-[var(--doc-accent-soft)] text-[var(--doc-accent)]" },
+  PAUSED: { text: "휴원", color: "bg-[var(--doc-grid-head)] text-[var(--doc-warn)]" },
+  WITHDRAWN: { text: "퇴원", color: "bg-[var(--doc-crit-soft)] text-[var(--doc-crit)]" },
 };
 
 const METHOD_LABEL: Record<string, string> = {
@@ -312,12 +312,12 @@ export default function ImportClient({ defaultSheetUrl = "" }: { defaultSheetUrl
       <div className="flex items-center justify-between">
         <div>
           {/* 설명문구 제거: 제목 반복 + 개발자 용어(DB) */}
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">수강생 데이터 이관</h1>
+          <h1 className="text-2xl font-bold text-[var(--doc-ink)]">수강생 데이터 이관</h1>
         </div>
         {step !== "upload" && (
           <button
             onClick={handleReset}
-            className="px-4 py-2 text-sm bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-200 rounded-lg hover:bg-gray-200 transition-colors"
+            className="px-4 py-2 text-sm bg-[var(--doc-grid-head)] text-[var(--doc-ink-2)] rounded-[3px] hover:bg-[var(--doc-grid-head)] transition-colors"
           >
             <span className="material-symbols-outlined text-base align-middle mr-1">
               restart_alt
@@ -332,11 +332,11 @@ export default function ImportClient({ defaultSheetUrl = "" }: { defaultSheetUrl
 
       {/* 에러 표시 */}
       {error && (
-        <div className="bg-red-50 border border-red-200 rounded-lg p-4 flex items-start gap-3">
-          <span className="material-symbols-outlined text-red-500 mt-0.5">error</span>
+        <div className="bg-[var(--doc-crit-soft)] border border-[var(--doc-crit)] rounded-[3px] p-4 flex items-start gap-3">
+          <span className="material-symbols-outlined text-[var(--doc-crit)] mt-0.5">error</span>
           <div>
-            <p className="text-sm font-medium text-red-800">오류</p>
-            <p className="text-sm text-red-600 mt-1">{error}</p>
+            <p className="text-sm font-medium text-[var(--doc-crit)]">오류</p>
+            <p className="text-sm text-[var(--doc-crit)] mt-1">{error}</p>
           </div>
         </div>
       )}
@@ -350,16 +350,16 @@ export default function ImportClient({ defaultSheetUrl = "" }: { defaultSheetUrl
       />
 
       {step === "upload" && (
-        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border p-6 space-y-4">
-          <div className="rounded-lg border border-blue-100 bg-blue-50/70 p-4 dark:border-blue-500/30 dark:bg-blue-500/10">
+        <div className="bg-[var(--doc-surface)] rounded-[3px] border p-6 space-y-4">
+          <div className="rounded-[3px] border border-[var(--doc-rule)] bg-[var(--doc-grid-head)]/70 p-4">
             <div className="flex items-start gap-3">
-              <span className="material-symbols-outlined text-blue-600 dark:text-blue-300">sync</span>
+              <span className="material-symbols-outlined text-[var(--doc-ink-2)]">sync</span>
               <div className="flex-1 space-y-3">
                 <div>
-                  <p className="text-sm font-semibold text-blue-900 dark:text-blue-100">
+                  <p className="text-sm font-semibold text-[var(--doc-ink-2)]">
                     구글시트에서 바로 가져오기
                   </p>
-                  <p className="mt-1 text-xs text-blue-700 dark:text-blue-200">
+                  <p className="mt-1 text-xs text-[var(--doc-ink-2)]">
                     등록, 차량, 변동내역, 대표팀 명단 탭을 한 번에 읽어 DB 이관 미리보기를 만듭니다.
                   </p>
                 </div>
@@ -371,12 +371,12 @@ export default function ImportClient({ defaultSheetUrl = "" }: { defaultSheetUrl
                       setError(null);
                     }}
                     placeholder="https://docs.google.com/spreadsheets/d/..."
-                    className="min-w-0 flex-1 rounded-lg border border-blue-200 bg-white px-3 py-2 text-sm text-gray-900 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-200 dark:border-blue-500/40 dark:bg-gray-900 dark:text-white"
+                    className="min-w-0 flex-1 rounded-[3px] border border-[var(--doc-rule)] bg-[var(--doc-surface)] px-3 py-2 text-sm text-[var(--doc-ink)] outline-none focus:border-[var(--doc-rule)] focus: focus:"
                   />
                   <button
                     onClick={() => handlePreview("googleSheet")}
                     disabled={loading || !sheetUrl.trim()}
-                    className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+                    className="rounded-[3px] bg-[var(--doc-grid-head)] px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-[var(--doc-grid-head)] disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     {loading ? "불러오는 중..." : "구글시트 미리보기"}
                   </button>
@@ -385,8 +385,8 @@ export default function ImportClient({ defaultSheetUrl = "" }: { defaultSheetUrl
             </div>
           </div>
 
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
-            <span className="material-symbols-outlined text-xl align-middle mr-2 text-blue-500">
+          <h2 className="text-lg font-semibold text-[var(--doc-ink)]">
+            <span className="material-symbols-outlined text-xl align-middle mr-2 text-[var(--doc-ink-2)]">
               upload_file
             </span>
             CSV 데이터 입력
@@ -402,12 +402,12 @@ export default function ImportClient({ defaultSheetUrl = "" }: { defaultSheetUrl
               setError(null);
             }}
             placeholder="여기에 스프레드시트 데이터를 붙여넣으세요... (Ctrl+V)&#10;&#10;헤더 행을 포함해서 전체를 복사해주세요."
-            className="w-full h-48 p-4 border rounded-lg text-sm font-mono resize-y focus:ring-2 focus:ring-blue-300 focus:border-blue-400 outline-none"
+            className="w-full h-48 p-4 border rounded-[3px] text-sm font-mono resize-y focus: focus: focus:border-[var(--doc-rule)] outline-none"
           />
 
           {/* 파일 업로드 */}
           <div className="flex items-center gap-4">
-            <label className="px-4 py-2 text-sm bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-200 rounded-lg hover:bg-gray-200 transition-colors cursor-pointer">
+            <label className="px-4 py-2 text-sm bg-[var(--doc-grid-head)] text-[var(--doc-ink-2)] rounded-[3px] hover:bg-[var(--doc-grid-head)] transition-colors cursor-pointer">
               <span className="material-symbols-outlined text-base align-middle mr-1">
                 attach_file
               </span>
@@ -421,7 +421,7 @@ export default function ImportClient({ defaultSheetUrl = "" }: { defaultSheetUrl
             </label>
 
             {csvText && (
-              <span className="text-sm text-gray-500 dark:text-gray-400">
+              <span className="text-sm text-[var(--doc-ink-2)]">
                 {csvText.split("\n").filter((l) => l.trim()).length}행 입력됨
               </span>
             )}
@@ -432,7 +432,7 @@ export default function ImportClient({ defaultSheetUrl = "" }: { defaultSheetUrl
             <button
               onClick={() => handlePreview("csv")}
               disabled={loading || !csvText.trim()}
-              className="px-6 py-3 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              className="px-6 py-3 bg-[var(--doc-grid-head)] text-white font-semibold rounded-[3px] hover:bg-[var(--doc-grid-head)] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
               {loading ? (
                 <span className="flex items-center gap-2">
@@ -465,7 +465,7 @@ export default function ImportClient({ defaultSheetUrl = "" }: { defaultSheetUrl
           </div>
 
           {auxiliarySummary && auxiliarySummary.totalRows > 0 && (
-            <div className="rounded-lg border border-blue-100 bg-blue-50/70 p-4 text-sm text-blue-900 dark:border-blue-500/30 dark:bg-blue-500/10 dark:text-blue-100">
+            <div className="rounded-[3px] border border-[var(--doc-rule)] bg-[var(--doc-grid-head)]/70 p-4 text-sm text-[var(--doc-ink-2)]">
               <div className="flex flex-wrap items-center gap-3">
                 <span className="material-symbols-outlined text-base">dataset</span>
                 <span className="font-semibold">보조 탭 감지</span>
@@ -474,7 +474,7 @@ export default function ImportClient({ defaultSheetUrl = "" }: { defaultSheetUrl
                 <span>대표팀 {auxiliarySummary.teamRows.toLocaleString()}행</span>
               </div>
               {sourceInfo?.type === "googleSheet" && (
-                <p className="mt-2 text-xs text-blue-700 dark:text-blue-200">
+                <p className="mt-2 text-xs text-[var(--doc-ink-2)]">
                   읽은 탭: {sourceInfo.fetchedSheets.join(", ")}
                 </p>
               )}
@@ -482,7 +482,7 @@ export default function ImportClient({ defaultSheetUrl = "" }: { defaultSheetUrl
           )}
 
           {sourceInfo?.skippedSheets?.length ? (
-            <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-100">
+            <div className="rounded-[3px] border border-[var(--doc-warn)] bg-[var(--doc-grid-head)] p-4 text-sm text-[var(--doc-warn)]">
               일부 탭은 없거나 읽을 수 없어 건너뛰었습니다:{" "}
               {sourceInfo.skippedSheets.slice(0, 8).map((sheet) => sheet.sheetName).join(", ")}
               {sourceInfo.skippedSheets.length > 8 ? " ..." : ""}
@@ -491,19 +491,19 @@ export default function ImportClient({ defaultSheetUrl = "" }: { defaultSheetUrl
 
           {/* 에러 목록 (있는 경우) */}
           {preview.errors.length > 0 && (
-            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-              <p className="text-sm font-medium text-yellow-800 mb-2">
+            <div className="bg-[var(--doc-grid-head)] border border-[var(--doc-warn)] rounded-[3px] p-4">
+              <p className="text-sm font-medium text-[var(--doc-warn)] mb-2">
                 <span className="material-symbols-outlined text-base align-middle mr-1">warning</span>
                 파싱 경고 ({preview.errors.length}건)
               </p>
-              <ul className="text-sm text-yellow-700 space-y-1">
+              <ul className="text-sm text-[var(--doc-warn)] space-y-1">
                 {preview.errors.slice(0, 10).map((e, i) => (
                   <li key={i}>
                     행 {e.rowNumber}: {e.reason}
                   </li>
                 ))}
                 {preview.errors.length > 10 && (
-                  <li className="text-yellow-500">... 외 {preview.errors.length - 10}건</li>
+                  <li className="text-[var(--doc-warn)]">... 외 {preview.errors.length - 10}건</li>
                 )}
               </ul>
             </div>
@@ -520,11 +520,11 @@ export default function ImportClient({ defaultSheetUrl = "" }: { defaultSheetUrl
               <button
                 key={tab.key}
                 onClick={() => setStatusFilter(tab.key)}
-                className={`px-3 py-1.5 text-sm rounded-lg transition-colors ${
-                  statusFilter === tab.key
-                    ? "bg-blue-600 text-white"
-                    : "bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-200"
-                }`}
+                className={`px-3 py-1.5 text-sm rounded-[3px] transition-colors ${
+ statusFilter === tab.key
+ ? "bg-[var(--doc-grid-head)] text-white"
+ : "bg-[var(--doc-grid-head)] text-[var(--doc-ink-2)] hover:bg-[var(--doc-grid-head)]"
+ }`}
               >
                 {tab.label} ({tab.count})
               </button>
@@ -532,47 +532,47 @@ export default function ImportClient({ defaultSheetUrl = "" }: { defaultSheetUrl
           </div>
 
           {/* 학생 테이블 */}
-          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border overflow-hidden">
+          <div className="bg-[var(--doc-surface)] rounded-[3px] border overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
-                <thead className="bg-gray-50 dark:bg-gray-900 border-b">
+                <thead className="bg-[var(--doc-grid-head)] border-b">
                   <tr>
-                    <th className="px-4 py-3 text-left font-medium text-gray-500 dark:text-gray-400">#</th>
-                    <th className="px-4 py-3 text-left font-medium text-gray-500 dark:text-gray-400">지점</th>
-                    <th className="px-4 py-3 text-left font-medium text-gray-500 dark:text-gray-400">이름</th>
-                    <th className="px-4 py-3 text-left font-medium text-gray-500 dark:text-gray-400">학부모</th>
-                    <th className="px-4 py-3 text-left font-medium text-gray-500 dark:text-gray-400">학교/학년</th>
-                    <th className="px-4 py-3 text-left font-medium text-gray-500 dark:text-gray-400">상태</th>
-                    <th className="px-4 py-3 text-left font-medium text-gray-500 dark:text-gray-400">결제</th>
-                    <th className="px-4 py-3 text-left font-medium text-gray-500 dark:text-gray-400">수업</th>
+                    <th className="px-4 py-3 text-left font-medium text-[var(--doc-ink-2)]">#</th>
+                    <th className="px-4 py-3 text-left font-medium text-[var(--doc-ink-2)]">지점</th>
+                    <th className="px-4 py-3 text-left font-medium text-[var(--doc-ink-2)]">이름</th>
+                    <th className="px-4 py-3 text-left font-medium text-[var(--doc-ink-2)]">학부모</th>
+                    <th className="px-4 py-3 text-left font-medium text-[var(--doc-ink-2)]">학교/학년</th>
+                    <th className="px-4 py-3 text-left font-medium text-[var(--doc-ink-2)]">상태</th>
+                    <th className="px-4 py-3 text-left font-medium text-[var(--doc-ink-2)]">결제</th>
+                    <th className="px-4 py-3 text-left font-medium text-[var(--doc-ink-2)]">수업</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y">
                   {filteredStudents.slice(0, 100).map((s, i) => {
-                    const statusInfo = STATUS_LABEL[s.status] || { text: s.status, color: "bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-100" };
+                    const statusInfo = STATUS_LABEL[s.status] || { text: s.status, color: "bg-[var(--doc-grid-head)]  text-[var(--doc-ink)] " };
                     return (
-                      <tr key={i} className="hover:bg-gray-50 dark:bg-gray-900">
-                        <td className="px-4 py-3 text-gray-400">{s.rowNumber}</td>
+                      <tr key={i} className="hover:bg-[var(--doc-grid-head)]">
+                        <td className="px-4 py-3 text-[var(--doc-ink-3)]">{s.rowNumber}</td>
                         <td className="px-4 py-3">{s.branch}</td>
                         <td className="px-4 py-3 font-medium">{s.name}</td>
-                        <td className="px-4 py-3 text-gray-600 dark:text-gray-300">
+                        <td className="px-4 py-3 text-[var(--doc-ink-2)]">
                           {s.parentName}
                           <br />
-                          <span className="text-xs text-gray-400">{s.parentPhone}</span>
+                          <span className="text-xs text-[var(--doc-ink-3)]">{s.parentPhone}</span>
                         </td>
-                        <td className="px-4 py-3 text-gray-600 dark:text-gray-300">
+                        <td className="px-4 py-3 text-[var(--doc-ink-2)]">
                           {s.school || "-"}
-                          {s.grade && <span className="text-xs text-gray-400 ml-1">{s.grade}</span>}
+                          {s.grade && <span className="text-xs text-[var(--doc-ink-3)] ml-1">{s.grade}</span>}
                         </td>
                         <td className="px-4 py-3">
-                          <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${statusInfo.color}`}>
+                          <span className={`px-2 py-0.5 rounded-[3px] text-xs font-medium ${statusInfo.color}`}>
                             {statusInfo.text}
                           </span>
                         </td>
-                        <td className="px-4 py-3 text-gray-600 dark:text-gray-300">
+                        <td className="px-4 py-3 text-[var(--doc-ink-2)]">
                           {s.paymentMethod ? METHOD_LABEL[s.paymentMethod] || s.paymentMethod : "-"}
                           {s.amount ? (
-                            <span className="text-xs text-gray-400 ml-1">
+                            <span className="text-xs text-[var(--doc-ink-3)] ml-1">
                               {s.amount.toLocaleString()}원
                             </span>
                           ) : null}
@@ -583,14 +583,14 @@ export default function ImportClient({ defaultSheetUrl = "" }: { defaultSheetUrl
                               {s.slotKeys.map((key) => (
                                 <span
                                   key={key}
-                                  className="px-1.5 py-0.5 bg-blue-50 text-blue-700 text-xs rounded"
+                                  className="px-1.5 py-0.5 bg-[var(--doc-grid-head)] text-[var(--doc-ink-2)] text-xs rounded"
                                 >
                                   {key}
                                 </span>
                               ))}
                             </div>
                           ) : (
-                            <span className="text-gray-400">-</span>
+                            <span className="text-[var(--doc-ink-3)]">-</span>
                           )}
                         </td>
                       </tr>
@@ -601,7 +601,7 @@ export default function ImportClient({ defaultSheetUrl = "" }: { defaultSheetUrl
             </div>
 
             {filteredStudents.length > 100 && (
-              <div className="px-4 py-3 bg-gray-50 dark:bg-gray-900 border-t text-sm text-gray-500 dark:text-gray-400">
+              <div className="px-4 py-3 bg-[var(--doc-grid-head)] border-t text-sm text-[var(--doc-ink-2)]">
                 상위 100명만 표시됨 (전체 {filteredStudents.length}명)
               </div>
             )}
@@ -611,14 +611,14 @@ export default function ImportClient({ defaultSheetUrl = "" }: { defaultSheetUrl
           <div className="flex justify-end gap-3">
             <button
               onClick={() => setStep("upload")}
-              className="px-6 py-3 bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-200 font-semibold rounded-lg hover:bg-gray-200 transition-colors"
+              className="px-6 py-3 bg-[var(--doc-grid-head)] text-[var(--doc-ink-2)] font-semibold rounded-[3px] hover:bg-[var(--doc-grid-head)] transition-colors"
             >
               뒤로
             </button>
             <button
               onClick={handleExecute}
               disabled={loading || preview.students.length === 0}
-              className="px-6 py-3 bg-orange-500 text-white font-semibold rounded-lg hover:bg-orange-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              className="px-6 py-3 bg-[var(--doc-grid-head)] text-white font-semibold rounded-[3px] hover:bg-[var(--doc-grid-head)] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
               {loading ? (
                 <span className="flex items-center gap-2">
@@ -640,11 +640,11 @@ export default function ImportClient({ defaultSheetUrl = "" }: { defaultSheetUrl
       {step === "result" && importResult && (
         <div className="space-y-6">
           {/* 성공 배너 */}
-          <div className="bg-green-50 border border-green-200 rounded-lg p-6 text-center">
-            <span className="material-symbols-outlined text-5xl text-green-500">check_circle</span>
-            <h2 className="text-xl font-bold text-green-800 mt-3">이관 완료</h2>
+          <div className="bg-[var(--doc-accent-soft)] border border-[var(--doc-accent)] rounded-[3px] p-6 text-center">
+            <span className="material-symbols-outlined text-5xl text-[var(--doc-accent)]">check_circle</span>
+            <h2 className="text-xl font-bold text-[var(--doc-accent)] mt-3">이관 완료</h2>
             {/* 개발자 표현(DB 삽입)만 다듬고 성공 안내는 유지 */}
-            <p className="text-sm text-green-600 mt-1">
+            <p className="text-sm text-[var(--doc-accent)] mt-1">
               데이터가 성공적으로 저장되었습니다.
             </p>
           </div>
@@ -675,7 +675,7 @@ export default function ImportClient({ defaultSheetUrl = "" }: { defaultSheetUrl
           </div>
 
           {importResult.sheetImport && (
-            <div className="rounded-lg border border-blue-100 bg-blue-50/70 p-4 text-sm text-blue-900 dark:border-blue-500/30 dark:bg-blue-500/10 dark:text-blue-100">
+            <div className="rounded-[3px] border border-[var(--doc-rule)] bg-[var(--doc-grid-head)]/70 p-4 text-sm text-[var(--doc-ink-2)]">
               <div className="flex flex-wrap items-center gap-3">
                 <span className="material-symbols-outlined text-base">database</span>
                 <span className="font-semibold">시트 원본 저장</span>
@@ -692,14 +692,14 @@ export default function ImportClient({ defaultSheetUrl = "" }: { defaultSheetUrl
 
           {/* 실패 목록 */}
           {importResult.failed.length > 0 && (
-            <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-              <p className="text-sm font-medium text-red-800 mb-2">
+            <div className="bg-[var(--doc-crit-soft)] border border-[var(--doc-crit)] rounded-[3px] p-4">
+              <p className="text-sm font-medium text-[var(--doc-crit)] mb-2">
                 <span className="material-symbols-outlined text-base align-middle mr-1">error</span>
                 실패 ({importResult.failed.length}건)
               </p>
               <div className="space-y-1 max-h-60 overflow-y-auto">
                 {importResult.failed.map((f, i) => (
-                  <p key={i} className="text-sm text-red-600">
+                  <p key={i} className="text-sm text-[var(--doc-crit)]">
                     행 {f.rowNumber} ({f.name}): {f.reason}
                   </p>
                 ))}
@@ -711,7 +711,7 @@ export default function ImportClient({ defaultSheetUrl = "" }: { defaultSheetUrl
           <div className="flex justify-center">
             <button
               onClick={handleReset}
-              className="px-6 py-3 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 transition-colors"
+              className="px-6 py-3 bg-[var(--doc-grid-head)] text-white font-semibold rounded-[3px] hover:bg-[var(--doc-grid-head)] transition-colors"
             >
               <span className="material-symbols-outlined text-base align-middle mr-1">restart_alt</span>
               새 이관 시작
@@ -787,11 +787,11 @@ function ImportHistoryPanel({
   };
 
   return (
-    <section className="rounded-xl border bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-800">
+    <section className="rounded-[3px] border bg-[var(--doc-surface)] p-4">
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div>
           {/* 내부 조회 동작 설명 제거 */}
-          <h2 className="text-base font-semibold text-gray-900 dark:text-white">
+          <h2 className="text-base font-semibold text-[var(--doc-ink)]">
             최근 이관 기록
           </h2>
         </div>
@@ -799,7 +799,7 @@ function ImportHistoryPanel({
           type="button"
           onClick={onLoad}
           disabled={loading}
-          className="inline-flex items-center justify-center gap-2 rounded-lg bg-gray-900 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-lime-300 dark:text-gray-950 dark:hover:bg-lime-200"
+          className="inline-flex items-center justify-center gap-2 rounded-[3px] bg-[var(--doc-grid-head)] px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-[var(--doc-grid-head)] disabled:cursor-not-allowed disabled:opacity-50 dark:bg-lime-300 dark:hover:bg-lime-200"
         >
           <span className={`material-symbols-outlined text-base ${loading ? "animate-spin" : ""}`}>
             {loading ? "progress_activity" : "history"}
@@ -809,7 +809,7 @@ function ImportHistoryPanel({
       </div>
 
       {error && (
-        <div className="mt-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-100">
+        <div className="mt-4 rounded-[3px] border border-[var(--doc-crit)] bg-[var(--doc-crit-soft)] p-3 text-sm text-[var(--doc-crit)]">
           {error}
         </div>
       )}
@@ -817,7 +817,7 @@ function ImportHistoryPanel({
       {/* 성능 최적화 설명문구 제거: 위 '최근 기록 불러오기' 버튼으로 자명 */}
 
       {batches?.length === 0 ? (
-        <p className="mt-4 text-sm text-gray-500 dark:text-gray-400">
+        <p className="mt-4 text-sm text-[var(--doc-ink-2)]">
           아직 저장된 이관 기록이 없습니다.
         </p>
       ) : null}
@@ -827,19 +827,19 @@ function ImportHistoryPanel({
           {batches.map((batch) => (
             <article
               key={batch.id}
-              className="rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-900"
+              className="rounded-[3px] border border-[var(--doc-rule)] bg-[var(--doc-grid-head)] p-4"
             >
               <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
                 <div>
                   <div className="flex flex-wrap items-center gap-2">
-                    <span className="rounded-full bg-green-100 px-2 py-0.5 text-xs font-semibold text-green-800 dark:bg-lime-300/15 dark:text-lime-200">
+                    <span className="rounded-[3px] bg-[var(--doc-accent-soft)] px-2 py-0.5 text-xs font-semibold text-[var(--doc-accent)] dark:bg-lime-300/15 dark:text-lime-200">
                       {batch.status}
                     </span>
-                    <span className="text-sm font-semibold text-gray-900 dark:text-white">
+                    <span className="text-sm font-semibold text-[var(--doc-ink)]">
                       {batch.spreadsheetTitle || batch.source}
                     </span>
                   </div>
-                  <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                  <p className="mt-1 text-xs text-[var(--doc-ink-2)]">
                     {new Date(batch.createdAt).toLocaleString("ko-KR")}
                   </p>
                 </div>
@@ -854,7 +854,7 @@ function ImportHistoryPanel({
                 </div>
               </div>
 
-              <div className="mt-3 flex flex-wrap gap-2 text-xs text-gray-600 dark:text-gray-300">
+              <div className="mt-3 flex flex-wrap gap-2 text-xs text-[var(--doc-ink-2)]">
                 <span>차량 {batch.vehicleRows.toLocaleString()}건</span>
                 <span>변동 {batch.changeRows.toLocaleString()}건</span>
                 <span>대표팀 {batch.teamRows.toLocaleString()}건</span>
@@ -872,7 +872,7 @@ function ImportHistoryPanel({
                     type="button"
                     onClick={() => void loadBatchDetail(batch.id, type)}
                     disabled={detail?.batchId === batch.id && detail.type === type && detail.loading}
-                    className="inline-flex items-center gap-1 rounded-md border border-gray-300 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 transition hover:bg-gray-100 disabled:cursor-wait disabled:opacity-60 dark:border-gray-600 dark:bg-gray-950 dark:text-gray-100 dark:hover:bg-gray-800"
+                    className="inline-flex items-center gap-1 rounded-[3px] border border-[var(--doc-rule)] bg-[var(--doc-surface)] px-3 py-1.5 text-xs font-semibold text-[var(--doc-ink-2)] transition hover:bg-[var(--doc-grid-head)] disabled:cursor-wait disabled:opacity-60"
                   >
                     <span className="material-symbols-outlined text-sm">
                       {detail?.batchId === batch.id && detail.type === type && detail.loading
@@ -887,7 +887,7 @@ function ImportHistoryPanel({
               {detail?.batchId === batch.id ? <ImportDetailBox detail={detail} /> : null}
 
               {batch.message ? (
-                <p className="mt-2 text-sm text-gray-600 dark:text-gray-300">{batch.message}</p>
+                <p className="mt-2 text-sm text-[var(--doc-ink-2)]">{batch.message}</p>
               ) : null}
 
               {batch.issues.length > 0 ? (
@@ -895,7 +895,7 @@ function ImportHistoryPanel({
                   {batch.issues.map((issue) => (
                     <div
                       key={issue.id}
-                      className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:border-amber-400/30 dark:bg-amber-400/10 dark:text-amber-100"
+                      className="rounded-[3px] border border-[var(--doc-warn)] bg-[var(--doc-grid-head)] px-3 py-2 text-xs text-[var(--doc-warn)]"
                     >
                       <span className="font-semibold">{issue.severity}</span>
                       {issue.sheetName ? ` · ${issue.sheetName}` : ""}
@@ -914,30 +914,30 @@ function ImportHistoryPanel({
 
 function ImportDetailBox({ detail }: { detail: ImportDetailState }) {
   return (
-    <div className="mt-3 rounded-lg border border-gray-200 bg-white p-3 dark:border-gray-700 dark:bg-gray-950">
+    <div className="mt-3 rounded-[3px] border border-[var(--doc-rule)] bg-[var(--doc-surface)] p-3">
       <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
-        <h3 className="text-sm font-bold text-gray-900 dark:text-white">
+        <h3 className="text-sm font-bold text-[var(--doc-ink)]">
           {getImportDetailTitle(detail.type)}
         </h3>
-        <p className="text-xs text-gray-500 dark:text-gray-400">
+        <p className="text-xs text-[var(--doc-ink-2)]">
           전체 {detail.total.toLocaleString()}건 중 최대 30건 표시
         </p>
       </div>
 
       {detail.loading ? (
-        <p className="mt-3 text-sm text-gray-500 dark:text-gray-400">
+        <p className="mt-3 text-sm text-[var(--doc-ink-2)]">
           상세 내역을 불러오는 중입니다.
         </p>
       ) : null}
 
       {detail.error ? (
-        <div className="mt-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-100">
+        <div className="mt-3 rounded-[3px] border border-[var(--doc-crit)] bg-[var(--doc-crit-soft)] px-3 py-2 text-xs text-[var(--doc-crit)]">
           {detail.error}
         </div>
       ) : null}
 
       {!detail.loading && !detail.error && detail.rows?.length === 0 ? (
-        <p className="mt-3 text-sm text-gray-500 dark:text-gray-400">
+        <p className="mt-3 text-sm text-[var(--doc-ink-2)]">
           표시할 상세 내역이 없습니다.
         </p>
       ) : null}
@@ -956,14 +956,14 @@ function ImportDetailBox({ detail }: { detail: ImportDetailState }) {
 function DetailRowCard({ type, row }: { type: ImportDetailType; row: ImportDetailRow }) {
   if (type === "shuttle") {
     return (
-      <div className="rounded-md bg-gray-50 px-3 py-2 text-xs text-gray-700 dark:bg-gray-900 dark:text-gray-200">
-        <p className="font-bold text-gray-900 dark:text-white">
+      <div className="rounded-[3px] bg-[var(--doc-grid-head)] px-3 py-2 text-xs text-[var(--doc-ink-2)]">
+        <p className="font-bold text-[var(--doc-ink)]">
           {detailText(row, "monthLabel")} · {detailText(row, "dayLabel")} {detailText(row, "classTime")}
         </p>
         <p className="mt-1">
           {detailText(row, "studentName")} · 도착 {detailText(row, "arrivalTime")} · {detailText(row, "destination")}
         </p>
-        <p className="mt-1 text-gray-500 dark:text-gray-400">
+        <p className="mt-1 text-[var(--doc-ink-2)]">
           {detailText(row, "memo") !== "-" ? detailText(row, "memo") : detailText(row, "note")}
         </p>
       </div>
@@ -972,28 +972,28 @@ function DetailRowCard({ type, row }: { type: ImportDetailType; row: ImportDetai
 
   if (type === "changes") {
     return (
-      <div className="rounded-md bg-gray-50 px-3 py-2 text-xs text-gray-700 dark:bg-gray-900 dark:text-gray-200">
-        <p className="font-bold text-gray-900 dark:text-white">
+      <div className="rounded-[3px] bg-[var(--doc-grid-head)] px-3 py-2 text-xs text-[var(--doc-ink-2)]">
+        <p className="font-bold text-[var(--doc-ink)]">
           {detailDate(row, "occurredAt")} · {detailText(row, "changeSummary")}
         </p>
         <p className="mt-1">
           등록 {detailBoolean(row, "registrationReflected")} · 랠리즈 {detailBoolean(row, "rallyzReflected")} · 차량 {detailBoolean(row, "vehicleReflected")}
         </p>
-        <p className="mt-1 text-gray-500 dark:text-gray-400">{detailText(row, "note")}</p>
+        <p className="mt-1 text-[var(--doc-ink-2)]">{detailText(row, "note")}</p>
       </div>
     );
   }
 
   if (type === "team") {
     return (
-      <div className="rounded-md bg-gray-50 px-3 py-2 text-xs text-gray-700 dark:bg-gray-900 dark:text-gray-200">
-        <p className="font-bold text-gray-900 dark:text-white">
+      <div className="rounded-[3px] bg-[var(--doc-grid-head)] px-3 py-2 text-xs text-[var(--doc-ink-2)]">
+        <p className="font-bold text-[var(--doc-ink)]">
           #{detailText(row, "jerseyNumber")} {detailText(row, "studentName")}
         </p>
         <p className="mt-1">
           {detailText(row, "grade")} · {detailText(row, "branch")} · {detailText(row, "phone")}
         </p>
-        <p className="mt-1 text-gray-500 dark:text-gray-400">
+        <p className="mt-1 text-[var(--doc-ink-2)]">
           DB 연결 {detailText(row, "studentId") !== "-" ? "완료" : "확인 필요"}
         </p>
       </div>
@@ -1001,7 +1001,7 @@ function DetailRowCard({ type, row }: { type: ImportDetailType; row: ImportDetai
   }
 
   return (
-    <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:border-amber-400/30 dark:bg-amber-400/10 dark:text-amber-100">
+    <div className="rounded-[3px] border border-[var(--doc-warn)] bg-[var(--doc-grid-head)] px-3 py-2 text-xs text-[var(--doc-warn)]">
       <p className="font-bold">
         {detailText(row, "severity")} · {detailText(row, "sheetName")}
         {detailText(row, "rowNumber") !== "-" ? ` ${detailText(row, "rowNumber")}행` : ""}
@@ -1045,14 +1045,14 @@ function ImportMetric({
 }) {
   const toneClass =
     tone === "warn"
-      ? "text-amber-700 dark:text-amber-200"
+      ? "text-[var(--doc-warn)] "
       : tone === "ok"
-      ? "text-green-700 dark:text-lime-200"
-      : "text-gray-900 dark:text-white";
+      ? "text-[var(--doc-accent)] dark:text-lime-200"
+      : "text-[var(--doc-ink)]";
 
   return (
-    <div className="rounded-md bg-white px-2 py-2 dark:bg-gray-800">
-      <p className="text-gray-500 dark:text-gray-400">{label}</p>
+    <div className="rounded-[3px] bg-[var(--doc-surface)] px-2 py-2">
+      <p className="text-[var(--doc-ink-2)]">{label}</p>
       <p className={`font-bold ${toneClass}`}>{value.toLocaleString()}</p>
     </div>
   );
@@ -1075,18 +1075,18 @@ function StepIndicator({ current }: { current: "upload" | "preview" | "result" }
           {i > 0 && (
             <div
               className={`w-8 h-0.5 ${
-                i <= currentIdx ? "bg-blue-500" : "bg-gray-200"
-              }`}
+ i <= currentIdx ? "bg-[var(--doc-grid-head)]" : "bg-[var(--doc-grid-head)]"
+ }`}
             />
           )}
           <div
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium ${
-              i === currentIdx
-                ? "bg-blue-100 text-blue-700"
-                : i < currentIdx
-                ? "bg-green-100 text-green-700"
-                : "bg-gray-100 dark:bg-gray-800 text-gray-400"
-            }`}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-[3px] text-sm font-medium ${
+ i === currentIdx
+ ? "bg-[var(--doc-grid-head)] text-[var(--doc-ink-2)]"
+ : i < currentIdx
+ ? "bg-[var(--doc-accent-soft)] text-[var(--doc-accent)]"
+ : "bg-[var(--doc-grid-head)] text-[var(--doc-ink-3)]"
+ }`}
           >
             <span className="material-symbols-outlined text-base">{s.icon}</span>
             {s.label}
@@ -1110,22 +1110,22 @@ function SummaryCard({
   color?: string;
 }) {
   const colorMap: Record<string, string> = {
-    gray: "text-gray-500 dark:text-gray-400",
-    blue: "text-blue-500",
-    green: "text-green-500",
-    yellow: "text-yellow-500",
-    red: "text-red-500",
+    gray: "text-[var(--doc-ink-2)] ",
+    blue: "text-[var(--doc-ink-2)]",
+    green: "text-[var(--doc-accent)]",
+    yellow: "text-[var(--doc-warn)]",
+    red: "text-[var(--doc-crit)]",
   };
 
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border p-4">
+    <div className="bg-[var(--doc-surface)] rounded-[3px] border p-4">
       <div className="flex items-center gap-2 mb-1">
         <span className={`material-symbols-outlined text-lg ${colorMap[color]}`}>
           {icon}
         </span>
-        <span className="text-xs text-gray-500 dark:text-gray-400">{label}</span>
+        <span className="text-xs text-[var(--doc-ink-2)]">{label}</span>
       </div>
-      <p className="text-2xl font-bold text-gray-900 dark:text-white">{value.toLocaleString()}</p>
+      <p className="text-2xl font-bold text-[var(--doc-ink)]">{value.toLocaleString()}</p>
     </div>
   );
 }
@@ -1141,16 +1141,16 @@ function ResultCard({
   skipped: number;
 }) {
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border p-4">
-      <p className="text-sm font-medium text-gray-700 dark:text-gray-200 mb-2">{label}</p>
+    <div className="bg-[var(--doc-surface)] rounded-[3px] border p-4">
+      <p className="text-sm font-medium text-[var(--doc-ink-2)] mb-2">{label}</p>
       <div className="space-y-1">
         <div className="flex justify-between text-sm">
-          <span className="text-green-600">생성</span>
-          <span className="font-bold text-green-700">{created}</span>
+          <span className="text-[var(--doc-accent)]">생성</span>
+          <span className="font-bold text-[var(--doc-accent)]">{created}</span>
         </div>
         <div className="flex justify-between text-sm">
-          <span className="text-gray-400">건너뜀 (중복)</span>
-          <span className="text-gray-500 dark:text-gray-400">{skipped}</span>
+          <span className="text-[var(--doc-ink-3)]">건너뜀 (중복)</span>
+          <span className="text-[var(--doc-ink-2)]">{skipped}</span>
         </div>
       </div>
     </div>

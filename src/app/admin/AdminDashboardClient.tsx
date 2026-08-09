@@ -128,8 +128,8 @@ function DashboardPrimarySkeleton() {
                     <div key={i} className="bg-[var(--doc-surface)] p-5 rounded-[6px] border border-[var(--doc-rule)]">
                         <div className="flex justify-between items-start">
                             <div>
-                                <div className="h-3 bg-gray-200 rounded w-16 mb-2" />
-                                <div className="h-7 bg-gray-200 rounded w-20" />
+                                <div className="h-3 bg-[var(--doc-grid-head)] rounded w-16 mb-2" />
+                                <div className="h-7 bg-[var(--doc-grid-head)] rounded w-20" />
                             </div>
                             <div className="h-10 w-10 bg-[var(--doc-grid-head)] rounded-[3px]" />
                         </div>
@@ -147,15 +147,15 @@ function SlowSectionSkeleton() {
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
                 {[...Array(4)].map((_, i) => (
                     <div key={i} className="bg-[var(--doc-surface)] p-5 rounded-[6px] border border-[var(--doc-rule)]">
-                        <div className="h-3 bg-gray-200 rounded w-20 mb-2" />
-                        <div className="h-7 bg-gray-200 rounded w-24" />
+                        <div className="h-3 bg-[var(--doc-grid-head)] rounded w-20 mb-2" />
+                        <div className="h-7 bg-[var(--doc-grid-head)] rounded w-24" />
                     </div>
                 ))}
             </div>
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 {[...Array(2)].map((_, i) => (
                     <div key={i} className="bg-[var(--doc-surface)] p-6 rounded-[6px] border border-[var(--doc-rule)]">
-                        <div className="h-4 bg-gray-200 rounded w-40 mb-4" />
+                        <div className="h-4 bg-[var(--doc-grid-head)] rounded w-40 mb-4" />
                         <div className="h-40 bg-[var(--doc-grid-head)] rounded" />
                     </div>
                 ))}
@@ -163,7 +163,7 @@ function SlowSectionSkeleton() {
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 {[...Array(2)].map((_, i) => (
                     <div key={i} className="bg-[var(--doc-surface)] p-6 rounded-[6px] border border-[var(--doc-rule)]">
-                        <div className="h-4 bg-gray-200 rounded w-32 mb-4" />
+                        <div className="h-4 bg-[var(--doc-grid-head)] rounded w-32 mb-4" />
                         <div className="space-y-3">
                             {[...Array(3)].map((_, j) => (
                                 <div key={j} className="h-10 bg-[var(--doc-grid-head)] rounded" />
@@ -175,7 +175,7 @@ function SlowSectionSkeleton() {
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 {[...Array(3)].map((_, i) => (
                     <div key={i} className="bg-[var(--doc-surface)] p-6 rounded-[6px] border border-[var(--doc-rule)]">
-                        <div className="h-4 bg-gray-200 rounded w-32 mb-4" />
+                        <div className="h-4 bg-[var(--doc-grid-head)] rounded w-32 mb-4" />
                         <div className="space-y-3">
                             {[...Array(3)].map((_, j) => (
                                 <div key={j} className="h-6 bg-[var(--doc-grid-head)] rounded" />
@@ -190,13 +190,13 @@ function SlowSectionSkeleton() {
 
 function ErrorState({ onRetry }: { onRetry: () => void }) {
     return (
-        <div className="rounded-[6px] border border-[var(--doc-crit)] bg-[var(--doc-surface)] p-8 text-center /40">
+        <div className="rounded-[6px] border border-[var(--doc-crit)] bg-[var(--doc-surface)] p-8 text-center">
             <SymbolIcon name="error" size={36} className="mx-auto mb-3 text-[var(--doc-crit)]" />
             <p className="font-bold text-[var(--doc-ink)]">대시보드 데이터를 불러오지 못했습니다.</p>
             <button
                 type="button"
                 onClick={onRetry}
-                className="mt-4 rounded-[3px] bg-[var(--doc-accent)] px-4 py-2 text-sm font-bold text-white transition hover:bg-orange-600 dark:text-[var(--doc-ink)]"
+                className="mt-4 rounded-[3px] bg-[var(--doc-accent)] px-4 py-2 text-sm font-bold text-white transition hover:bg-[var(--doc-grid-head)]"
             >
                 다시 시도
             </button>
@@ -355,7 +355,7 @@ function DashboardContent({
             {pendingCount > 0 && (
                 <Link href="/admin/requests" prefetch={false}
                     className="flex items-center gap-3 bg-[var(--doc-grid-head)] border border-[var(--doc-warn)] rounded-[6px] p-4 hover:bg-[var(--doc-grid-head)] transition">
-                    <div className="bg-yellow-400 text-white p-2 rounded-[3px]">
+                    <div className="bg-[var(--doc-grid-head)] text-white p-2 rounded-[3px]">
                         <SymbolIcon name="forum" size={20} />
                     </div>
                     <div className="flex-1">
@@ -372,7 +372,7 @@ function DashboardContent({
             {enrollStats.PENDING > 0 && (
                 <Link href="/admin/apply" prefetch={false}
                     className="flex items-center gap-3 bg-[var(--doc-grid-head)] border border-[var(--doc-rule)] rounded-[6px] p-4 hover:bg-[var(--doc-grid-head)] transition">
-                    <div className="bg-blue-500 text-white p-2 rounded-[3px]">
+                    <div className="bg-[var(--doc-grid-head)] text-white p-2 rounded-[3px]">
                         <SymbolIcon name="person_add" size={20} />
                     </div>
                     <div className="flex-1">
@@ -500,7 +500,7 @@ function DeferredDetailsCard({ loading, onLoad }: { loading: boolean; onLoad: ()
                     type="button"
                     onClick={onLoad}
                     disabled={loading}
-                    className="inline-flex items-center justify-center gap-2 rounded-[3px] bg-[var(--doc-accent)] px-4 py-2 text-sm font-bold text-white transition hover:bg-orange-600 disabled:cursor-wait disabled:opacity-60 dark:text-[var(--doc-ink)]"
+                    className="inline-flex items-center justify-center gap-2 rounded-[3px] bg-[var(--doc-accent)] px-4 py-2 text-sm font-bold text-white transition hover:bg-[var(--doc-grid-head)] disabled:cursor-wait disabled:opacity-60"
                 >
                     <SymbolIcon name={loading ? "sync" : "download"} size={18} />
                     {loading ? "불러오는 중" : "상세 데이터 불러오기"}
@@ -675,7 +675,7 @@ function ProgramStudentsCard({ programStudents }: { programStudents: { name: str
                             </div>
                             <div className="w-full bg-[var(--doc-grid-head)] rounded-[3px] h-2">
                                 <div
-                                    className="bg-blue-500 h-2 rounded-[3px] transition-all duration-500"
+                                    className="bg-[var(--doc-grid-head)] h-2 rounded-[3px] transition-all duration-500"
                                     style={{ width: `${(program.count / maxCnt) * 100}%` }}
                                 />
                             </div>
@@ -752,7 +752,7 @@ function SiteOpsBotCard({
                 type="button"
                 onClick={onRun}
                 disabled={loading}
-                className="mb-3 inline-flex w-full items-center justify-center gap-2 rounded-[3px] bg-[var(--doc-accent)] px-4 py-2 text-sm font-bold text-white transition hover:bg-orange-600 disabled:cursor-wait disabled:opacity-60 dark:text-[var(--doc-ink)]"
+                className="mb-3 inline-flex w-full items-center justify-center gap-2 rounded-[3px] bg-[var(--doc-accent)] px-4 py-2 text-sm font-bold text-white transition hover:bg-[var(--doc-grid-head)] disabled:cursor-wait disabled:opacity-60"
             >
                 <SymbolIcon name={loading ? "sync" : "smart_toy"} size={18} />
                 {loading ? "점검 중" : "점검 실행"}

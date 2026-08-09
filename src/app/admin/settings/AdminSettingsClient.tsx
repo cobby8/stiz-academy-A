@@ -17,7 +17,7 @@ function AppliesTo({ pages }: { pages: string[] }) {
     return (
         <div className="flex flex-wrap gap-1.5 mt-1 mb-3">
             {pages.map((p) => (
-                <span key={p} className="text-[11px] bg-blue-50 text-blue-700 border border-blue-200 px-2 py-0.5 rounded-full font-medium dark:border-blue-500/30 dark:bg-blue-500/10 dark:text-blue-300">
+                <span key={p} className="text-[11px] bg-[var(--doc-grid-head)] text-[var(--doc-ink-2)] border border-[var(--doc-rule)] px-2 py-0.5 rounded-[3px] font-medium">
                     📍 {p}
                 </span>
             ))}
@@ -34,23 +34,23 @@ function FontCard({ option, selected, name, onSelect }: {
 }) {
     return (
         <label
-            className={`cursor-pointer rounded-xl border-2 p-3.5 transition-all flex flex-col gap-1.5 ${
-                selected ? "border-brand-orange-500 bg-orange-50 shadow-sm dark:border-brand-neon-lime dark:bg-brand-neon-lime/10" : "border-gray-200 bg-white hover:border-gray-300 dark:border-gray-700 dark:bg-gray-800 dark:hover:border-gray-500"
-            }`}
+            className={`cursor-pointer rounded-[3px] border-2 p-3.5 transition-all flex flex-col gap-1.5 ${
+ selected ? "border-[var(--doc-accent)] bg-[var(--doc-grid-head)] " : "border-[var(--doc-rule)] bg-[var(--doc-surface)] hover:border-[var(--doc-rule)] dark:hover:border-[var(--doc-rule)]"
+ }`}
             onClick={() => onSelect(option.key)}
         >
             <input type="radio" name={name} value={option.key} checked={selected} onChange={() => onSelect(option.key)} className="sr-only" />
             <div className="flex items-center gap-2">
-                <span className="text-xs font-bold text-gray-800 dark:text-gray-100">{option.name}</span>
+                <span className="text-xs font-bold text-[var(--doc-ink)]">{option.name}</span>
                 {option.tag && (
-                    <span className="text-[10px] bg-brand-orange-500 dark:bg-brand-neon-lime dark:text-brand-navy-900 text-white px-1.5 py-0.5 rounded-full font-bold">{option.tag}</span>
+                    <span className="text-[10px] bg-[var(--doc-accent)] dark:text-[var(--doc-ink)] text-white px-1.5 py-0.5 rounded-[3px] font-bold">{option.tag}</span>
                 )}
-                {selected && <span className="ml-auto text-brand-orange-500 dark:text-brand-neon-lime text-sm">✓</span>}
+                {selected && <span className="ml-auto text-[var(--doc-accent)] text-sm">✓</span>}
             </div>
-            <p style={{ fontFamily: option.css === "inherit" ? undefined : option.css }} className="text-sm text-gray-600 dark:text-gray-300 leading-snug truncate">
+            <p style={{ fontFamily: option.css === "inherit" ? undefined : option.css }} className="text-sm text-[var(--doc-ink-2)] leading-snug truncate">
                 {option.sample}
             </p>
-            <p className="text-[10px] text-gray-400 dark:text-gray-500">{option.nameEn}</p>
+            <p className="text-[10px] text-[var(--doc-ink-3)]">{option.nameEn}</p>
         </label>
     );
 }
@@ -58,7 +58,7 @@ function FontCard({ option, selected, name, onSelect }: {
 // ─── 섹션 헤더 ────────────────────────────────────────────────────────────────
 function SectionHeader({ title }: { title: string }) {
     return (
-        <h2 className="text-xl font-bold text-brand-navy-900 border-b-2 border-brand-orange-500 dark:border-brand-neon-lime pb-2 mb-2 inline-block dark:text-white">
+        <h2 className="text-xl font-bold text-[var(--doc-ink)] border-b-2 border-[var(--doc-accent)] pb-2 mb-2 inline-block">
             {title}
         </h2>
     );
@@ -68,19 +68,19 @@ function AdminSettingsLoadingFallback() {
     return (
         <div className="space-y-6">
             <div>
-                <div className="h-8 w-48 animate-pulse rounded bg-gray-200 dark:bg-gray-700" />
-                <div className="mt-2 h-4 w-96 max-w-full animate-pulse rounded bg-gray-100 dark:bg-gray-800" />
+                <div className="h-8 w-48 rounded bg-[var(--doc-grid-head)]" />
+                <div className="mt-2 h-4 w-96 max-w-full rounded bg-[var(--doc-grid-head)]" />
             </div>
 
             <div className="grid gap-6 xl:grid-cols-[280px_minmax(0,1fr)]">
-                <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-800">
+                <div className="rounded-[3px] border border-[var(--doc-rule)] bg-[var(--doc-surface)] p-4">
                     <div className="space-y-2">
                         {Array.from({ length: 7 }).map((_, index) => (
                             <div
                                 key={index}
-                                className={`h-10 animate-pulse rounded-lg ${
-                                    index === 0 ? "bg-gray-200 dark:bg-gray-700" : "bg-gray-100 dark:bg-gray-700"
-                                }`}
+                                className={`h-10 rounded-[3px] ${
+ index === 0 ? "bg-[var(--doc-grid-head)] " : "bg-[var(--doc-grid-head)] "
+ }`}
                             />
                         ))}
                     </div>
@@ -90,18 +90,18 @@ function AdminSettingsLoadingFallback() {
                     {Array.from({ length: 4 }).map((_, sectionIndex) => (
                         <div
                             key={sectionIndex}
-                            className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-700 dark:bg-gray-800"
+                            className="rounded-[3px] border border-[var(--doc-rule)] bg-[var(--doc-surface)] p-5"
                         >
-                            <div className="h-6 w-40 animate-pulse rounded bg-gray-200 dark:bg-gray-700" />
+                            <div className="h-6 w-40 rounded bg-[var(--doc-grid-head)]" />
                             <div className="mt-5 grid gap-4 md:grid-cols-2">
                                 {Array.from({ length: 4 }).map((__, fieldIndex) => (
                                     <div key={fieldIndex}>
-                                        <div className="h-4 w-24 animate-pulse rounded bg-gray-100 dark:bg-gray-700" />
-                                        <div className="mt-2 h-11 animate-pulse rounded-lg bg-gray-100 dark:bg-gray-700" />
+                                        <div className="h-4 w-24 rounded bg-[var(--doc-grid-head)]" />
+                                        <div className="mt-2 h-11 rounded-[3px] bg-[var(--doc-grid-head)]" />
                                     </div>
                                 ))}
                             </div>
-                            <div className="mt-5 h-28 animate-pulse rounded-lg bg-gray-100 dark:bg-gray-700" />
+                            <div className="mt-5 h-28 rounded-[3px] bg-[var(--doc-grid-head)]" />
                         </div>
                     ))}
                 </div>
@@ -227,26 +227,26 @@ export default function AdminSettingsClient({
     }
 
     return (
-        <div className="flex-1 overflow-y-auto p-8 bg-gray-50 dark:bg-gray-900">
+        <div className="flex-1 overflow-y-auto p-8 bg-[var(--doc-grid-head)]">
             {fetchErrorState && (
-                <div className="bg-red-50 text-red-600 p-4 rounded-lg font-medium border border-red-200 mb-6 text-sm dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-300">
+                <div className="bg-[var(--doc-crit-soft)] text-[var(--doc-crit)] p-4 rounded-[3px] font-medium border border-[var(--doc-crit)] mb-6 text-sm">
                     데이터베이스 연결에 문제가 발생했습니다. 잠시 후 다시 시도하고, 계속되면 관리자에게 문의해 주세요.
                 </div>
             )}
             {saveSuccess && (
-                <div className="bg-green-50 text-green-700 p-4 rounded-lg font-medium border border-green-200 mb-4 text-sm flex justify-between items-center dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-300">
+                <div className="bg-[var(--doc-accent-soft)] text-[var(--doc-accent)] p-4 rounded-[3px] font-medium border border-[var(--doc-accent)] mb-4 text-sm flex justify-between items-center">
                     <span>✓ 저장되었습니다. 폰트 변경은 새로고침 후 반영됩니다.</span>
-                    <button onClick={() => setSaveSuccess(false)} className="text-green-400 hover:text-green-600 font-bold ml-4">✕</button>
+                    <button onClick={() => setSaveSuccess(false)} className="text-[var(--doc-accent)] hover:text-[var(--doc-accent)] font-bold ml-4">✕</button>
                 </div>
             )}
             {actionError && (
-                <div className="bg-red-50 text-red-600 p-4 rounded-lg font-medium border border-red-200 mb-4 text-sm flex justify-between items-center dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-300">
+                <div className="bg-[var(--doc-crit-soft)] text-[var(--doc-crit)] p-4 rounded-[3px] font-medium border border-[var(--doc-crit)] mb-4 text-sm flex justify-between items-center">
                     <span>⚠ {actionError}</span>
-                    <button onClick={() => setActionError(null)} className="text-red-400 hover:text-red-600 font-bold ml-4">✕</button>
+                    <button onClick={() => setActionError(null)} className="text-[var(--doc-crit)] hover:text-[var(--doc-crit)] font-bold ml-4">✕</button>
                 </div>
             )}
 
-            <div className="max-w-3xl mx-auto space-y-8 bg-white dark:bg-gray-800 p-8 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700">
+            <div className="max-w-3xl mx-auto space-y-8 bg-[var(--doc-surface)] p-8 rounded-[3px] border border-[var(--doc-rule)]">
                 <form action={saveBasicSettings} className="space-y-8">
 
                     {/* ── 폰트 설정 ───────────────────────────────────────── */}
@@ -255,16 +255,16 @@ export default function AdminSettingsClient({
                         <AppliesTo pages={["홈페이지 전체 (모든 페이지)"]} />
 
                         {/* 폰트 미리보기 */}
-                        <div className="bg-gray-900 rounded-xl p-5 mb-6 text-white space-y-1">
-                            <p className="text-xs text-gray-400 mb-2 font-mono">PREVIEW</p>
-                            <p style={{ fontFamily: headingFontCss }} className="text-2xl font-black">STIZ 농구교실 다산점</p>
-                            <p style={{ fontFamily: bodyFontCss }} className="text-sm text-gray-300 leading-relaxed">
+                        <div className="bg-[var(--doc-grid-head)] rounded-[3px] p-5 mb-6 text-white space-y-1">
+                            <p className="text-xs text-[var(--doc-ink-3)] mb-2 font-mono">PREVIEW</p>
+                            <p style={{ fontFamily: headingFontCss }} className="text-2xl font-bold">STIZ 농구교실 다산점</p>
+                            <p style={{ fontFamily: bodyFontCss }} className="text-sm text-[var(--doc-ink-3)] leading-relaxed">
                                 아이들의 가능성을 이끌어드립니다. 전문 코치진의 체계적인 지도로 농구의 즐거움을 경험하세요.
                             </p>
                         </div>
 
                         <div className="mb-6">
-                            <label className="block text-sm font-bold text-gray-700 dark:text-gray-200 mb-3">
+                            <label className="block text-sm font-bold text-[var(--doc-ink-2)] mb-3">
                                 본문 폰트
                             </label>
                             <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
@@ -275,7 +275,7 @@ export default function AdminSettingsClient({
                         </div>
 
                         <div>
-                            <label className="block text-sm font-bold text-gray-700 dark:text-gray-200 mb-3">
+                            <label className="block text-sm font-bold text-[var(--doc-ink-2)] mb-3">
                                 제목 폰트
                             </label>
                             <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
@@ -287,13 +287,13 @@ export default function AdminSettingsClient({
                     </section>
 
                     {/* ── 학원 소개 문구 ───────────────────────────────────── */}
-                    <section className="pt-6 border-t border-gray-100 dark:border-gray-800">
+                    <section className="pt-6 border-t border-[var(--doc-rule)]">
                         <SectionHeader title="학원 소개 문구" />
 
                         <div className="space-y-5">
                             {/* 메인 타이틀 */}
                             <div>
-                                <label className="block text-sm font-bold text-gray-700 dark:text-gray-200 mb-1">
+                                <label className="block text-sm font-bold text-[var(--doc-ink-2)] mb-1">
                                     메인 타이틀
                                 </label>
                                 <AppliesTo pages={["홈페이지 메인 히어로 제목"]} />
@@ -302,13 +302,13 @@ export default function AdminSettingsClient({
                                     type="text"
                                     defaultValue={settings?.introductionTitle || ""}
                                     placeholder="예: 다산신도시 No.1 스티즈농구교실"
-                                    className="w-full border border-gray-300 rounded-lg p-2.5 text-sm bg-gray-50 focus:bg-white dark:focus:bg-gray-700 dark:bg-gray-800 focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime transition"
+                                    className="w-full border border-[var(--doc-rule)] rounded-[3px] p-2.5 text-sm bg-[var(--doc-grid-head)] focus:bg-[var(--doc-surface)] focus: focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime transition"
                                 />
                             </div>
 
                             {/* 원장 인사말 */}
                             <div>
-                                <label className="block text-sm font-bold text-gray-700 dark:text-gray-200 mb-1">
+                                <label className="block text-sm font-bold text-[var(--doc-ink-2)] mb-1">
                                     원장 인사말 / 학원 소개
                                 </label>
                                 <AppliesTo pages={["홈페이지 메인 히어로 소개 문구", "학원소개 페이지 원장 인사말"]} />
@@ -322,10 +322,10 @@ export default function AdminSettingsClient({
                     </section>
 
                     {/* ── 교육 이념 ──────────────────────────────────────── */}
-                    <section className="pt-6 border-t border-gray-100 dark:border-gray-800">
+                    <section className="pt-6 border-t border-[var(--doc-rule)]">
                         <SectionHeader title="교육 이념" />
                         <AppliesTo pages={["학원소개 페이지 (원장 인사말 아래)"]} />
-                        <p className="text-xs text-gray-400 mb-2">
+                        <p className="text-xs text-[var(--doc-ink-3)] mb-2">
                             비워두면 섹션이 숨겨집니다.
                         </p>
                         <LazyRichTextEditor
@@ -336,14 +336,14 @@ export default function AdminSettingsClient({
                     </section>
 
                     {/* ── 시설 소개 ──────────────────────────────────────── */}
-                    <section className="pt-6 border-t border-gray-100 dark:border-gray-800">
+                    <section className="pt-6 border-t border-[var(--doc-rule)]">
                         <SectionHeader title="시설 소개" />
                         <AppliesTo pages={["학원소개 페이지 (코치진 아래)"]} />
 
                         <div className="space-y-4">
                             <div>
-                                <label className="block text-sm font-bold text-gray-700 dark:text-gray-200 mb-1">시설 설명</label>
-                                <p className="text-xs text-gray-400 mb-2">비워두면 섹션이 숨겨집니다.</p>
+                                <label className="block text-sm font-bold text-[var(--doc-ink-2)] mb-1">시설 설명</label>
+                                <p className="text-xs text-[var(--doc-ink-3)] mb-2">비워두면 섹션이 숨겨집니다.</p>
                                 <LazyRichTextEditor
                                     value={facilitiesText}
                                     onChange={setFacilitiesText}
@@ -352,8 +352,8 @@ export default function AdminSettingsClient({
                             </div>
 
                             <div>
-                                <label className="block text-sm font-bold text-gray-700 dark:text-gray-200 mb-1">시설 사진 URL</label>
-                                <p className="text-xs text-gray-400 mb-2">
+                                <label className="block text-sm font-bold text-[var(--doc-ink-2)] mb-1">시설 사진 URL</label>
+                                <p className="text-xs text-[var(--doc-ink-3)] mb-2">
                                     이미지 URL을 한 줄에 하나씩 입력합니다.
                                 </p>
                                 {facilityImages.map((url, i) => (
@@ -367,12 +367,12 @@ export default function AdminSettingsClient({
                                                 setFacilityImages(next);
                                             }}
                                             placeholder="https://..."
-                                            className="flex-1 border border-gray-300 rounded-lg p-2 text-sm bg-gray-50 focus:bg-white dark:focus:bg-gray-700 dark:bg-gray-800 focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime transition font-mono"
+                                            className="flex-1 border border-[var(--doc-rule)] rounded-[3px] p-2 text-sm bg-[var(--doc-grid-head)] focus:bg-[var(--doc-surface)] focus: focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime transition font-mono"
                                         />
                                         <button
                                             type="button"
                                             onClick={() => setFacilityImages(facilityImages.filter((_, j) => j !== i))}
-                                            className="text-red-400 hover:text-red-600 px-2 font-bold text-lg"
+                                            className="text-[var(--doc-crit)] hover:text-[var(--doc-crit)] px-2 font-bold text-lg"
                                         >
                                             ✕
                                         </button>
@@ -381,7 +381,7 @@ export default function AdminSettingsClient({
                                 <button
                                     type="button"
                                     onClick={() => setFacilityImages([...facilityImages, ""])}
-                                    className="text-sm text-brand-orange-500 dark:text-brand-neon-lime font-bold hover:underline"
+                                    className="text-sm text-[var(--doc-accent)] font-bold hover:underline"
                                 >
                                     + 사진 URL 추가
                                 </button>
@@ -390,14 +390,14 @@ export default function AdminSettingsClient({
                     </section>
 
                     {/* ── 포토갤러리 관리 안내 ─────────────────────────────── */}
-                    <section className="pt-6 border-t border-gray-100 dark:border-gray-800">
+                    <section className="pt-6 border-t border-[var(--doc-rule)]">
                         <SectionHeader title="포토 갤러리" />
                         <AppliesTo pages={["홈페이지 메인 활동 사진", "포토갤러리 페이지"]} />
-                        <div className="rounded-xl border border-blue-100 dark:border-blue-900/50 bg-blue-50/70 dark:bg-blue-950/20 p-4">
+                        <div className="rounded-[3px] border border-[var(--doc-rule)] bg-[var(--doc-grid-head)]/70 p-4">
                             <Link
                                 href="/admin/gallery"
                                 prefetch={false}
-                                className="inline-flex items-center justify-center rounded-lg bg-brand-navy-900 px-4 py-2 text-sm font-bold text-white hover:bg-gray-800 transition"
+                                className="inline-flex items-center justify-center rounded-[3px] bg-[var(--doc-ink)] px-4 py-2 text-sm font-bold text-white hover:bg-[var(--doc-grid-head)] transition"
                             >
                                 사진/영상 갤러리 관리로 이동
                             </Link>
@@ -405,40 +405,40 @@ export default function AdminSettingsClient({
                     </section>
 
                     {/* ── 연락처 ───────────────────────────────────────────── */}
-                    <section className="pt-6 border-t border-gray-100 dark:border-gray-800">
+                    <section className="pt-6 border-t border-[var(--doc-rule)]">
                         <SectionHeader title="연락처 및 위치" />
                         <AppliesTo pages={["모든 페이지 헤더 전화버튼", "학원소개 페이지 CTA", "홈 푸터"]} />
 
                         <div className="space-y-4">
                             <div>
-                                <label className="block text-sm font-bold text-gray-700 dark:text-gray-200 mb-1">대표 전화번호</label>
+                                <label className="block text-sm font-bold text-[var(--doc-ink-2)] mb-1">대표 전화번호</label>
                                 <input
                                     name="contactPhone"
                                     type="text"
                                     defaultValue={settings?.contactPhone || ""}
                                     placeholder="010-0000-0000"
-                                    className="w-full border border-gray-300 rounded-lg p-2.5 text-sm bg-gray-50 focus:bg-white dark:focus:bg-gray-700 dark:bg-gray-800 focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime transition"
+                                    className="w-full border border-[var(--doc-rule)] rounded-[3px] p-2.5 text-sm bg-[var(--doc-grid-head)] focus:bg-[var(--doc-surface)] focus: focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime transition"
                                 />
                             </div>
                             <div>
-                                <label className="block text-sm font-bold text-gray-700 dark:text-gray-200 mb-1">운영시간</label>
+                                <label className="block text-sm font-bold text-[var(--doc-ink-2)] mb-1">운영시간</label>
                                 <input
                                     name="operatingHours"
                                     type="text"
                                     defaultValue={settings?.operatingHours || ""}
                                     placeholder="평일 13:00~21:00 / 토 09:00~18:00 (일요일·공휴일 휴무)"
-                                    className="w-full border border-gray-300 rounded-lg p-2.5 text-sm bg-gray-50 focus:bg-white dark:focus:bg-gray-700 dark:bg-gray-800 focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime transition"
+                                    className="w-full border border-[var(--doc-rule)] rounded-[3px] p-2.5 text-sm bg-[var(--doc-grid-head)] focus:bg-[var(--doc-surface)] focus: focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime transition"
                                 />
-                                <p className="text-xs text-gray-400 mt-1.5">비워두면 기본 운영시간이 표시됩니다. 모든 공개 페이지의 상단 바와 푸터에 함께 반영됩니다.</p>
+                                <p className="text-xs text-[var(--doc-ink-3)] mt-1.5">비워두면 기본 운영시간이 표시됩니다. 모든 공개 페이지의 상단 바와 푸터에 함께 반영됩니다.</p>
                             </div>
                             <div>
-                                <label className="block text-sm font-bold text-gray-700 dark:text-gray-200 mb-1">오시는 길 (주소)</label>
+                                <label className="block text-sm font-bold text-[var(--doc-ink-2)] mb-1">오시는 길 (주소)</label>
                                 <input
                                     name="address"
                                     type="text"
                                     defaultValue={settings?.address || ""}
                                     placeholder="경기도 남양주시 다산동 ..."
-                                    className="w-full border border-gray-300 rounded-lg p-2.5 text-sm bg-gray-50 focus:bg-white dark:focus:bg-gray-700 dark:bg-gray-800 focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime transition"
+                                    className="w-full border border-[var(--doc-rule)] rounded-[3px] p-2.5 text-sm bg-[var(--doc-grid-head)] focus:bg-[var(--doc-surface)] focus: focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime transition"
                                 />
                             </div>
 
@@ -446,45 +446,45 @@ export default function AdminSettingsClient({
                                 위 "오시는 길"은 홈페이지에 보여주는 안내 문구라 자유롭게 바꿀 수 있다.
                                 반면 여기 좌표는 셔틀 노선의 출발지·도착지와 T맵 경로 계산의 기준점이라
                                 문구가 바뀌어도 흔들리면 안 되므로 별도 항목으로 관리한다. */}
-                            <div className="rounded-xl border border-gray-200 p-4 dark:border-gray-700">
+                            <div className="rounded-[3px] border border-[var(--doc-rule)] p-4">
                                 <div className="flex flex-wrap items-start justify-between gap-2">
                                     <div>
-                                        <p className="text-sm font-bold text-gray-700 dark:text-gray-200">셔틀 기준 학원 위치</p>
-                                        <p className="text-xs text-gray-400 mt-1">셔틀 노선 만들기의 &quot;학원으로 채우기&quot;와 반별 자동배치가 이 좌표를 사용합니다.</p>
+                                        <p className="text-sm font-bold text-[var(--doc-ink-2)]">셔틀 기준 학원 위치</p>
+                                        <p className="text-xs text-[var(--doc-ink-3)] mt-1">셔틀 노선 만들기의 &quot;학원으로 채우기&quot;와 반별 자동배치가 이 좌표를 사용합니다.</p>
                                     </div>
                                     <button
                                         type="button"
                                         onClick={() => setAcademyPickerOpen(true)}
-                                        className="min-h-10 rounded-lg border border-gray-300 bg-gray-50 px-3 text-xs font-bold text-gray-800 hover:bg-gray-100 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 dark:hover:bg-gray-700 transition"
+                                        className="min-h-10 rounded-[3px] border border-[var(--doc-rule)] bg-[var(--doc-grid-head)] px-3 text-xs font-bold text-[var(--doc-ink)] hover:bg-[var(--doc-grid-head)] transition"
                                     >
                                         지도에서 선택
                                     </button>
                                 </div>
                                 <div className="grid gap-3 sm:grid-cols-2 mt-3">
                                     <div className="sm:col-span-2">
-                                        <label className="block text-xs font-bold text-gray-600 dark:text-gray-300 mb-1">학원 이름</label>
+                                        <label className="block text-xs font-bold text-[var(--doc-ink-2)] mb-1">학원 이름</label>
                                         <input
                                             name="academyPlaceName"
                                             type="text"
                                             value={academyPin.name}
                                             onChange={(e) => setAcademyPin(p => ({ ...p, name: e.target.value }))}
                                             placeholder="스티즈농구교실 다산2호점"
-                                            className="w-full border border-gray-300 rounded-lg p-2.5 text-sm bg-gray-50 focus:bg-white dark:focus:bg-gray-700 dark:bg-gray-800 focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime transition"
+                                            className="w-full border border-[var(--doc-rule)] rounded-[3px] p-2.5 text-sm bg-[var(--doc-grid-head)] focus:bg-[var(--doc-surface)] focus: focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime transition"
                                         />
                                     </div>
                                     <div className="sm:col-span-2">
-                                        <label className="block text-xs font-bold text-gray-600 dark:text-gray-300 mb-1">학원 주소</label>
+                                        <label className="block text-xs font-bold text-[var(--doc-ink-2)] mb-1">학원 주소</label>
                                         <input
                                             name="academyAddress"
                                             type="text"
                                             value={academyPin.address}
                                             onChange={(e) => setAcademyPin(p => ({ ...p, address: e.target.value }))}
                                             placeholder="경기 남양주시 다산중앙로20번길 10-32"
-                                            className="w-full border border-gray-300 rounded-lg p-2.5 text-sm bg-gray-50 focus:bg-white dark:focus:bg-gray-700 dark:bg-gray-800 focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime transition"
+                                            className="w-full border border-[var(--doc-rule)] rounded-[3px] p-2.5 text-sm bg-[var(--doc-grid-head)] focus:bg-[var(--doc-surface)] focus: focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime transition"
                                         />
                                     </div>
                                     <div>
-                                        <label className="block text-xs font-bold text-gray-600 dark:text-gray-300 mb-1">위도</label>
+                                        <label className="block text-xs font-bold text-[var(--doc-ink-2)] mb-1">위도</label>
                                         <input
                                             name="academyLatitude"
                                             type="text"
@@ -492,11 +492,11 @@ export default function AdminSettingsClient({
                                             value={academyPin.latitude}
                                             onChange={(e) => setAcademyPin(p => ({ ...p, latitude: e.target.value }))}
                                             placeholder="37.6145054"
-                                            className="w-full border border-gray-300 rounded-lg p-2.5 text-sm bg-gray-50 focus:bg-white dark:focus:bg-gray-700 dark:bg-gray-800 focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime transition"
+                                            className="w-full border border-[var(--doc-rule)] rounded-[3px] p-2.5 text-sm bg-[var(--doc-grid-head)] focus:bg-[var(--doc-surface)] focus: focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime transition"
                                         />
                                     </div>
                                     <div>
-                                        <label className="block text-xs font-bold text-gray-600 dark:text-gray-300 mb-1">경도</label>
+                                        <label className="block text-xs font-bold text-[var(--doc-ink-2)] mb-1">경도</label>
                                         <input
                                             name="academyLongitude"
                                             type="text"
@@ -504,7 +504,7 @@ export default function AdminSettingsClient({
                                             value={academyPin.longitude}
                                             onChange={(e) => setAcademyPin(p => ({ ...p, longitude: e.target.value }))}
                                             placeholder="127.1563116"
-                                            className="w-full border border-gray-300 rounded-lg p-2.5 text-sm bg-gray-50 focus:bg-white dark:focus:bg-gray-700 dark:bg-gray-800 focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime transition"
+                                            className="w-full border border-[var(--doc-rule)] rounded-[3px] p-2.5 text-sm bg-[var(--doc-grid-head)] focus:bg-[var(--doc-surface)] focus: focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime transition"
                                         />
                                     </div>
                                 </div>
@@ -513,7 +513,7 @@ export default function AdminSettingsClient({
                     </section>
 
                     {/* ── 유튜브 영상 ───────────────────────────────────────── */}
-                    <section className="pt-6 border-t border-gray-100 dark:border-gray-800">
+                    <section className="pt-6 border-t border-[var(--doc-rule)]">
                         <SectionHeader title="메인페이지 유튜브 영상" />
                         <AppliesTo pages={["메인 페이지 (홍보 영상)"]} />
                         <input
@@ -521,105 +521,105 @@ export default function AdminSettingsClient({
                             type="text"
                             defaultValue={settings?.youtubeUrl || ""}
                             placeholder="https://www.youtube.com/watch?v=XXXXXXXXXXX  또는 <iframe ...> 코드"
-                            className="w-full border border-gray-300 rounded-lg p-2.5 text-sm bg-gray-50 focus:bg-white dark:focus:bg-gray-700 dark:bg-gray-800 focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime transition font-mono"
+                            className="w-full border border-[var(--doc-rule)] rounded-[3px] p-2.5 text-sm bg-[var(--doc-grid-head)] focus:bg-[var(--doc-surface)] focus: focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime transition font-mono"
                         />
-                        <p className="text-xs text-gray-400 mt-1.5">YouTube 영상 URL 또는 YouTube &quot;공유 → 퍼가기&quot; iframe 코드를 그대로 붙여넣으면 메인페이지에 자동 임베드됩니다. 비우면 영상 섹션이 숨겨집니다.</p>
+                        <p className="text-xs text-[var(--doc-ink-3)] mt-1.5">YouTube 영상 URL 또는 YouTube &quot;공유 → 퍼가기&quot; iframe 코드를 그대로 붙여넣으면 메인페이지에 자동 임베드됩니다. 비우면 영상 섹션이 숨겨집니다.</p>
                     </section>
 
                     {/* ── 푸터 및 소셜 링크 ─────────────────────────────────── */}
-                    <section className="pt-6 border-t border-gray-100 dark:border-gray-800">
+                    <section className="pt-6 border-t border-[var(--doc-rule)]">
                         <SectionHeader title="푸터 및 소셜 링크" />
                         <AppliesTo pages={["모든 공개 페이지 푸터"]} />
 
                         <div className="space-y-4">
                             <div>
-                                <label className="block text-sm font-bold text-gray-700 dark:text-gray-200 mb-1">푸터 소개 문구</label>
+                                <label className="block text-sm font-bold text-[var(--doc-ink-2)] mb-1">푸터 소개 문구</label>
                                 <textarea
                                     name="footerDescription"
                                     defaultValue={settings?.footerDescription || ""}
                                     rows={3}
                                     placeholder={"아이들이 농구를 통해 협동심과\n건강한 체력을 기를 수 있도록 지도합니다."}
-                                    className="w-full border border-gray-300 rounded-lg p-2.5 text-sm bg-gray-50 focus:bg-white dark:focus:bg-gray-700 dark:bg-gray-800 focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime transition resize-y"
+                                    className="w-full border border-[var(--doc-rule)] rounded-[3px] p-2.5 text-sm bg-[var(--doc-grid-head)] focus:bg-[var(--doc-surface)] focus: focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime transition resize-y"
                                 />
-                                <p className="text-xs text-gray-400 mt-1.5">비워두면 기본 소개 문구가 표시됩니다.</p>
+                                <p className="text-xs text-[var(--doc-ink-3)] mt-1.5">비워두면 기본 소개 문구가 표시됩니다.</p>
                             </div>
 
                             <div>
-                                <label className="block text-sm font-bold text-gray-700 dark:text-gray-200 mb-1">저작권 문구</label>
+                                <label className="block text-sm font-bold text-[var(--doc-ink-2)] mb-1">저작권 문구</label>
                                 <input
                                     name="footerCopyright"
                                     type="text"
                                     defaultValue={settings?.footerCopyright || ""}
                                     placeholder="© 2026 STIZ Basketball Academy. All rights reserved."
-                                    className="w-full border border-gray-300 rounded-lg p-2.5 text-sm bg-gray-50 focus:bg-white dark:focus:bg-gray-700 dark:bg-gray-800 focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime transition"
+                                    className="w-full border border-[var(--doc-rule)] rounded-[3px] p-2.5 text-sm bg-[var(--doc-grid-head)] focus:bg-[var(--doc-surface)] focus: focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime transition"
                                 />
-                                <p className="text-xs text-gray-400 mt-1.5">비워두면 기본 저작권 문구가 표시됩니다.</p>
+                                <p className="text-xs text-[var(--doc-ink-3)] mt-1.5">비워두면 기본 저작권 문구가 표시됩니다.</p>
                             </div>
 
                             <div className="grid md:grid-cols-2 gap-4">
                                 <div>
-                                    <label className="block text-sm font-bold text-gray-700 dark:text-gray-200 mb-1">인스타그램 URL</label>
+                                    <label className="block text-sm font-bold text-[var(--doc-ink-2)] mb-1">인스타그램 URL</label>
                                     <input
                                         name="instagramUrl"
                                         type="text"
                                         defaultValue={settings?.instagramUrl || ""}
                                         placeholder="https://www.instagram.com/stiz... 또는 @stiz..."
-                                        className="w-full border border-gray-300 rounded-lg p-2.5 text-sm bg-gray-50 focus:bg-white dark:focus:bg-gray-700 dark:bg-gray-800 focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime transition"
+                                        className="w-full border border-[var(--doc-rule)] rounded-[3px] p-2.5 text-sm bg-[var(--doc-grid-head)] focus:bg-[var(--doc-surface)] focus: focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime transition"
                                     />
                                 </div>
                                 <div>
-                                    <label className="block text-sm font-bold text-gray-700 dark:text-gray-200 mb-1">Instagram Business Account ID</label>
+                                    <label className="block text-sm font-bold text-[var(--doc-ink-2)] mb-1">Instagram Business Account ID</label>
                                     <input
                                         name="instagramBusinessAccountId"
                                         type="text"
                                         defaultValue={settings?.instagramBusinessAccountId || ""}
                                         placeholder="예: 1784..."
-                                        className="w-full border border-gray-300 rounded-lg p-2.5 text-sm bg-gray-50 focus:bg-white dark:focus:bg-gray-700 dark:bg-gray-800 focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime transition font-mono"
+                                        className="w-full border border-[var(--doc-rule)] rounded-[3px] p-2.5 text-sm bg-[var(--doc-grid-head)] focus:bg-[var(--doc-surface)] focus: focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime transition font-mono"
                                     />
-                                    <p className="text-xs text-gray-400 mt-1.5">인스타그램 게시물 가져오기와 자동 업로드에 사용됩니다.</p>
+                                    <p className="text-xs text-[var(--doc-ink-3)] mt-1.5">인스타그램 게시물 가져오기와 자동 업로드에 사용됩니다.</p>
                                 </div>
                                 <div>
-                                    <label className="block text-sm font-bold text-gray-700 dark:text-gray-200 mb-1">네이버 플레이스 URL</label>
+                                    <label className="block text-sm font-bold text-[var(--doc-ink-2)] mb-1">네이버 플레이스 URL</label>
                                     <input
                                         name="naverPlaceUrl"
                                         type="url"
                                         defaultValue={settings?.naverPlaceUrl || ""}
                                         placeholder="https://naver.me/..."
-                                        className="w-full border border-gray-300 rounded-lg p-2.5 text-sm bg-gray-50 focus:bg-white dark:focus:bg-gray-700 dark:bg-gray-800 focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime transition"
+                                        className="w-full border border-[var(--doc-rule)] rounded-[3px] p-2.5 text-sm bg-[var(--doc-grid-head)] focus:bg-[var(--doc-surface)] focus: focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime transition"
                                     />
                                 </div>
                                 <div>
-                                    <label className="block text-sm font-bold text-gray-700 dark:text-gray-200 mb-1">카카오 채널 URL</label>
+                                    <label className="block text-sm font-bold text-[var(--doc-ink-2)] mb-1">카카오 채널 URL</label>
                                     <input
                                         name="kakaoChannelUrl"
                                         type="url"
                                         defaultValue={settings?.kakaoChannelUrl || ""}
                                         placeholder="https://pf.kakao.com/..."
-                                        className="w-full border border-gray-300 rounded-lg p-2.5 text-sm bg-gray-50 focus:bg-white dark:focus:bg-gray-700 dark:bg-gray-800 focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime transition"
+                                        className="w-full border border-[var(--doc-rule)] rounded-[3px] p-2.5 text-sm bg-[var(--doc-grid-head)] focus:bg-[var(--doc-surface)] focus: focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime transition"
                                     />
                                 </div>
                             </div>
-                            <label className="flex items-start gap-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 p-3 text-sm">
+                            <label className="flex items-start gap-3 rounded-[3px] border border-[var(--doc-rule)] bg-[var(--doc-grid-head)] p-3 text-sm">
                                 <input
                                     type="checkbox"
                                     name="instagramAutoPublishEnabled"
                                     value="true"
                                     defaultChecked={settings?.instagramAutoPublishEnabled === true}
-                                    className="mt-1 rounded border-gray-300"
+                                    className="mt-1 rounded border-[var(--doc-rule)]"
                                 />
                                 <span>
-                                    <span className="block font-bold text-gray-700 dark:text-gray-200">갤러리 새 게시물 인스타그램 자동 업로드</span>
-                                    <span className="block text-xs text-gray-400 mt-1">켜면 관리자 갤러리에 새 공개 게시물을 만들 때 첫 번째 이미지를 인스타그램에도 발행합니다.</span>
+                                    <span className="block font-bold text-[var(--doc-ink-2)]">갤러리 새 게시물 인스타그램 자동 업로드</span>
+                                    <span className="block text-xs text-[var(--doc-ink-3)] mt-1">켜면 관리자 갤러리에 새 공개 게시물을 만들 때 첫 번째 이미지를 인스타그램에도 발행합니다.</span>
                                 </span>
                             </label>
                         </div>
                     </section>
 
                     {/* 저장 */}
-                    <div className="pt-4 border-t border-gray-100 dark:border-gray-800 flex justify-end">
+                    <div className="pt-4 border-t border-[var(--doc-rule)] flex justify-end">
                         <ConfirmSubmitButton
                             confirmMessage="변경 사항을 저장하시겠습니까?"
-                            className="bg-brand-orange-500 dark:bg-brand-neon-lime dark:text-brand-navy-900 text-white px-6 py-2.5 rounded-lg font-bold hover:bg-orange-600 transition shadow"
+                            className="bg-[var(--doc-accent)] dark:text-[var(--doc-ink)] text-white px-6 py-2.5 rounded-[3px] font-bold hover:bg-[var(--doc-grid-head)] transition"
                         >
                             저장하기
                         </ConfirmSubmitButton>

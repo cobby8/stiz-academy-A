@@ -275,18 +275,18 @@ function FinanceLoadingFallback({ year, month }: { year: number; month: number }
         <div className="mx-auto max-w-6xl">
             <div className="flex flex-wrap justify-between items-start gap-3 mb-6">
                 <div>
-                    <div className="h-8 w-32 rounded bg-gray-200" />
+                    <div className="h-8 w-32 rounded bg-[var(--doc-grid-head)]" />
                     <div className="h-4 w-64 rounded bg-[var(--doc-grid-head)] mt-2" />
                 </div>
                 <div className="flex gap-2">
                     <div className="h-10 w-28 rounded-[3px] bg-[var(--doc-grid-head)]" />
                     <div className="h-10 w-28 rounded-[3px] bg-[var(--doc-grid-head)]" />
-                    <div className="h-10 w-32 rounded-[3px] bg-gray-200" />
+                    <div className="h-10 w-32 rounded-[3px] bg-[var(--doc-grid-head)]" />
                 </div>
             </div>
             <div className="flex items-center justify-center gap-4 mb-6">
                 <div className="h-10 w-10 rounded-[3px] bg-[var(--doc-grid-head)]" />
-                <div className="h-7 w-28 rounded bg-gray-200" aria-label={`${year}년 ${month}월 수납 로딩 중`} />
+                <div className="h-7 w-28 rounded bg-[var(--doc-grid-head)]" aria-label={`${year}년 ${month}월 수납 로딩 중`} />
                 <div className="h-10 w-10 rounded-[3px] bg-[var(--doc-grid-head)]" />
             </div>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
@@ -299,7 +299,7 @@ function FinanceLoadingFallback({ year, month }: { year: number; month: number }
             </div>
             <div className="overflow-hidden bg-[var(--doc-surface)] rounded-[3px] border border-[var(--doc-rule)]">
                 <div className="h-12 bg-[var(--doc-grid-head)] border-b border-[var(--doc-rule)]" />
-                <div className="divide-y divide-gray-100 dark:divide-gray-700">
+                <div className="divide-y divide-[var(--doc-rule)]">
                     {Array.from({ length: 6 }).map((_, index) => (
                         <div key={index} className="grid grid-cols-5 gap-4 px-4 py-4">
                             <div className="h-4 rounded bg-[var(--doc-grid-head)]" />
@@ -317,13 +317,13 @@ function FinanceLoadingFallback({ year, month }: { year: number; month: number }
 
 function FinanceErrorState({ onRetry }: { onRetry: () => void }) {
     return (
-        <div className="mx-auto max-w-5xl rounded-[6px] border border-[var(--doc-crit)] bg-[var(--doc-surface)] p-8 text-center /40">
+        <div className="mx-auto max-w-5xl rounded-[6px] border border-[var(--doc-crit)] bg-[var(--doc-surface)] p-8 text-center">
             <span className="material-symbols-outlined mb-3 text-4xl text-[var(--doc-crit)]">error</span>
             <p className="font-bold text-[var(--doc-ink)]">수납 데이터를 불러오지 못했습니다.</p>
             <button
                 type="button"
                 onClick={onRetry}
-                className="mt-4 rounded-[3px] bg-[var(--doc-accent)] px-4 py-2 text-sm font-bold text-white transition hover:bg-orange-600 dark:text-[var(--doc-ink)]"
+                className="mt-4 rounded-[3px] bg-[var(--doc-accent)] px-4 py-2 text-sm font-bold text-white transition hover:bg-[var(--doc-grid-head)]"
             >
                 다시 시도
             </button>
@@ -1000,7 +1000,7 @@ export default function FinanceClient({
                             <button
                                 type="submit"
                                 disabled={terminalSubmitting}
-                                className="rounded-[3px] bg-[var(--doc-accent)] px-4 py-2 text-sm font-bold text-white transition hover:bg-orange-600 disabled:opacity-50 dark:text-[var(--doc-ink)]"
+                                className="rounded-[3px] bg-[var(--doc-accent)] px-4 py-2 text-sm font-bold text-white transition hover:bg-[var(--doc-grid-head)] disabled:opacity-50"
                             >
                                 {terminalSubmitting ? "반영 중..." : "납부완료 반영"}
                             </button>
@@ -1042,7 +1042,7 @@ export default function FinanceClient({
             />
 
             {financeNotice && (
-                <p role="status" className="mb-4 rounded-[3px] border border-[var(--doc-accent)] bg-[var(--doc-accent-soft)] px-4 py-3 text-sm font-bold text-[var(--doc-accent)] /30">
+                <p role="status" className="mb-4 rounded-[3px] border border-[var(--doc-accent)] bg-[var(--doc-accent-soft)] px-4 py-3 text-sm font-bold text-[var(--doc-accent)]">
                     {financeNotice}
                 </p>
             )}
@@ -1052,7 +1052,7 @@ export default function FinanceClient({
                     <span className={`inline-flex h-9 items-center gap-1.5 rounded-[3px] px-3 text-xs font-bold ${
  paymentProvider.providerReady
  ? "bg-[var(--doc-accent-soft)] text-[var(--doc-accent)] "
- : "bg-[var(--doc-grid-head)] text-[var(--doc-warn)] /15 "
+ : "bg-[var(--doc-grid-head)] text-[var(--doc-warn)]  "
  }`}>
                         <span className="material-symbols-outlined text-[17px]">payments</span>
                         온라인 결제 {paymentProvider.providerReady ? "사용 가능" : "준비 필요"}
@@ -1078,7 +1078,7 @@ export default function FinanceClient({
                             type="button"
                             onClick={loadSheetPreview}
                             disabled={busy || sheetPreviewLoading || sheetApplying}
-                            className="inline-flex h-9 items-center gap-1 rounded-[3px] bg-gray-900 px-3 text-xs font-bold text-white transition hover:bg-gray-800 disabled:opacity-50"
+                            className="inline-flex h-9 items-center gap-1 rounded-[3px] bg-[var(--doc-grid-head)] px-3 text-xs font-bold text-white transition hover:bg-[var(--doc-grid-head)] disabled:opacity-50"
                         >
                             <span className="material-symbols-outlined text-[17px]">fact_check</span>
                             {sheetPreviewLoading ? "점검 중" : "시트 점검"}
@@ -1143,7 +1143,7 @@ export default function FinanceClient({
                                     void loadStudents();
                                 }
                             }}
-                            className="inline-flex h-9 items-center gap-1 rounded-[3px] bg-[var(--doc-accent)] px-3 text-xs font-bold text-white transition hover:bg-orange-600 dark:text-[var(--doc-ink)]"
+                            className="inline-flex h-9 items-center gap-1 rounded-[3px] bg-[var(--doc-accent)] px-3 text-xs font-bold text-white transition hover:bg-[var(--doc-grid-head)]"
                         >
                             <span className="material-symbols-outlined text-[17px]">add</span>
                             수납 추가
@@ -1196,7 +1196,7 @@ export default function FinanceClient({
                                 type="button"
                                 disabled={invoiceGenerating || invoicePreview.createCount === 0}
                                 onClick={() => void handleGenerateInvoices()}
-                                className="rounded-[3px] bg-[var(--doc-accent)] px-4 py-1.5 text-xs font-bold text-white disabled:opacity-40 dark:text-[var(--doc-ink)]"
+                                className="rounded-[3px] bg-[var(--doc-accent)] px-4 py-1.5 text-xs font-bold text-white disabled:opacity-40"
                             >
                                 {invoiceGenerating ? "발행 중…" : excludedStudentIds.size > 0 ? `선택 ${invoicePreview.createCount - excludedStudentIds.size}건 발행` : `전체 ${invoicePreview.createCount}건 발행`}
                             </button>
@@ -1218,8 +1218,8 @@ export default function FinanceClient({
                                     type="button"
                                     onClick={() => setInvoiceFilter(option.value)}
                                     className={`rounded-[3px] px-3 py-1 text-xs font-bold transition ${invoiceFilter === option.value
- ? "bg-[var(--doc-accent)] text-white dark:text-[var(--doc-ink)]"
- : "bg-[var(--doc-grid-head)] text-[var(--doc-ink-2)] hover:bg-gray-200 "
+ ? "bg-[var(--doc-accent)] text-white "
+ : "bg-[var(--doc-grid-head)] text-[var(--doc-ink-2)] hover:bg-[var(--doc-grid-head)] "
  }`}
                                 >
                                     {option.label} {option.count}
@@ -1245,7 +1245,7 @@ export default function FinanceClient({
                         const sortedClasses = Array.from(classMap.entries()).sort(([a], [b]) => a.localeCompare(b, "ko"));
 
                         return (
-                            <div className="divide-y divide-gray-100 dark:divide-gray-800">
+                            <div className="divide-y divide-[var(--doc-rule)] dark:divide-[var(--doc-rule)]">
                                 {sortedClasses.map(([className, classItems]) => {
                                     const studentMap = new Map<string, MonthlyInvoicePreviewItem[]>();
                                     for (const item of classItems) {
@@ -1301,7 +1301,7 @@ export default function FinanceClient({
                                                             const nonClassExcluded = Array.from(excludedStudentIds).filter((id) => !allStudentIds.includes(id));
                                                             void handleGenerateInvoices(nonClassExcluded);
                                                         }}
-                                                        className="rounded-[3px] border border-[var(--doc-accent)] px-3 py-1 text-xs font-bold text-[var(--doc-accent)] hover:bg-[var(--doc-accent)] disabled:opacity-40 /30 /10"
+                                                        className="rounded-[3px] border border-[var(--doc-accent)] px-3 py-1 text-xs font-bold text-[var(--doc-accent)] hover:bg-[var(--doc-accent)] disabled:opacity-40"
                                                     >
                                                         이 반 발행
                                                     </button>
@@ -1309,7 +1309,7 @@ export default function FinanceClient({
                                             </div>
 
                                             {/* 학생 행 */}
-                                            <div className="divide-y divide-gray-50 dark:divide-gray-800/50">
+                                            <div className="divide-y divide-[var(--doc-rule)] dark:divide-[var(--doc-rule)]/50">
                                                 {students.map(([studentId, studentItems]) => {
                                                     const first = studentItems[0];
                                                     const hasCreate = studentItems.some((i) => i.action === "CREATE");
@@ -1434,7 +1434,7 @@ export default function FinanceClient({
                                 type="button"
                                 onClick={applySheetPreview}
                                 disabled={sheetApplying || sheetApplyCount === 0}
-                                className="rounded-[3px] bg-[var(--doc-accent)] px-4 py-2 text-sm font-bold text-white transition hover:bg-orange-600 disabled:cursor-not-allowed disabled:opacity-50 dark:text-[var(--doc-ink)]"
+                                className="rounded-[3px] bg-[var(--doc-accent)] px-4 py-2 text-sm font-bold text-white transition hover:bg-[var(--doc-grid-head)] disabled:cursor-not-allowed disabled:opacity-50"
                             >
                                 {sheetApplying ? "적용 중..." : sheetApplyCount === 0 ? "적용할 변경 없음" : "변경 적용"}
                             </button>
@@ -1522,7 +1522,7 @@ export default function FinanceClient({
                 <span className="inline-flex h-8 items-center gap-2 rounded-[3px] bg-[var(--doc-grid-head)] px-3 text-[var(--doc-ink-2)]">
                     수납률 {payRate}%
                     <span className="h-1.5 w-16 overflow-hidden rounded-[3px] bg-[var(--doc-surface)]/70">
-                        <span className="block h-full rounded-[3px] bg-blue-500 transition-all" style={{ width: `${payRate}%` }} />
+                        <span className="block h-full rounded-[3px] bg-[var(--doc-grid-head)] transition-all" style={{ width: `${payRate}%` }} />
                     </span>
                 </span>
             </section>
@@ -1536,7 +1536,7 @@ export default function FinanceClient({
                     <button
                         onClick={handleBulkPaid}
                         disabled={busy}
-                        className="bg-green-600 text-white px-4 py-1.5 rounded-[3px] text-sm font-bold hover:bg-green-700 transition disabled:opacity-50"
+                        className="bg-[var(--doc-accent)] text-white px-4 py-1.5 rounded-[3px] text-sm font-bold hover:bg-[var(--doc-accent)] transition disabled:opacity-50"
                     >
                         선택 항목 납부 처리
                     </button>
@@ -1648,7 +1648,7 @@ export default function FinanceClient({
                     </div>
                     <div className="flex gap-2 justify-end">
                         <button type="button" onClick={() => setShowForm(false)} className="px-4 py-2 text-sm text-[var(--doc-ink-2)]">취소</button>
-                        <button type="submit" disabled={busy} className="bg-[var(--doc-accent)] dark:text-[var(--doc-ink)] text-white px-6 py-2 rounded-[3px] font-bold hover:bg-orange-600 transition disabled:opacity-50">
+                        <button type="submit" disabled={busy} className="bg-[var(--doc-accent)] text-white px-6 py-2 rounded-[3px] font-bold hover:bg-[var(--doc-grid-head)] transition disabled:opacity-50">
                             {busy ? "저장 중..." : "추가"}
                         </button>
                     </div>
@@ -1663,7 +1663,7 @@ export default function FinanceClient({
             ) : (
                 <div className="bg-[var(--doc-surface)] rounded-[3px] border border-[var(--doc-rule)] overflow-hidden">
                     <div className="overflow-x-auto">
-                        <table className="min-w-full divide-y divide-gray-200">
+                        <table className="min-w-full divide-y divide-[var(--doc-rule)]">
                             <thead className="bg-[var(--doc-grid-head)]">
                                 <tr>
                                     {canManageCriticalFinance && (
@@ -1685,7 +1685,7 @@ export default function FinanceClient({
                                     <th className="px-4 py-3 text-right text-xs font-medium text-[var(--doc-ink-2)] uppercase">관리</th>
                                 </tr>
                             </thead>
-                            <tbody className="divide-y divide-gray-100">
+                            <tbody className="divide-y divide-[var(--doc-rule)]">
                                 {payments.map((p) => {
                                     const statusInfo = STATUS_LABELS[p.status] || STATUS_LABELS.PENDING;
                                     const invoiceHref = getInvoiceHref(p);

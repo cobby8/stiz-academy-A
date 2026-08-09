@@ -54,9 +54,9 @@ const ENROLLMENT_STATUS_OPTIONS = [
 
 // 상태변경 세그먼트 버튼: 선택된 상태를 의미색(성공/경고/위험)으로 채워 시각적으로 구분한다
 const ENROLLMENT_SEG_SELECTED: Record<string, string> = {
-    ACTIVE: "bg-emerald-600 text-white  ",
-    PAUSED: "bg-amber-500 text-white  ",
-    WITHDRAWN: "bg-red-600 text-white  ",
+    ACTIVE: "bg-[var(--doc-accent)] text-white  ",
+    PAUSED: "bg-[var(--doc-grid-head)] text-white  ",
+    WITHDRAWN: "bg-[var(--doc-crit)] text-white  ",
 };
 
 // 결제 상태 변경 옵션(완납/대기/연체/취소) — 서버 updatePaymentStatus 가 받는 status 값과 1:1
@@ -69,10 +69,10 @@ const PAY_STATUS_OPTIONS = [
 
 // 결제 상태 세그먼트: 선택된 상태를 의미색(완납=성공/대기=경고/연체·취소=위험·중립)으로 채운다
 const PAY_SEG_SELECTED: Record<string, string> = {
-    PAID: "bg-emerald-600 text-white  ",
-    PENDING: "bg-amber-500 text-white  ",
-    OVERDUE: "bg-red-600 text-white  ",
-    CANCELED: "bg-gray-600 text-white  ",
+    PAID: "bg-[var(--doc-accent)] text-white  ",
+    PENDING: "bg-[var(--doc-grid-head)] text-white  ",
+    OVERDUE: "bg-[var(--doc-crit)] text-white  ",
+    CANCELED: "bg-[var(--doc-grid-head)] text-white  ",
 };
 
 function toDateStr(d: Date | string | null): string {
@@ -339,7 +339,7 @@ function ShuttleLocationBlock({
         <div className="rounded-[3px] border border-[var(--doc-rule)] p-3">
             <div className="mb-1.5 flex items-center justify-between gap-2">
                 <span className="inline-flex items-center gap-1.5 text-[13px] font-bold text-[var(--doc-ink)]">
-                    <span className="grid h-6 w-6 shrink-0 place-items-center rounded-[3px] bg-[var(--doc-accent)] text-[var(--doc-accent)] /10">
+                    <span className="grid h-6 w-6 shrink-0 place-items-center rounded-[3px] bg-[var(--doc-accent)] text-[var(--doc-accent)]">
                         <SymbolIcon name={icon} size={14} />
                     </span>
                     {label}
@@ -557,9 +557,9 @@ export default function StudentDetailClient({
         return (
             <div className="mx-auto max-w-6xl space-y-6">
                 <div className="flex items-center gap-4">
-                    <div className="h-10 w-10 rounded-[3px] bg-gray-200" />
+                    <div className="h-10 w-10 rounded-[3px] bg-[var(--doc-grid-head)]" />
                     <div>
-                        <div className="h-8 w-40 rounded bg-gray-200" />
+                        <div className="h-8 w-40 rounded bg-[var(--doc-grid-head)]" />
                         <div className="mt-2 h-4 w-80 max-w-full rounded bg-[var(--doc-grid-head)]" />
                     </div>
                 </div>
@@ -571,7 +571,7 @@ export default function StudentDetailClient({
                             className="rounded-[6px] border border-[var(--doc-rule)] bg-[var(--doc-surface)] p-4"
                         >
                             <div className="h-4 w-20 rounded bg-[var(--doc-grid-head)]" />
-                            <div className="mt-3 h-8 w-24 rounded bg-gray-200" />
+                            <div className="mt-3 h-8 w-24 rounded bg-[var(--doc-grid-head)]" />
                             <div className="mt-2 h-3 w-16 rounded bg-[var(--doc-grid-head)]" />
                         </div>
                     ))}
@@ -584,7 +584,7 @@ export default function StudentDetailClient({
                                 key={index}
                                 className="rounded-[6px] border border-[var(--doc-rule)] bg-[var(--doc-surface)] p-5"
                             >
-                                <div className="h-5 w-32 rounded bg-gray-200" />
+                                <div className="h-5 w-32 rounded bg-[var(--doc-grid-head)]" />
                                 <div className="mt-4 space-y-3">
                                     {Array.from({ length: 3 }).map((__, rowIndex) => (
                                         <div key={rowIndex} className="h-4 rounded bg-[var(--doc-grid-head)]" />
@@ -600,7 +600,7 @@ export default function StudentDetailClient({
                                 key={sectionIndex}
                                 className="rounded-[6px] border border-[var(--doc-rule)] bg-[var(--doc-surface)] p-5"
                             >
-                                <div className="h-5 w-32 rounded bg-gray-200" />
+                                <div className="h-5 w-32 rounded bg-[var(--doc-grid-head)]" />
                                 <div className="mt-4 space-y-3">
                                     {Array.from({ length: 6 }).map((__, rowIndex) => (
                                         <div key={rowIndex} className="h-10 rounded bg-[var(--doc-grid-head)]" />
@@ -616,12 +616,12 @@ export default function StudentDetailClient({
 
     if (error && !activityData) {
         return (
-            <div className="mx-auto max-w-6xl rounded-[3px] border border-[var(--doc-crit)] bg-[var(--doc-crit-soft)] p-8 text-center /50">
+            <div className="mx-auto max-w-6xl rounded-[3px] border border-[var(--doc-crit)] bg-[var(--doc-crit-soft)] p-8 text-center">
                 <p className="font-bold text-[var(--doc-crit)]">{error}</p>
                 <button
                     type="button"
                     onClick={() => void loadData()}
-                    className="mt-4 rounded-[3px] bg-[var(--doc-accent)] px-4 py-2 text-sm font-bold text-white transition hover:bg-orange-600 dark:text-[var(--doc-ink)]"
+                    className="mt-4 rounded-[3px] bg-[var(--doc-accent)] px-4 py-2 text-sm font-bold text-white transition hover:bg-[var(--doc-grid-head)]"
                 >
                     다시 불러오기
                 </button>
@@ -716,7 +716,7 @@ export default function StudentDetailClient({
                         type="button"
                         onClick={() => saveSection(section)}
                         disabled={saving}
-                        className="inline-flex items-center gap-1 rounded-[3px] bg-[var(--doc-accent)] px-2.5 py-1.5 text-xs font-bold text-white transition hover:bg-orange-600 disabled:opacity-50 dark:text-[var(--doc-ink)] dark:hover:bg-lime-200"
+                        className="inline-flex items-center gap-1 rounded-[3px] bg-[var(--doc-accent)] px-2.5 py-1.5 text-xs font-bold text-white transition hover:bg-[var(--doc-grid-head)] disabled:opacity-50 dark:hover:bg-lime-200"
                     >
                         <SymbolIcon name="check" size={14} /> {saving ? "저장 중…" : "저장"}
                     </button>
@@ -869,7 +869,7 @@ export default function StudentDetailClient({
                                 disabled={Boolean(statusUpdatingId)}
                                 className={`px-3 py-1.5 text-xs font-bold transition disabled:cursor-not-allowed disabled:opacity-60 ${
  selected
- ? ENROLLMENT_SEG_SELECTED[option.value] ?? "bg-gray-900 text-white dark:text-[var(--doc-ink)]"
+ ? ENROLLMENT_SEG_SELECTED[option.value] ?? "bg-[var(--doc-grid-head)] text-white "
  : "text-[var(--doc-ink-2)] hover:bg-[var(--doc-grid-head)] hover:text-[var(--doc-ink)] "
  }`}
                             >
@@ -885,7 +885,7 @@ export default function StudentDetailClient({
                     disabled={deletingEnrollmentId === enrollment.id}
                     aria-label="수강 반 완전 삭제"
                     title="수강 반 완전 삭제(이력 영구 제거)"
-                    className="grid h-8 w-8 shrink-0 place-items-center rounded-[3px] border border-[var(--doc-crit)] bg-[var(--doc-surface)] text-[var(--doc-crit)] transition hover:bg-[var(--doc-crit-soft)] hover:text-[var(--doc-crit)] disabled:opacity-40 /50"
+                    className="grid h-8 w-8 shrink-0 place-items-center rounded-[3px] border border-[var(--doc-crit)] bg-[var(--doc-surface)] text-[var(--doc-crit)] transition hover:bg-[var(--doc-crit-soft)] hover:text-[var(--doc-crit)] disabled:opacity-40"
                 >
                     <SymbolIcon name="delete" size={16} />
                 </button>
@@ -913,10 +913,10 @@ export default function StudentDetailClient({
 
     // 출석 통계 막대 정의 (present/late/absent/excused)
     const attBars = [
-        { key: "present", label: "출석", value: attendanceStats.present, bar: "bg-emerald-500", text: "text-[var(--doc-accent)] " },
-        { key: "late", label: "지각", value: attendanceStats.late, bar: "bg-amber-500", text: "text-[var(--doc-warn)] " },
-        { key: "absent", label: "결석", value: attendanceStats.absent, bar: "bg-red-500", text: "text-[var(--doc-crit)] " },
-        { key: "excused", label: "사유", value: attendanceStats.excused, bar: "bg-sky-500", text: "text-[var(--doc-ink-2)] " },
+        { key: "present", label: "출석", value: attendanceStats.present, bar: "bg-[var(--doc-accent)]", text: "text-[var(--doc-accent)] " },
+        { key: "late", label: "지각", value: attendanceStats.late, bar: "bg-[var(--doc-grid-head)]", text: "text-[var(--doc-warn)] " },
+        { key: "absent", label: "결석", value: attendanceStats.absent, bar: "bg-[var(--doc-crit)]", text: "text-[var(--doc-crit)] " },
+        { key: "excused", label: "사유", value: attendanceStats.excused, bar: "bg-[var(--doc-grid-head)]", text: "text-[var(--doc-ink-2)] " },
     ];
 
     const tabs: { key: TabKey; label: string; count?: number }[] = [
@@ -944,7 +944,7 @@ export default function StudentDetailClient({
                             {representativeStatusInfo.label}
                         </span>
                         {activeEnrollments.length > 0 && (
-                            <span className="rounded-[3px] bg-[var(--doc-accent)] px-2.5 py-0.5 text-xs font-bold text-[var(--doc-accent)] /10">
+                            <span className="rounded-[3px] bg-[var(--doc-accent)] px-2.5 py-0.5 text-xs font-bold text-[var(--doc-accent)]">
                                 {activeEnrollments.length}개 반
                             </span>
                         )}
@@ -1026,7 +1026,7 @@ export default function StudentDetailClient({
 
                 {/* 수강 중 반 수 */}
                 <div className="flex items-center gap-3 rounded-[6px] border border-[var(--doc-rule)] bg-[var(--doc-surface)] p-4">
-                    <div className="grid h-11 w-11 shrink-0 place-items-center rounded-[3px] bg-[var(--doc-accent)] text-[var(--doc-accent)] /10">
+                    <div className="grid h-11 w-11 shrink-0 place-items-center rounded-[3px] bg-[var(--doc-accent)] text-[var(--doc-accent)]">
                         <SymbolIcon name="sports_basketball" size={22} />
                     </div>
                     <div className="min-w-0">
@@ -1204,7 +1204,7 @@ export default function StudentDetailClient({
                                 <button
                                     onClick={saveMemo}
                                     disabled={isPending}
-                                    className="inline-flex items-center gap-1 rounded-[3px] bg-[var(--doc-accent)] px-3 py-1.5 text-xs font-bold text-white transition hover:bg-orange-600 disabled:opacity-50 dark:text-[var(--doc-ink)] dark:hover:bg-lime-200"
+                                    className="inline-flex items-center gap-1 rounded-[3px] bg-[var(--doc-accent)] px-3 py-1.5 text-xs font-bold text-white transition hover:bg-[var(--doc-grid-head)] disabled:opacity-50 dark:hover:bg-lime-200"
                                 >
                                     <SymbolIcon name="save" size={14} /> {isPending ? "저장 중..." : "저장"}
                                 </button>
@@ -1258,7 +1258,7 @@ export default function StudentDetailClient({
                                         <button
                                             type="button"
                                             onClick={() => { setShowClassPicker((v) => !v); setEnrollError(null); }}
-                                            className="inline-flex items-center gap-1 rounded-[3px] border border-[var(--doc-accent)] bg-[var(--doc-accent)] px-2.5 py-1 text-xs font-bold text-[var(--doc-accent)] transition hover:bg-[var(--doc-accent)] /30 /10 /20"
+                                            className="inline-flex items-center gap-1 rounded-[3px] border border-[var(--doc-accent)] bg-[var(--doc-accent)] px-2.5 py-1 text-xs font-bold text-[var(--doc-accent)] transition hover:bg-[var(--doc-accent)]"
                                         >
                                             <SymbolIcon name={showClassPicker ? "close" : "add"} size={15} />
                                             {showClassPicker ? "닫기" : "반 추가"}
@@ -1301,7 +1301,7 @@ export default function StudentDetailClient({
                                                                         type="button"
                                                                         onClick={() => void addEnrollment(c.id)}
                                                                         disabled={Boolean(enrollingClassId)}
-                                                                        className="flex w-full items-center justify-between gap-2 rounded-[3px] border border-[var(--doc-rule)] bg-[var(--doc-surface)] px-3 py-2 text-left transition hover:border-[var(--doc-accent)] hover:bg-[var(--doc-accent)] disabled:opacity-50 /40 /5"
+                                                                        className="flex w-full items-center justify-between gap-2 rounded-[3px] border border-[var(--doc-rule)] bg-[var(--doc-surface)] px-3 py-2 text-left transition hover:border-[var(--doc-accent)] hover:bg-[var(--doc-accent)] disabled:opacity-50"
                                                                     >
                                                                         <span className="min-w-0 truncate text-sm font-bold text-[var(--doc-ink)]">{c.name}</span>
                                                                         <span className="shrink-0 text-xs text-[var(--doc-ink-3)]">
@@ -1420,7 +1420,7 @@ export default function StudentDetailClient({
                                 {attendances.length === 0 ? (
                                     <EmptyState text="출결 기록이 없습니다." />
                                 ) : (
-                                    <div className="divide-y divide-gray-100 dark:divide-gray-700/70">
+                                    <div className="divide-y divide-[var(--doc-rule)]/70">
                                         {attendances.map((a) => {
                                             const info = ATT_STATUS[a.status] || ATT_STATUS.PRESENT;
                                             return (
@@ -1450,7 +1450,7 @@ export default function StudentDetailClient({
                                 {payments.length === 0 ? (
                                     <EmptyState text="청구·납부 내역이 없습니다." />
                                 ) : (
-                                    <div className="divide-y divide-gray-100 dark:divide-gray-700/70">
+                                    <div className="divide-y divide-[var(--doc-rule)]/70">
                                         {payments.map((p) => {
                                             const info = PAY_STATUS[p.status] || PAY_STATUS.PENDING;
                                             const invoiceInfo = getInvoiceStatusInfo(p.invoiceStatus);
@@ -1550,7 +1550,7 @@ export default function StudentDetailClient({
                                 {ledgerHistory.length === 0 ? (
                                     <EmptyState text="시트 원장에서 이관된 수납 기록이 없습니다." />
                                 ) : (
-                                    <div className="divide-y divide-gray-100 dark:divide-gray-700/70">
+                                    <div className="divide-y divide-[var(--doc-rule)]/70">
                                         {ledgerHistory.map((h) => (
                                             <div key={h.id} className="flex items-start gap-3 py-3">
                                                 <span className="w-16 shrink-0 pt-0.5 text-xs font-bold text-[var(--doc-ink-2)]">{formatMonthLabel(h)}</span>
@@ -1600,7 +1600,7 @@ export default function StudentDetailClient({
                                                         <span className={`rounded-[3px] px-2 py-0.5 text-[11px] font-bold ${statusInfo.color}`}>{statusInfo.label}</span>
                                                         {/* 반 뱃지 전체 노출 (기존 +N 숨김 개선) */}
                                                         {history.classes.map((c) => (
-                                                            <span key={c.slotKey} className="rounded-[3px] bg-[var(--doc-accent)] px-2 py-0.5 text-[11px] font-bold text-[var(--doc-accent)] /10">
+                                                            <span key={c.slotKey} className="rounded-[3px] bg-[var(--doc-accent)] px-2 py-0.5 text-[11px] font-bold text-[var(--doc-accent)]">
                                                                 {c.className}
                                                             </span>
                                                         ))}

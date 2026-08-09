@@ -18,9 +18,9 @@ export default function SeasonalHeader({ action, eyebrow = "SEASONAL PROGRAM", t
       <header className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
         <div className="min-w-0">
           {/* 브랜드 오렌지는 하드코딩하지 않고 CSS 변수 사용 → 다크모드에서 자동으로 네온 라임으로 바뀐다. */}
-          <p className="text-sm font-bold uppercase tracking-wide text-[var(--brand-accent)]">{eyebrow}</p>
-          <h1 className="mt-1 text-2xl font-black text-gray-950 dark:text-white sm:text-3xl">{title}</h1>
-          <p className="mt-2 break-keep text-sm text-gray-500 dark:text-gray-400">
+          <p className="text-sm font-bold uppercase tracking-wide text-[var(--doc-accent)]">{eyebrow}</p>
+          <h1 className="mt-1 text-2xl font-bold text-gray-950 sm:text-3xl">{title}</h1>
+          <p className="mt-2 break-keep text-sm text-[var(--doc-ink-2)]">
             {subtitle}
           </p>
         </div>

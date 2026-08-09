@@ -366,17 +366,17 @@ function formatReportList(values: string[] | null | undefined) {
 const ROSTER_STATUS_META: Record<string, { label: string; tone: string; note: string }> = {
     ACTIVE: {
         label: "재원",
-        tone: "border-[var(--doc-accent)] bg-[var(--doc-accent-soft)] text-[var(--doc-accent)] /20  ",
+        tone: "border-[var(--doc-accent)] bg-[var(--doc-accent-soft)] text-[var(--doc-accent)]   ",
         note: "장부 기준 실제 수업 인원",
     },
     PAUSED: {
         label: "휴원",
-        tone: "border-[var(--doc-warn)] bg-[var(--doc-grid-head)] text-[var(--doc-warn)] /20  ",
+        tone: "border-[var(--doc-warn)] bg-[var(--doc-grid-head)] text-[var(--doc-warn)]   ",
         note: "등록 행이 모두 휴원인 학생",
     },
     WITHDRAWN: {
         label: "퇴원",
-        tone: "border-[var(--doc-crit)] bg-[var(--doc-crit-soft)] text-[var(--doc-crit)] /20  ",
+        tone: "border-[var(--doc-crit)] bg-[var(--doc-crit-soft)] text-[var(--doc-crit)]   ",
         note: "최신 상태가 퇴원인 학생",
     },
     UNKNOWN: {
@@ -652,7 +652,7 @@ function ReconcilePreviewBox({
                     type="button"
                     onClick={onApply}
                     disabled={applying || actionCount === 0 || preview.missingClassSlots > 0}
-                    className="rounded-[3px] bg-gray-900 px-3 py-2 text-xs font-bold text-white transition hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-50 dark:hover:bg-lime-200"
+                    className="rounded-[3px] bg-[var(--doc-grid-head)] px-3 py-2 text-xs font-bold text-white transition hover:bg-[var(--doc-grid-head)] disabled:cursor-not-allowed disabled:opacity-50 dark:hover:bg-lime-200"
                 >
                     {applying ? "적용 중" : actionCount === 0 ? "적용할 변경 없음" : "시트 기준 적용"}
                 </button>
@@ -664,7 +664,7 @@ function ReconcilePreviewBox({
               아래 전용 버튼으로만 확정하도록 분리했다.
             */}
             {preview.withdrawCandidates > 0 && (
-                <div className="mt-3 rounded-[3px] border border-[var(--doc-crit)] bg-[var(--doc-crit-soft)] p-3 text-xs text-[var(--doc-crit)] /30">
+                <div className="mt-3 rounded-[3px] border border-[var(--doc-crit)] bg-[var(--doc-crit-soft)] p-3 text-xs text-[var(--doc-crit)]">
                     <p className="font-bold">
                         퇴원 후보 {preview.withdrawCandidateStudents}명 ({preview.withdrawCandidates}건)
                     </p>
@@ -687,7 +687,7 @@ function ReconcilePreviewBox({
                             type="button"
                             onClick={onApplyWithdrawals}
                             disabled={applying}
-                            className="rounded-[3px] bg-red-700 px-3 py-2 text-xs font-bold text-white transition hover:bg-red-800 disabled:cursor-not-allowed disabled:opacity-50"
+                            className="rounded-[3px] bg-[var(--doc-crit)] px-3 py-2 text-xs font-bold text-white transition hover:bg-[var(--doc-crit)] disabled:cursor-not-allowed disabled:opacity-50"
                         >
                             {applying ? "적용 중" : `퇴원 후보 ${preview.withdrawCandidateStudents}명 퇴원 처리`}
                         </button>
@@ -776,7 +776,7 @@ function RelinkPreviewBox({
                     type="button"
                     onClick={onApplyAuto}
                     disabled={applying || applyReadyTotal === 0}
-                    className="rounded-[3px] bg-gray-900 px-3 py-2 font-bold text-white transition hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-50 dark:hover:bg-lime-200"
+                    className="rounded-[3px] bg-[var(--doc-grid-head)] px-3 py-2 font-bold text-white transition hover:bg-[var(--doc-grid-head)] disabled:cursor-not-allowed disabled:opacity-50 dark:hover:bg-lime-200"
                 >
                     {applying ? "적용 중" : applyReadyTotal === 0 ? "확정 후보 없음" : "확정 후보 적용"}
                 </button>
@@ -788,7 +788,7 @@ function RelinkPreviewBox({
                         재연결이 필요한 원본 행이 없습니다.
                     </div>
                 ) : (
-                    <div className="divide-y divide-gray-100 text-xs dark:divide-gray-800">
+                    <div className="divide-y divide-[var(--doc-rule)] text-xs dark:divide-[var(--doc-rule)]">
                         {preview.reviewRows.map((row) => {
                             const key = relinkRowKey(row);
                             const selectedStudentId = selections[key] ?? row.match?.studentId ?? "";
@@ -1598,10 +1598,10 @@ export default function StudentManagementClient({
                 </div>
                 <div className="flex items-center justify-between">
                     <div className="space-y-2">
-                        <div className="h-7 w-36 rounded bg-gray-200" />
+                        <div className="h-7 w-36 rounded bg-[var(--doc-grid-head)]" />
                         <div className="h-4 w-48 rounded bg-[var(--doc-grid-head)]" />
                     </div>
-                    <div className="h-10 w-28 rounded-[3px] bg-gray-200" />
+                    <div className="h-10 w-28 rounded-[3px] bg-[var(--doc-grid-head)]" />
                 </div>
                 <div className="h-11 w-full max-w-md rounded-[3px] bg-[var(--doc-grid-head)]" />
                 <div className="overflow-hidden rounded-[3px] border border-[var(--doc-rule)] bg-[var(--doc-surface)]">
@@ -1618,12 +1618,12 @@ export default function StudentManagementClient({
 
     if (dataError && students.length === 0) {
         return (
-            <div className="mx-auto max-w-5xl rounded-[3px] border border-[var(--doc-crit)] bg-[var(--doc-crit-soft)] p-8 text-center /50">
+            <div className="mx-auto max-w-5xl rounded-[3px] border border-[var(--doc-crit)] bg-[var(--doc-crit-soft)] p-8 text-center">
                 <p className="font-bold text-[var(--doc-crit)]">{dataError}</p>
                 <button
                     type="button"
                     onClick={() => void loadData()}
-                    className="mt-4 rounded-[3px] bg-[var(--doc-accent)] px-4 py-2 text-sm font-bold text-white transition hover:bg-orange-600 dark:text-[var(--doc-ink)]"
+                    className="mt-4 rounded-[3px] bg-[var(--doc-accent)] px-4 py-2 text-sm font-bold text-white transition hover:bg-[var(--doc-grid-head)]"
                 >
                     다시 불러오기
                 </button>
@@ -1728,13 +1728,13 @@ export default function StudentManagementClient({
                                         type="button"
                                         onClick={() => void loadCurrentRosterReport()}
                                         disabled={currentRosterLoading}
-                                        className="rounded-[3px] bg-gray-900 px-3 py-2 font-bold text-white transition hover:bg-gray-800 disabled:cursor-wait disabled:opacity-60 dark:hover:bg-lime-200"
+                                        className="rounded-[3px] bg-[var(--doc-grid-head)] px-3 py-2 font-bold text-white transition hover:bg-[var(--doc-grid-head)] disabled:cursor-wait disabled:opacity-60 dark:hover:bg-lime-200"
                                     >
                                         {currentRosterLoading ? "점검 중" : "상세 점검"}
                                     </button>
                                 </div>
                                 {currentRosterError && (
-                                    <div className="mt-3 rounded-[3px] border border-[var(--doc-crit)] bg-[var(--doc-crit-soft)] px-3 py-2 text-xs text-[var(--doc-crit)] /30">
+                                    <div className="mt-3 rounded-[3px] border border-[var(--doc-crit)] bg-[var(--doc-crit-soft)] px-3 py-2 text-xs text-[var(--doc-crit)]">
                                         {currentRosterError}
                                     </div>
                                 )}
@@ -1768,13 +1768,13 @@ export default function StudentManagementClient({
                                             type="button"
                                             onClick={() => void loadReconcilePreview()}
                                             disabled={reconcileLoading}
-                                            className="rounded-[3px] bg-amber-700 px-3 py-2 text-xs font-bold text-white transition hover:bg-amber-800 disabled:cursor-wait disabled:opacity-60 dark:hover:bg-lime-200"
+                                            className="rounded-[3px] bg-[var(--doc-grid-head)] px-3 py-2 text-xs font-bold text-white transition hover:bg-[var(--doc-grid-head)] disabled:cursor-wait disabled:opacity-60 dark:hover:bg-lime-200"
                                         >
                                             {reconcileLoading ? "점검 중" : "차이 점검"}
                                         </button>
                                     </div>
                                     {reconcileError && (
-                                        <div className="mt-3 rounded-[3px] border border-[var(--doc-crit)] bg-[var(--doc-crit-soft)] px-3 py-2 text-xs text-[var(--doc-crit)] /30">
+                                        <div className="mt-3 rounded-[3px] border border-[var(--doc-crit)] bg-[var(--doc-crit-soft)] px-3 py-2 text-xs text-[var(--doc-crit)]">
                                             {reconcileError}
                                         </div>
                                     )}
@@ -1801,13 +1801,13 @@ export default function StudentManagementClient({
                                         type="button"
                                         onClick={() => void loadRelinkPreview()}
                                         disabled={relinkLoading}
-                                        className="rounded-[3px] bg-gray-900 px-3 py-2 font-bold text-white transition hover:bg-gray-800 disabled:cursor-wait disabled:opacity-60 dark:hover:bg-lime-200"
+                                        className="rounded-[3px] bg-[var(--doc-grid-head)] px-3 py-2 font-bold text-white transition hover:bg-[var(--doc-grid-head)] disabled:cursor-wait disabled:opacity-60 dark:hover:bg-lime-200"
                                     >
                                         {relinkLoading ? "점검 중" : "미연결 점검"}
                                     </button>
                                 </div>
                                 {relinkError && (
-                                    <div className="mt-3 rounded-[3px] border border-[var(--doc-crit)] bg-[var(--doc-crit-soft)] px-3 py-2 text-xs text-[var(--doc-crit)] /30">
+                                    <div className="mt-3 rounded-[3px] border border-[var(--doc-crit)] bg-[var(--doc-crit-soft)] px-3 py-2 text-xs text-[var(--doc-crit)]">
                                         {relinkError}
                                     </div>
                                 )}
@@ -1883,14 +1883,14 @@ export default function StudentManagementClient({
                     {/* 엑셀 일괄 업로드 버튼 — 랠리즈 다운로드 파일용 */}
                     <button
                         onClick={() => setShowExcelUpload(true)}
-                        className="bg-emerald-600 text-white px-4 py-2 rounded-[3px] font-bold hover:bg-emerald-700 transition"
+                        className="bg-[var(--doc-accent)] text-white px-4 py-2 rounded-[3px] font-bold hover:bg-[var(--doc-accent)] transition"
                     >
                         엑셀 업로드
                     </button>
                     {/* 기존 1명씩 수동 등록 버튼 */}
                     <button
                         onClick={() => { resetForm(); setShowForm(true); }}
-                        className="bg-[var(--doc-accent)] dark:text-[var(--doc-ink)] text-white px-4 py-2 rounded-[3px] font-bold hover:bg-orange-600 transition"
+                        className="bg-[var(--doc-accent)] text-white px-4 py-2 rounded-[3px] font-bold hover:bg-[var(--doc-grid-head)] transition"
                     >
                         + 원생 등록
                     </button>
@@ -2087,7 +2087,7 @@ export default function StudentManagementClient({
                         <button
                             type="submit"
                             disabled={busy || (!editingId && !guardianConsent)}
-                            className="bg-[var(--doc-accent)] dark:text-[var(--doc-ink)] text-white px-6 py-2 rounded-[3px] font-bold hover:bg-orange-600 transition disabled:opacity-50"
+                            className="bg-[var(--doc-accent)] text-white px-6 py-2 rounded-[3px] font-bold hover:bg-[var(--doc-grid-head)] transition disabled:opacity-50"
                         >
                             {busy ? "저장 중..." : editingId ? "수정" : "등록"}
                         </button>
@@ -2103,7 +2103,7 @@ export default function StudentManagementClient({
             ) : (
                 <div className="bg-[var(--doc-surface)] rounded-[3px] border border-[var(--doc-rule)] overflow-hidden">
                     <div className="overflow-x-auto">
-                        <table className="min-w-full divide-y divide-gray-200">
+                        <table className="min-w-full divide-y divide-[var(--doc-rule)]">
                             <thead className="bg-[var(--doc-grid-head)]">
                                 <tr>
                                     <th className="px-4 py-2.5 text-left text-xs font-medium text-[var(--doc-ink-2)] uppercase">이름</th>
@@ -2116,7 +2116,7 @@ export default function StudentManagementClient({
                                     <th className="px-4 py-2.5 text-right text-xs font-medium text-[var(--doc-ink-2)] uppercase">관리</th>
                                 </tr>
                             </thead>
-                            <tbody className="divide-y divide-gray-100">
+                            <tbody className="divide-y divide-[var(--doc-rule)]">
                                 {visibleStudents.map((s) => (
                                     <tr key={s.id} className="hover:bg-[var(--doc-grid-head)] transition-colors">
                                         {/* 이름: 항상 표시, 클릭하면 상세 페이지로 이동 */}

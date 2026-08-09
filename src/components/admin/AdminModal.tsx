@@ -94,7 +94,7 @@ export default function AdminModal({
             <div
                 ref={panelRef}
                 tabIndex={-1}
-                className={`flex max-h-[calc(100dvh-1.5rem)] w-full flex-col overflow-y-auto overscroll-contain rounded-2xl bg-white shadow-2xl outline-none dark:bg-gray-800 sm:max-h-[calc(100dvh-2rem)] ${panelClassName}`}
+                className={`flex max-h-[calc(100dvh-1.5rem)] w-full flex-col overflow-y-auto overscroll-contain rounded-[6px] bg-[var(--doc-surface)] outline-none sm:max-h-[calc(100dvh-2rem)] ${panelClassName}`}
                 onMouseDown={(event) => event.stopPropagation()}
             >
                 {children}

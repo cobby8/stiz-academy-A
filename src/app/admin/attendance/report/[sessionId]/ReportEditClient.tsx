@@ -65,9 +65,9 @@ const DAY_LABELS: Record<string, string> = {
 
 // 출석 상태 라벨/색상
 const STATUS_MAP: Record<string, { label: string; color: string }> = {
-    PRESENT: { label: "출석", color: "bg-green-100 text-green-700" },
-    ABSENT: { label: "결석", color: "bg-red-100 text-red-700" },
-    LATE: { label: "지각", color: "bg-yellow-100 text-yellow-700" },
+    PRESENT: { label: "출석", color: "bg-[var(--doc-accent-soft)] text-[var(--doc-accent)]" },
+    ABSENT: { label: "결석", color: "bg-[var(--doc-crit-soft)] text-[var(--doc-crit)]" },
+    LATE: { label: "지각", color: "bg-[var(--doc-grid-head)] text-[var(--doc-warn)]" },
 };
 
 type ReportPayload = {
@@ -80,45 +80,45 @@ function ReportEditLoadingFallback() {
         <div className="mx-auto max-w-4xl">
             <div className="mb-6 flex items-center justify-between gap-4">
                 <div>
-                    <div className="h-5 w-28 animate-pulse rounded bg-gray-100 dark:bg-gray-800" />
-                    <div className="mt-3 h-8 w-48 animate-pulse rounded bg-gray-200 dark:bg-gray-700" />
-                    <div className="mt-2 h-4 w-96 max-w-full animate-pulse rounded bg-gray-100 dark:bg-gray-800" />
+                    <div className="h-5 w-28 rounded bg-[var(--doc-grid-head)]" />
+                    <div className="mt-3 h-8 w-48 rounded bg-[var(--doc-grid-head)]" />
+                    <div className="mt-2 h-4 w-96 max-w-full rounded bg-[var(--doc-grid-head)]" />
                 </div>
-                <div className="h-8 w-24 animate-pulse rounded-full bg-gray-100 dark:bg-gray-800" />
+                <div className="h-8 w-24 rounded-[3px] bg-[var(--doc-grid-head)]" />
             </div>
 
-            <div className="mb-6 rounded-xl border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-700 dark:bg-gray-800">
-                <div className="h-7 w-32 animate-pulse rounded bg-gray-200 dark:bg-gray-700" />
+            <div className="mb-6 rounded-[3px] border border-[var(--doc-rule)] bg-[var(--doc-surface)] p-6">
+                <div className="h-7 w-32 rounded bg-[var(--doc-grid-head)]" />
                 <div className="mt-5 space-y-4">
-                    <div className="h-11 animate-pulse rounded-lg bg-gray-100 dark:bg-gray-700" />
-                    <div className="h-11 animate-pulse rounded-lg bg-gray-100 dark:bg-gray-700" />
-                    <div className="h-28 animate-pulse rounded-lg bg-gray-100 dark:bg-gray-700" />
-                    <div className="h-10 w-32 animate-pulse rounded-lg bg-gray-100 dark:bg-gray-700" />
+                    <div className="h-11 rounded-[3px] bg-[var(--doc-grid-head)]" />
+                    <div className="h-11 rounded-[3px] bg-[var(--doc-grid-head)]" />
+                    <div className="h-28 rounded-[3px] bg-[var(--doc-grid-head)]" />
+                    <div className="h-10 w-32 rounded-[3px] bg-[var(--doc-grid-head)]" />
                 </div>
             </div>
 
-            <div className="mb-6 overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800">
-                <div className="border-b border-gray-100 bg-gray-50 p-5 dark:border-gray-700 dark:bg-gray-900/50">
-                    <div className="h-7 w-56 animate-pulse rounded bg-gray-200 dark:bg-gray-700" />
-                    <div className="mt-2 h-3 w-80 max-w-full animate-pulse rounded bg-gray-100 dark:bg-gray-700" />
+            <div className="mb-6 overflow-hidden rounded-[3px] border border-[var(--doc-rule)] bg-[var(--doc-surface)]">
+                <div className="border-b border-[var(--doc-rule)] bg-[var(--doc-grid-head)] p-5">
+                    <div className="h-7 w-56 rounded bg-[var(--doc-grid-head)]" />
+                    <div className="mt-2 h-3 w-80 max-w-full rounded bg-[var(--doc-grid-head)]" />
                 </div>
-                <div className="divide-y divide-gray-100 dark:divide-gray-700">
+                <div className="divide-y divide-[var(--doc-rule)]">
                     {Array.from({ length: 5 }).map((_, index) => (
                         <div key={index} className="px-5 py-4">
                             <div className="mb-3 flex items-center justify-between gap-3">
-                                <div className="h-5 w-24 animate-pulse rounded bg-gray-200 dark:bg-gray-700" />
-                                <div className="h-6 w-14 animate-pulse rounded-full bg-gray-100 dark:bg-gray-700" />
+                                <div className="h-5 w-24 rounded bg-[var(--doc-grid-head)]" />
+                                <div className="h-6 w-14 rounded-[3px] bg-[var(--doc-grid-head)]" />
                             </div>
-                            <div className="mb-3 h-5 w-32 animate-pulse rounded bg-gray-100 dark:bg-gray-700" />
-                            <div className="h-16 animate-pulse rounded-lg bg-gray-100 dark:bg-gray-700" />
+                            <div className="mb-3 h-5 w-32 rounded bg-[var(--doc-grid-head)]" />
+                            <div className="h-16 rounded-[3px] bg-[var(--doc-grid-head)]" />
                         </div>
                     ))}
                 </div>
             </div>
 
-            <div className="flex items-center justify-between rounded-xl border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-700 dark:bg-gray-800">
-                <div className="h-10 w-32 animate-pulse rounded-lg bg-gray-200 dark:bg-gray-700" />
-                <div className="h-10 w-24 animate-pulse rounded-lg bg-gray-200 dark:bg-gray-700" />
+            <div className="flex items-center justify-between rounded-[3px] border border-[var(--doc-rule)] bg-[var(--doc-surface)] p-5">
+                <div className="h-10 w-32 rounded-[3px] bg-[var(--doc-grid-head)]" />
+                <div className="h-10 w-24 rounded-[3px] bg-[var(--doc-grid-head)]" />
             </div>
         </div>
     );
@@ -126,12 +126,12 @@ function ReportEditLoadingFallback() {
 
 function ReportEditErrorState({ onRetry }: { onRetry: () => void }) {
     return (
-        <div className="mx-auto max-w-4xl rounded-xl border border-red-200 bg-red-50 p-6 text-center dark:border-red-800 dark:bg-red-950/30">
-            <p className="text-sm font-bold text-red-700 dark:text-red-200">수업 리포트 정보를 불러오지 못했습니다.</p>
+        <div className="mx-auto max-w-4xl rounded-[3px] border border-[var(--doc-crit)] bg-[var(--doc-crit-soft)] p-6 text-center">
+            <p className="text-sm font-bold text-[var(--doc-crit)]">수업 리포트 정보를 불러오지 못했습니다.</p>
             <button
                 type="button"
                 onClick={onRetry}
-                className="mt-4 rounded-lg bg-red-600 px-4 py-2 text-sm font-bold text-white transition hover:bg-red-700"
+                className="mt-4 rounded-[3px] bg-[var(--doc-crit)] px-4 py-2 text-sm font-bold text-white transition hover:bg-[var(--doc-crit)]"
             >
                 다시 불러오기
             </button>
@@ -369,26 +369,26 @@ function ReportEditForm({
                     <Link
                         href="/admin/attendance/report"
                         prefetch={false}
-                        className="text-sm text-gray-500 hover:text-gray-700 dark:text-gray-200 flex items-center gap-1 mb-2"
+                        className="text-sm text-[var(--doc-ink-2)] hover:text-[var(--doc-ink-2)] flex items-center gap-1 mb-2"
                     >
                         <span className="material-symbols-outlined text-sm">arrow_back</span>
                         리포트 목록
                     </Link>
-                    <h1 className="text-2xl font-extrabold text-gray-900 dark:text-white">수업 리포트 편집</h1>
-                    <p className="text-gray-500 dark:text-gray-400 text-sm mt-1">
+                    <h1 className="text-2xl font-bold text-[var(--doc-ink)]">수업 리포트 편집</h1>
+                    <p className="text-[var(--doc-ink-2)] text-sm mt-1">
                         {dateStr} | {report.className} ({DAY_LABELS[report.dayOfWeek] || report.dayOfWeek} {report.startTime}~{report.endTime})
-                        {report.programName && <span className="ml-2 text-gray-400">- {report.programName}</span>}
+                        {report.programName && <span className="ml-2 text-[var(--doc-ink-3)]">- {report.programName}</span>}
                     </p>
                 </div>
                 {/* 발행 상태 배지 */}
                 <div className="flex items-center gap-3">
                     {published ? (
-                        <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-sm font-bold bg-green-100 text-green-700">
+                        <span className="inline-flex items-center gap-1 px-3 py-1 rounded-[3px] text-sm font-bold bg-[var(--doc-accent-soft)] text-[var(--doc-accent)]">
                             <span className="material-symbols-outlined text-base">check_circle</span>
                             발행됨
                         </span>
                     ) : (
-                        <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-sm font-bold bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400">
+                        <span className="inline-flex items-center gap-1 px-3 py-1 rounded-[3px] text-sm font-bold bg-[var(--doc-grid-head)] text-[var(--doc-ink-2)]">
                             <span className="material-symbols-outlined text-base">edit_note</span>
                             미발행
                         </span>
@@ -397,8 +397,8 @@ function ReportEditForm({
             </div>
 
             {/* 기본 정보 카드 */}
-            <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm p-6 mb-6">
-                <h2 className="text-lg font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+            <div className="bg-[var(--doc-surface)] rounded-[3px] border border-[var(--doc-rule)] p-6 mb-6">
+                <h2 className="text-lg font-bold text-[var(--doc-ink)] mb-4 flex items-center gap-2">
                     <span className="material-symbols-outlined">description</span>
                     수업 정보
                 </h2>
@@ -406,23 +406,23 @@ function ReportEditForm({
                 <div className="space-y-4">
                     {/* 수업 주제 */}
                     <div>
-                        <label className="block text-sm font-bold text-gray-700 dark:text-gray-200 mb-1">수업 주제</label>
+                        <label className="block text-sm font-bold text-[var(--doc-ink-2)] mb-1">수업 주제</label>
                         <input
                             type="text"
                             value={topic}
                             onChange={(e) => { setTopic(e.target.value); setSaved(false); }}
                             placeholder="예: 드리블 연습, 3대3 미니게임"
-                            className="w-full border border-gray-300 dark:border-gray-600 rounded-lg p-2.5 text-sm dark:bg-gray-800 dark:text-white focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime focus:border-brand-orange-500"
+                            className="w-full border border-[var(--doc-rule)] rounded-[3px] p-2.5 text-sm focus: focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime focus:border-[var(--doc-accent)]"
                         />
                     </div>
 
                     {/* 담당 코치 */}
                     <div>
-                        <label className="block text-sm font-bold text-gray-700 dark:text-gray-200 mb-1">담당 코치</label>
+                        <label className="block text-sm font-bold text-[var(--doc-ink-2)] mb-1">담당 코치</label>
                         <select
                             value={coachId}
                             onChange={(e) => { setCoachId(e.target.value); setSaved(false); }}
-                            className="w-full border border-gray-300 dark:border-gray-600 rounded-lg p-2.5 text-sm dark:text-white focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime bg-white dark:bg-gray-800"
+                            className="w-full border border-[var(--doc-rule)] rounded-[3px] p-2.5 text-sm focus: focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime bg-[var(--doc-surface)]"
                         >
                             <option value="">코치 선택</option>
                             {coaches.map((c) => (
@@ -433,33 +433,33 @@ function ReportEditForm({
 
                     {/* 수업 내용 */}
                     <div>
-                        <label className="block text-sm font-bold text-gray-700 dark:text-gray-200 mb-1">수업 내용</label>
+                        <label className="block text-sm font-bold text-[var(--doc-ink-2)] mb-1">수업 내용</label>
                         <textarea
                             value={content}
                             onChange={(e) => { setContent(e.target.value); setSaved(false); }}
                             rows={4}
-                            className="w-full border border-gray-300 dark:border-gray-600 rounded-lg p-2.5 text-sm dark:bg-gray-800 dark:text-white focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime resize-y"
+                            className="w-full border border-[var(--doc-rule)] rounded-[3px] p-2.5 text-sm focus: focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime resize-y"
                         />
                     </div>
 
                     {/* 수업 사진 */}
                     <div>
-                        <label className="block text-sm font-bold text-gray-700 dark:text-gray-200 mb-1">수업 사진</label>
+                        <label className="block text-sm font-bold text-[var(--doc-ink-2)] mb-1">수업 사진</label>
                         {photos.length > 0 && (
                             <div className="flex flex-wrap gap-3 mb-3">
                                 {photos.map((photo, i) => (
                                     <div key={`${photo.index}-${photo.src}`} className="relative group">
                                         {brokenPhotoIndexes.includes(photo.index) ? (
                                             // 로드 실패 시 빈 src로 되돌리면 현재 페이지를 다시 요청하게 되므로 자리표시자를 그립니다.
-                                            <div className="w-24 h-24 rounded-lg border border-dashed border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-900 flex flex-col items-center justify-center gap-1 px-1 text-center">
-                                                <span className="material-symbols-outlined text-base text-gray-400">broken_image</span>
-                                                <span className="text-[10px] leading-tight text-gray-400">사진을 불러올 수 없습니다</span>
+                                            <div className="w-24 h-24 rounded-[3px] border border-dashed border-[var(--doc-rule)] bg-[var(--doc-grid-head)] flex flex-col items-center justify-center gap-1 px-1 text-center">
+                                                <span className="material-symbols-outlined text-base text-[var(--doc-ink-3)]">broken_image</span>
+                                                <span className="text-[10px] leading-tight text-[var(--doc-ink-3)]">사진을 불러올 수 없습니다</span>
                                             </div>
                                         ) : (
                                             <img
                                                 src={photo.src}
                                                 alt={`수업 사진 ${i + 1}`}
-                                                className="w-24 h-24 object-cover rounded-lg border border-gray-200 dark:border-gray-700"
+                                                className="w-24 h-24 object-cover rounded-[3px] border border-[var(--doc-rule)]"
                                                 onError={() => {
                                                     setBrokenPhotoIndexes((prev) =>
                                                         prev.includes(photo.index) ? prev : [...prev, photo.index]
@@ -477,7 +477,7 @@ function ReportEditForm({
                                             type="button"
                                             onClick={() => removePhoto(photo.index)}
                                             aria-label={`수업 사진 ${i + 1} 삭제`}
-                                            className="absolute -top-2 -right-2 w-5 h-5 bg-red-500 text-white rounded-full text-xs flex items-center justify-center opacity-0 group-hover:opacity-100 focus:opacity-100 transition"
+                                            className="absolute -top-2 -right-2 w-5 h-5 bg-[var(--doc-crit)] text-white rounded-[3px] text-xs flex items-center justify-center opacity-0 group-hover:opacity-100 focus:opacity-100 transition"
                                         >
                                             X
                                         </button>
@@ -489,7 +489,7 @@ function ReportEditForm({
                             type="button"
                             onClick={() => fileInputRef.current?.click()}
                             disabled={uploading}
-                            className="text-sm text-brand-orange-500 dark:text-brand-neon-lime font-bold hover:underline flex items-center gap-1 disabled:opacity-50"
+                            className="text-sm text-[var(--doc-accent)] font-bold hover:underline flex items-center gap-1 disabled:opacity-50"
                         >
                             <span className="material-symbols-outlined text-sm">add_photo_alternate</span>
                             {uploading ? "업로드 중..." : "사진 추가 (여러 장 선택 가능)"}
@@ -504,47 +504,47 @@ function ReportEditForm({
                             className="hidden"
                         />
                         {photoError && (
-                            <p className="mt-2 text-xs font-medium text-red-600">{photoError}</p>
+                            <p className="mt-2 text-xs font-medium text-[var(--doc-crit)]">{photoError}</p>
                         )}
                     </div>
                 </div>
             </div>
 
             {/* 출석 현황 + 학생별 노트 카드 */}
-            <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden mb-6">
-                <div className="p-5 border-b border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-900/50">
-                    <h2 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
+            <div className="bg-[var(--doc-surface)] rounded-[3px] border border-[var(--doc-rule)] overflow-hidden mb-6">
+                <div className="p-5 border-b border-[var(--doc-rule)] bg-[var(--doc-grid-head)]">
+                    <h2 className="text-lg font-bold text-[var(--doc-ink)] flex items-center gap-2">
                         <span className="material-symbols-outlined">people</span>
                         출석 현황 및 학생별 코멘트
                     </h2>
-                    <p className="text-gray-500 dark:text-gray-400 text-xs mt-1">
+                    <p className="text-[var(--doc-ink-2)] text-xs mt-1">
                         학부모에게 리포트 발행 시 함께 전달됩니다.
                     </p>
                 </div>
 
                 {report.attendances.length === 0 ? (
-                    <div className="p-12 text-center text-gray-400">
+                    <div className="p-12 text-center text-[var(--doc-ink-3)]">
                         출석 기록이 없습니다.
                     </div>
                 ) : (
-                    <div className="divide-y divide-gray-100">
+                    <div className="divide-y divide-[var(--doc-rule)]">
                         {report.attendances.map((a) => {
-                            const statusInfo = STATUS_MAP[a.status] || { label: a.status, color: "bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400" };
+                            const statusInfo = STATUS_MAP[a.status] || { label: a.status, color: "bg-[var(--doc-grid-head)]  text-[var(--doc-ink-2)] " };
                             const noteData = studentNotes[a.studentId] || { note: "", rating: null };
 
                             return (
                                 <div key={a.studentId} className="px-5 py-4">
                                     {/* 학생 이름 + 출석 상태 */}
                                     <div className="flex items-center justify-between mb-2">
-                                        <span className="font-bold text-gray-900 dark:text-white">{a.studentName}</span>
-                                        <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${statusInfo.color}`}>
+                                        <span className="font-bold text-[var(--doc-ink)]">{a.studentName}</span>
+                                        <span className={`px-2 py-0.5 rounded-[3px] text-xs font-bold ${statusInfo.color}`}>
                                             {statusInfo.label}
                                         </span>
                                     </div>
 
                                     {/* 참여도 평점 (별 1~5) */}
                                     <div className="flex items-center gap-2 mb-2">
-                                        <span className="text-xs text-gray-500 dark:text-gray-400 font-medium">참여도:</span>
+                                        <span className="text-xs text-[var(--doc-ink-2)] font-medium">참여도:</span>
                                         <div className="flex gap-0.5">
                                             {[1, 2, 3, 4, 5].map((star) => (
                                                 <button
@@ -557,10 +557,10 @@ function ReportEditForm({
                                                 >
                                                     <span
                                                         className={`material-symbols-outlined text-lg ${
-                                                            noteData.rating && noteData.rating >= star
-                                                                ? "text-yellow-400"
-                                                                : "text-gray-300"
-                                                        }`}
+ noteData.rating && noteData.rating >= star
+ ? "text-[var(--doc-warn)]"
+ : "text-[var(--doc-ink-3)]"
+ }`}
                                                         style={{
                                                             fontVariationSettings:
                                                                 noteData.rating && noteData.rating >= star
@@ -580,7 +580,7 @@ function ReportEditForm({
                                         value={noteData.note}
                                         onChange={(e) => updateNote(a.studentId, e.target.value)}
                                         rows={2}
-                                        className="w-full border border-gray-200 dark:border-gray-700 rounded-lg p-2 text-sm focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime resize-y"
+                                        className="w-full border border-[var(--doc-rule)] rounded-[3px] p-2 text-sm focus: focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime resize-y"
                                     />
                                 </div>
                             );
@@ -590,17 +590,17 @@ function ReportEditForm({
             </div>
 
             {/* 하단 버튼 바 */}
-            <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm p-5 flex items-center justify-between">
+            <div className="bg-[var(--doc-surface)] rounded-[3px] border border-[var(--doc-rule)] p-5 flex items-center justify-between">
                 <div className="flex items-center gap-3">
                     {/* 발행/발행취소 버튼 */}
                     <button
                         onClick={handleTogglePublish}
                         disabled={publishing}
-                        className={`px-4 py-2 rounded-lg text-sm font-bold transition flex items-center gap-1 ${
-                            published
-                                ? "bg-gray-200 text-gray-700 dark:text-gray-200 hover:bg-gray-300"
-                                : "bg-green-600 text-white hover:bg-green-700"
-                        } disabled:opacity-50`}
+                        className={`px-4 py-2 rounded-[3px] text-sm font-bold transition flex items-center gap-1 ${
+ published
+ ? "bg-[var(--doc-grid-head)] text-[var(--doc-ink-2)] hover:bg-[var(--doc-grid-head)]"
+ : "bg-[var(--doc-accent)] text-white hover:bg-[var(--doc-accent)]"
+ } disabled:opacity-50`}
                     >
                         <span className="material-symbols-outlined text-base">
                             {published ? "unpublished" : "publish"}
@@ -610,12 +610,12 @@ function ReportEditForm({
                 </div>
                 <div className="flex items-center gap-3">
                     {saved && (
-                        <span className="text-sm text-green-600 font-medium">저장 완료</span>
+                        <span className="text-sm text-[var(--doc-accent)] font-medium">저장 완료</span>
                     )}
                     <button
                         onClick={handleSave}
                         disabled={saving}
-                        className="bg-brand-orange-500 dark:bg-brand-neon-lime dark:text-brand-navy-900 text-white px-6 py-2 rounded-lg font-bold hover:bg-orange-600 transition disabled:opacity-50 flex items-center gap-1"
+                        className="bg-[var(--doc-accent)] dark:text-[var(--doc-ink)] text-white px-6 py-2 rounded-[3px] font-bold hover:bg-[var(--doc-grid-head)] transition disabled:opacity-50 flex items-center gap-1"
                     >
                         <span className="material-symbols-outlined text-base">save</span>
                         {saving ? "저장 중..." : "저장"}

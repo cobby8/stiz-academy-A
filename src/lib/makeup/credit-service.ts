@@ -111,6 +111,67 @@ export async function syncMakeupCreditForAttendance(input: {
   return { action: r.revoked > 0 ? "revoked" : "none" };
 }
 
+/**
+ * 보강 예약의 상태(BOOKED/ATTENDED/NO_SHOW/CANCELLED)를 보강권에 반영한다.
+ *
+ * 예약 화면에서 보강권과 MakeupSession 을 연결해 뒀으므로, 관리자가 보강 출결을
+ * 찍으면 그 한 장의 운명이 정해진다.
+ *
+ *   ATTENDED  → USED     보강을 다녀왔으니 소진
+ *   NO_SHOW   → NO_SHOW  약관: "예약 후 무단 불참 시 사용한 것으로 처리"
+ *   CANCELLED → AVAILABLE 약관: "미리 취소하면 보강권 유지" — 연결을 끊고 되돌린다
+ *   BOOKED    → RESERVED  되돌림(상태를 잘못 찍었다가 고치는 경우)
+ *
+ * 연결된 보강권이 없으면(이 기능 이전에 만들어진 예약) 조용히 넘어간다.
+ */
+export async function syncCreditForMakeupSession(input: {
+  makeupSessionId: string;
+  status: string;
+}): Promise<{ action: string }> {
+  const nextStatus =
+    input.status === "ATTENDED" ? "USED"
+    : input.status === "NO_SHOW" ? "NO_SHOW"
+    : input.status === "CANCELLED" ? "AVAILABLE"
+    : input.status === "BOOKED" ? "RESERVED"
+    : null;
+  if (!nextStatus) return { action: "none" };
+
+  if (nextStatus === "AVAILABLE") {
+    // 취소 — 보강권을 되돌리고 예약과의 연결을 끊는다.
+    const n = await prisma.$executeRawUnsafe(
+      `UPDATE "MakeupCredit"
+          SET status='AVAILABLE', "makeupSessionId"=NULL, "updatedAt"=now()
+        WHERE "makeupSessionId" = $1`,
+      input.makeupSessionId,
+    );
+    return { action: Number(n) > 0 ? "restored" : "none" };
+  }
+
+  const n = await prisma.$executeRawUnsafe(
+    `UPDATE "MakeupCredit" SET status=$2, "updatedAt"=now() WHERE "makeupSessionId" = $1`,
+    input.makeupSessionId, nextStatus,
+  );
+  return { action: Number(n) > 0 ? nextStatus : "none" };
+}
+
+/**
+ * 기간이 지난 보강권을 소멸시킨다(매일 1회 크론).
+ *
+ * ⚠️ **AVAILABLE 인 것만** 소멸시킨다. 예약(RESERVED)까지 태우면, 만료일 직전에
+ *    예약해 둔 보강을 다녀오기도 전에 권리가 사라진다. 예약은 이미 자리를 잡았으니
+ *    출결(ATTENDED/NO_SHOW)로 끝나야 한다.
+ *
+ * 경계는 학부모에게 유리하게 — 만료일 당일 자정까지는 남겨 둔다(`expiresAt < now`).
+ */
+export async function expireOverdueCredits(): Promise<{ expired: number }> {
+  const n = await prisma.$executeRawUnsafe(
+    `UPDATE "MakeupCredit"
+        SET status='EXPIRED', "updatedAt"=now()
+      WHERE status='AVAILABLE' AND "expiresAt" < now()`,
+  );
+  return { expired: Number(n) };
+}
+
 /** 정규 수업 출결용 — 세션에서 반·날짜를 읽어 키를 만든다. */
 export async function syncCreditForRegularSession(input: {
   sessionId: string;

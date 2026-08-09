@@ -39,6 +39,10 @@
       "schedule": "10 15 * * *"
     },
     {
+      "path": "/api/cron/makeup-credits",
+      "schedule": "30 15 * * *"
+    },
+    {
       "path": "/api/cron/site-ops-bot",
       "schedule": "0 17 * * *"
     }

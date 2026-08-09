@@ -4735,6 +4735,14 @@ export async function updateMakeupStatus(id: string, status: string) {
         console.error("Failed to update makeup status:", e);
         throw new Error("보강 상태 변경 실패");
     }
+    // 보강권 반영(참석→사용완료 / 노쇼→차감 / 취소→복구).
+    // 실패해도 출결 자체는 저장돼야 하므로 격리한다.
+    try {
+        const { syncCreditForMakeupSession } = await import("@/lib/makeup/credit-service");
+        await syncCreditForMakeupSession({ makeupSessionId: id, status });
+    } catch (e) {
+        console.error("[updateMakeupStatus] 보강권 반영 실패(상태 변경은 완료됨):", e);
+    }
     revalidatePath("/admin/makeup");
     revalidateMakeupAdminCaches();
 }

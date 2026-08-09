@@ -15,7 +15,9 @@
 import type { RegularShuttleStop } from "./regularSheet";
 
 // ── 기사님 화면이 소비하는 표시 계약(RegularDriverClient 가 그대로 import 해서 쓴다) ──────────
-export type DriverRow = { rowId: string; name: string; parentPhone: string | null; studentPhone: string | null; absent?: boolean };
+export type DriverRow = { rowId: string; name: string; parentPhone: string | null; studentPhone: string | null; absent?: boolean;
+  /** "오늘만" 셔틀 변경(안 탐·다른 곳에서 탐). 결석과 다르다 — 아이는 수업에 온다. */
+  shuttleNote?: string | null };
 export type DriverStop = { label: string; arriveTime: string | null; lat: number | null; lng: number | null; direction: "BOARD" | "ALIGHT"; rows: DriverRow[] };
 /** classTime: 섹션 구분 키(=React key). title 이 있으면 화면 제목으로 그것을 쓴다. pending=확정 전(임시 순서). */
 export type DriverClass = { classTime: string; title?: string; pending?: boolean; board: DriverStop[]; alight: DriverStop[] };
@@ -24,6 +26,56 @@ export type DriverClass = { classTime: string; title?: string; pending?: boolean
 export type AbsentPredicate = (p: { name: string | null; phone: string | null }) => boolean;
 
 export type RouteDirection = "PICKUP" | "DROPOFF";
+
+/** 그날 셔틀 예외 한 건. 정규 명단은 시트에서 온 글자라 학생 id 가 없어 이름·전화로 잇는다. */
+export type ShuttleDayExceptionEntry = {
+  name: string;
+  phone: string | null;
+  direction: string; // PICKUP | DROPOFF | BOTH
+  kind: string; // SKIP | LOCATION
+  location: string | null;
+};
+
+/**
+ * 다 만들어진 운행 명단에 "오늘만" 셔틀 변경을 덧붙인다.
+ *
+ * 조립 과정에 끼워 넣지 않고 **뒤에서 덧붙이는** 이유: 명단을 만드는 경로가
+ * 저장 노선·폴백 두 갈래라, 양쪽에 같은 로직을 심으면 한쪽만 고쳐지기 쉽다.
+ * 여기 한 곳에서 붙이면 어느 경로로 만들어졌든 똑같이 적용된다.
+ */
+export function attachShuttleDayNotes(
+  classes: DriverClass[],
+  exceptions: ShuttleDayExceptionEntry[],
+  matches: (row: { name: string | null; phone: string | null }, entry: ShuttleDayExceptionEntry) => boolean,
+  describe: (entry: { kind: string; location: string | null }) => string,
+): DriverClass[] {
+  if (exceptions.length === 0) return classes;
+
+  const noteFor = (row: DriverRow, runDirection: "PICKUP" | "DROPOFF"): string | null => {
+    const hit = exceptions.find(
+      (entry) =>
+        (entry.direction === "BOTH" || entry.direction === runDirection) &&
+        matches({ name: row.name, phone: row.parentPhone }, entry),
+    );
+    return hit ? describe(hit) : null;
+  };
+
+  const withNotes = (stops: DriverStop[], runDirection: "PICKUP" | "DROPOFF"): DriverStop[] =>
+    stops.map((stop) => ({
+      ...stop,
+      rows: stop.rows.map((row) => {
+        const note = noteFor(row, runDirection);
+        return note ? { ...row, shuttleNote: note } : row;
+      }),
+    }));
+
+  return classes.map((item) => ({
+    ...item,
+    board: withNotes(item.board, "PICKUP"),
+    alight: withNotes(item.alight, "DROPOFF"),
+  }));
+}
+
 
 // 저장 payload 는 JSON 이라 타입이 없다. 읽는 필드만 느슨하게 선언한다(없어도 안전하게 동작).
 type SavedStudent = { requestId?: unknown; name?: unknown; parentPhone?: unknown; childPhone?: unknown };

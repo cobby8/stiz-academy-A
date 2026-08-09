@@ -302,6 +302,9 @@ export default function UnifiedDriverClient({
                               )}
                               {!lockedAbsent && status === "NOSHOW" && <span className="rounded-md bg-red-500 px-2 py-0.5 text-[13px] font-black text-white">결석</span>}
                               {!lockedAbsent && status === "SELF" && <span className="rounded-md bg-violet-600 px-2 py-0.5 text-[13px] font-black text-white">{selfLabel}</span>}
+                              {/* "오늘만" 셔틀 변경. 결석과 다른 색으로 둔다 — 아이는 수업에 오고,
+                                  기사님이 태우지 않거나 다른 곳으로 가야 한다는 뜻이다. */}
+                              {rider.shuttleNote && <span className="rounded-md bg-blue-600 px-2 py-0.5 text-[13px] font-black text-white">{rider.shuttleNote}</span>}
                             </div>
                             {!lockedAbsent && (parent || child) && (
                               <div className="mt-1 flex gap-3">

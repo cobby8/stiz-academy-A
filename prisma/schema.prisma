@@ -111,6 +111,7 @@ model Student {
   regularAbsences          RegularAbsence[] // 정규 수업 사전 결석 신고(back-relation)
   enrollmentChangeRequests EnrollmentChangeRequest[]
   paymentParentRequests    PaymentParentRequest[]
+  shuttleDayExceptions     ShuttleDayException[]
   parent                   User                        @relation(fields: [parentId], references: [id])
 
   @@index([parentId])
@@ -371,6 +372,29 @@ model PaymentParentRequest {
 
   @@index([status, createdAt(sort: Desc)])
   @@index([paymentId])
+}
+
+/// 학부모가 "오늘만" 셔틀을 바꾸는 것: 안 타거나, 다른 곳에서 타거나.
+/// 결석과 다르다 — 아이는 수업에 온다. 기사님 화면에서도 다른 배지로 보인다.
+/// 결석 신고처럼 승인 없이 바로 반영하고 원장에게는 알림만 보낸다.
+/// 참고: "같은 학생·날짜·방향에 살아있는 예외는 한 건"은 DB 부분 유니크로 막는다.
+model ShuttleDayException {
+  id                String    @id @default(dbgenerated("(gen_random_uuid())::text"))
+  studentId         String
+  serviceDate       DateTime  @db.Date
+  direction         String // PICKUP | DROPOFF | BOTH
+  kind              String // SKIP | LOCATION
+  /// kind=LOCATION 일 때 기사님이 읽을 장소. 좌표가 아니라 사람이 읽는 글이다.
+  location          String?
+  note              String?
+  requestedByUserId String
+  canceledAt        DateTime? @db.Timestamptz(6)
+  createdAt         DateTime  @default(now()) @db.Timestamptz(6)
+  updatedAt         DateTime  @default(now()) @updatedAt @db.Timestamptz(6)
+
+  student Student @relation(fields: [studentId], references: [id])
+
+  @@index([studentId])
 }
 
 model PaymentInvoice {

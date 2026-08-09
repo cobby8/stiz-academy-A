@@ -30,6 +30,8 @@ export type UnifiedRider = {
   studentPhone: string | null;
   /** 그날 결석으로 잡힌 학생(정규=자동 제외 표시, 특강=결석예정). */
   absent: boolean;
+  /** "오늘만" 셔틀 변경(안 탐·다른 곳에서 탐). 결석과 다르다 — 아이는 수업에 온다. */
+  shuttleNote?: string | null;
 };
 
 /** 목록의 한 줄 = 한 정차(또는 차고지 출발/학원 도착 같은 안내 줄). */
@@ -223,6 +225,7 @@ export function buildRegularRows(classes: DriverClass[]): UnifiedRow[] {
             parentPhone: r.parentPhone ?? null,
             studentPhone: r.studentPhone ?? null,
             absent: Boolean(r.absent),
+            shuttleNote: r.shuttleNote ?? null,
           })),
         });
       }

@@ -1,11 +1,14 @@
 import { getRegularShuttleStops } from "./regularImport";
 import { getRegularAbsentPeople } from "./regularRun";
+import { getShuttleExceptionsForDate } from "./parent-shuttle-exception";
+import { describeException } from "./dayExceptionRules";
 import { getSavedRegularDispatchRoute } from "@/lib/regular/regularDispatchRoute";
 import { getRegularShuttleRiders } from "@/lib/regular/shuttleRoster";
 import { DOW_NAMES } from "@/lib/regular/shuttleRosterLogic";
 import { matchAbsentee } from "@/lib/regular/regularAbsenceMatch";
 import {
   assembleRegularDriverClasses,
+  attachShuttleDayNotes,
   pickRegularRouteSource,
   type DriverClass,
   type RouteDirection,
@@ -63,9 +66,10 @@ export async function getRegularDriverClasses(viewDate: string): Promise<DriverC
   const weekday = weekdayOf(viewDate);
   const dayOfWeek = DOW_NAMES[weekday];
 
-  const [{ stops }, absentees] = await Promise.all([
+  const [{ stops }, absentees, shuttleExceptions] = await Promise.all([
     getRegularShuttleStops(),
     getRegularAbsentPeople(viewDate),
+    getShuttleExceptionsForDate(viewDate),
   ]);
 
   // 그 요일의 학생 정차행만(승차/하차). 시트 순서 유지 — 폴백 화면은 이 순서가 곧 운행 순서다.
@@ -92,10 +96,20 @@ export async function getRegularDriverClasses(viewDate: string): Promise<DriverC
     ),
   );
 
-  return assembleRegularDriverClasses({
+  const classes = assembleRegularDriverClasses({
     dayRows,
     isAbsent,
     saved,
     rowIdsByStudentId: { PICKUP: mapPickup, DROPOFF: mapDropoff },
   });
+
+  // "오늘만" 셔틀 변경은 명단을 다 만든 뒤 덧붙인다. 저장 노선·폴백 두 경로 모두에
+  // 똑같이 적용되어야 하는데, 조립 안에 심으면 한쪽만 고쳐지기 쉽다.
+  // 결석과 같은 이름·전화 매칭을 쓴다(시트 명단에는 학생 id 가 없다).
+  return attachShuttleDayNotes(
+    classes,
+    shuttleExceptions,
+    (row, entry) => matchAbsentee(row, [{ name: entry.name, phone: entry.phone }]) !== null,
+    describeException,
+  );
 }

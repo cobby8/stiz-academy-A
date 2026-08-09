@@ -1180,6 +1180,20 @@ export default function MyPageClient({ data, gallery = [], notices = [], notific
                 </Link>
             </div>
 
+            {/* 셔틀 당일 변경 — 수업은 오지만 셔틀만 바꾸는 경우. 결석과 별개다. */}
+            <Link href="/mypage/shuttle" className="block mb-4">
+                <div className="bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-800 rounded-2xl p-4 shadow-sm flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                        <span className="material-symbols-outlined text-2xl text-brand-orange-500 dark:text-brand-neon-lime">directions_bus</span>
+                        <div>
+                            <p className="font-bold text-brand-navy-900">셔틀 당일 변경</p>
+                            <p className="text-xs text-gray-500 dark:text-gray-400">오늘만 안 타거나 다른 곳에서 탈 때. 기사님 화면에 바로 뜹니다.</p>
+                        </div>
+                    </div>
+                    <span className="material-symbols-outlined text-gray-300">chevron_right</span>
+                </div>
+            </Link>
+
             {/* 청구서·영수증 — 입금해도 원장이 확인하기 전까지 "미납"으로 보여 문의가 오던 자리. */}
             <Link href="/mypage/payments" className="block mb-4">
                 <div className="bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-800 rounded-2xl p-4 shadow-sm flex items-center justify-between">

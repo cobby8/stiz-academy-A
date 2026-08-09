@@ -13,6 +13,12 @@ const TrialCrmClient = dynamic(() => import("../trial/TrialCrmClient"), {
     loading: () => <ApplyLoadingFallback />,
 });
 
+// 대기자는 신청의 뒷단이라 같은 화면에 둔다(별도 메뉴에서 이동).
+// 다른 탭과 같이 지연 로딩해, 대기자 탭을 열기 전에는 내려받지 않는다.
+const WaitlistClient = dynamic(() => import("@/app/admin/waitlist/WaitlistClient"), {
+    loading: () => <ApplyLoadingFallback />,
+});
+
 const ApplySettingsTab = dynamic(() => import("./ApplySettingsTab"), {
     loading: () => (
         <div className="rounded-xl border border-gray-200 bg-white p-6 text-center text-sm text-gray-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-400">
@@ -413,7 +419,7 @@ function ApplyErrorState({ onRetry }: { onRetry: () => void }) {
 
 // ── 탭 상수 ──────────────────────────────────────────────────────────────────────
 
-type TabType = "trial" | "applications" | "sources" | "settings";
+type TabType = "trial" | "applications" | "waitlist" | "sources" | "settings";
 
 // ── 메인 컴포넌트 ──────────────────────────────────────────────────────────────
 
@@ -956,6 +962,17 @@ export default function ApplyAdminClient({
                     )}
                 </button>
                 <button
+                    onClick={() => setActiveTab("waitlist")}
+                    className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition ${
+                        activeTab === "waitlist"
+                            ? "bg-white dark:bg-gray-900 text-gray-900 dark:text-white shadow-sm"
+                            : "text-gray-500 hover:text-gray-700 dark:text-gray-200"
+                    }`}
+                >
+                    <span className="material-symbols-outlined text-lg">hourglass_top</span>
+                    대기자
+                </button>
+                <button
                     onClick={() => setActiveTab("sources")}
                     className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition ${
                         activeTab === "sources"
@@ -1114,6 +1131,9 @@ export default function ApplyAdminClient({
                     )}
                 </>
                 )
+            ) : activeTab === "waitlist" ? (
+                /* 대기자 탭 — 컴포넌트가 스스로 데이터를 불러온다(props 선택형) */
+                <WaitlistClient />
             ) : activeTab === "sources" ? (
                 renderSourceStats()
             ) : (

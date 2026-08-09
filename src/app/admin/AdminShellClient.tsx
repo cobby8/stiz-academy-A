@@ -171,7 +171,6 @@ export default function AdminShellClient({
                             <NavItem href="/staff" active={false} icon="🧑‍🏫" label="선생님 수업 화면" />
                             <NavItem href="/admin/programs" active={pathname.startsWith("/admin/programs")} icon="📋" label="프로그램 관리" />
                             <NavItem href="/admin/schedule" active={pathname.startsWith("/admin/schedule")} icon="📅" label="수업시간표 관리" />
-                            <NavItem href="/admin/annual" active={pathname.startsWith("/admin/annual")} icon="📆" label="연간일정 관리" />
 
                             {/* 소식/안내 */}
                             <p className="text-gray-500 dark:text-gray-400 text-xs font-bold uppercase px-4 py-2 mt-3">소식/안내</p>
@@ -220,8 +219,6 @@ export default function AdminShellClient({
                                 <div className="mt-1 space-y-1 border-l border-white/10 pl-2">
                                     <NavItem href="/admin/attendance/report" active={pathname.startsWith("/admin/attendance/report")} icon="📝" label="수업 리포트" compact />
                                     <NavItem href="/admin/requests" active={pathname.startsWith("/admin/requests")} icon="📩" label="학부모 요청" compact />
-                                    <NavItem href="/admin/feedback" active={pathname.startsWith("/admin/feedback")} icon="📝" label="학습 피드백" compact />
-                                    <NavItem href="/admin/waitlist" active={pathname.startsWith("/admin/waitlist")} icon="⏳" label="대기자" compact />
                                     <NavItem href="/admin/makeup" active={pathname.startsWith("/admin/makeup")} icon="🔄" label="보강" compact />
                                     <NavItem href="/admin/stats" active={pathname.startsWith("/admin/stats")} icon="📊" label="상세 통계" compact />
                                     <NavItem href="/admin/sms" active={pathname.startsWith("/admin/sms")} icon="💬" label="문자/템플릿" compact />

@@ -468,6 +468,33 @@ export function DocFoot(
   );
 }
 
+/**
+ * 확인란 — 안내 문구 + 결재 서명 칸.
+ *
+ * 정산 내역서처럼 인쇄해서 결재에 쓰는 서류에 붙인다. 종이 서류의 오래된 관습이고,
+ * 이 칸이 있어야 화면을 그대로 뽑아 서류로 쓸 수 있다.
+ */
+export function DocStamp(
+  { notes = [], role = "원장 (인)" }:
+  { notes?: ReactNode[]; role?: string },
+) {
+  return (
+    <div className="mt-6 grid items-start gap-8 sm:grid-cols-[1fr_240px]">
+      <div className="text-[12.5px]" style={{ color: "var(--doc-ink-2)" }}>
+        {notes.map((n, i) => (
+          <div key={i} className="py-2" style={{ borderTop: "1px solid var(--doc-rule)" }}>{n}</div>
+        ))}
+      </div>
+      <div className="p-3" style={{ border: "1px solid var(--doc-rule)" }}>
+        <div className="text-[10px] font-extrabold uppercase tracking-[0.1em]"
+             style={{ color: "var(--doc-ink-3)" }}>확인</div>
+        <div className="h-14" style={{ borderBottom: "1px solid var(--doc-rule)" }} />
+        <div className="pt-1.5 text-[11px]" style={{ color: "var(--doc-ink-3)" }}>{role}</div>
+      </div>
+    </div>
+  );
+}
+
 /** 발행 시각 문자열 — "2026.08.09 05:40". 서류 표기는 점(.)으로 통일한다. */
 export function issuedAt(d: Date = new Date()): string {
   const p = Object.fromEntries(

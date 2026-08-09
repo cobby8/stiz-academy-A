@@ -129,32 +129,35 @@ export default function DriverRunClient({
   }
 
   return (
-    <div className="mx-auto max-w-lg px-3 pb-28 text-gray-900" style={{ colorScheme: "light" }}>
-      <header className="sticky top-0 z-10 -mx-3 mb-3 border-b border-gray-200 bg-white px-4 py-4">
-        <p className="text-[20px] font-black text-gray-900">🚌 스티즈 셔틀 운행</p>
-        <p className="mt-0.5 text-[15px] font-bold text-gray-600">{fmtDate(date)} · 등원 → 하원</p>
+    // data-density="driver" — 운행 중에 흘깃 보는 화면. 글자·터치를 키우고
+    // 강조는 야외 시인성이 좋은 브랜드 오렌지로 토큰이 바꿔 준다. 다크 미지원(라이트 고정).
+    <div data-density="driver" className="mx-auto max-w-lg px-3 pb-28"
+         style={{ colorScheme: "light", background: "var(--color-paper)", color: "var(--color-ink)", fontSize: "var(--density-body)" }}>
+      <header className="sticky top-0 z-10 -mx-3 mb-3 border-b border-[var(--doc-rule)] bg-[var(--doc-surface)] px-4 py-4">
+        <p className="text-[20px] font-bold text-[var(--doc-ink)]">🚌 스티즈 셔틀 운행</p>
+        <p className="mt-0.5 text-[15px] font-bold text-[var(--doc-ink-2)]">{fmtDate(date)} · 등원 → 하원</p>
       </header>
 
       {/* PWA 설치 배너 */}
       {showInstallBanner && (
-        <div className="mb-3 flex items-center gap-3 rounded-2xl border-2 border-indigo-300 bg-indigo-50 px-4 py-3">
+        <div className="mb-3 flex items-center gap-3 rounded-[6px] border-2 border-[var(--doc-rule)] bg-[var(--doc-grid-head)] px-4 py-3">
           <span className="text-[28px]">📲</span>
           <div className="flex-1">
-            <p className="text-[15px] font-black text-indigo-900">홈 화면에 추가하세요</p>
-            <p className="text-[12px] font-semibold text-indigo-700">앱처럼 빠르게 열 수 있어요</p>
+            <p className="text-[15px] font-bold text-[var(--doc-ink-2)]">홈 화면에 추가하세요</p>
+            <p className="text-[12px] font-semibold text-[var(--doc-ink-2)]">앱처럼 빠르게 열 수 있어요</p>
           </div>
           <button type="button" onClick={installPwa}
-            className="rounded-xl bg-indigo-600 px-4 py-2 text-[14px] font-black text-white active:bg-indigo-700">설치</button>
-          <button type="button" onClick={() => setShowInstallBanner(false)} className="text-[20px] text-indigo-300">✕</button>
+            className="rounded-[3px] bg-indigo-600 px-4 py-2 text-[14px] font-bold text-white active:bg-indigo-700">설치</button>
+          <button type="button" onClick={() => setShowInstallBanner(false)} className="text-[20px] text-[var(--doc-ink-2)]">✕</button>
         </div>
       )}
 
       {/* 운행 시작 전 */}
       {runState === "idle" && (
-        <div className="mb-4 rounded-2xl border-2 border-yellow-400 bg-yellow-50 p-5 text-center">
-          <p className="mb-3 text-[15px] font-bold text-gray-700">운행을 시작하면 위치가 관리자에게 공유됩니다</p>
+        <div className="mb-4 rounded-[6px] border-2 border-[var(--doc-warn)] bg-[var(--doc-grid-head)] p-5 text-center">
+          <p className="mb-3 text-[15px] font-bold text-[var(--doc-ink-2)]">운행을 시작하면 위치가 관리자에게 공유됩니다</p>
           <button type="button" onClick={handleRunStart}
-            className="h-16 w-full rounded-2xl bg-green-600 text-[20px] font-black text-white active:bg-green-700">
+            className="h-16 w-full rounded-[6px] bg-green-600 text-[20px] font-bold text-white active:bg-green-700">
             🚦 운행 시작
           </button>
         </div>
@@ -165,7 +168,7 @@ export default function DriverRunClient({
         <div className="mb-3">
           <GpsShareBar gpsState={gpsState} lastSentAt={lastSentAt} accuracy={accuracy} />
           <button type="button" onClick={handleRunEnd}
-            className="mt-2 h-13 w-full rounded-2xl border-2 border-red-300 bg-white py-3 text-[17px] font-black text-red-600 active:bg-red-50">
+            className="mt-2 h-13 w-full rounded-[6px] border-2 border-[var(--doc-crit)] bg-[var(--doc-surface)] py-3 text-[17px] font-bold text-[var(--doc-crit)] active:bg-[var(--doc-crit-soft)]">
             🏁 운행 종료
           </button>
         </div>
@@ -173,8 +176,8 @@ export default function DriverRunClient({
 
       {/* 운행 종료 후 */}
       {runState === "ended" && (
-        <div className="mb-4 rounded-2xl bg-gray-100 px-4 py-5 text-center">
-          <p className="text-[17px] font-black text-gray-600">✅ 운행이 종료되었습니다</p>
+        <div className="mb-4 rounded-[6px] bg-[var(--doc-grid-head)] px-4 py-5 text-center">
+          <p className="text-[17px] font-bold text-[var(--doc-ink-2)]">✅ 운행이 종료되었습니다</p>
         </div>
       )}
 
@@ -183,7 +186,7 @@ export default function DriverRunClient({
 
       {/* 선택한 날짜에 배차가 아예 없으면 안내(운행 가능일끼리 넘기도록) */}
       {sections.every((s) => s.vehicles.length === 0) && (
-        <p className="mb-3 rounded-2xl bg-gray-50 px-4 py-6 text-center text-[16px] font-bold text-gray-400">이 날짜는 운행이 없습니다.<br />‹ 이전 · 다음 › 으로 운행일을 넘겨보세요.</p>
+        <p className="mb-3 rounded-[6px] bg-[var(--doc-grid-head)] px-4 py-6 text-center text-[16px] font-bold text-[var(--doc-ink-3)]">이 날짜는 운행이 없습니다.<br />‹ 이전 · 다음 › 으로 운행일을 넘겨보세요.</p>
       )}
 
       {sections.map((sec) => {
@@ -197,12 +200,12 @@ export default function DriverRunClient({
         return (
           <section key={sec.direction} className="mb-6">
             {/* 구간 헤더: 시간 · 방향 */}
-            <div className={`sticky top-[68px] z-[5] -mx-1 mb-3 flex items-center justify-between gap-2 rounded-2xl px-4 py-3 ${isPickup ? "bg-blue-600" : "bg-orange-600"} text-white`}>
-              <span className="text-[19px] font-black">{isPickup ? "⬆" : "⬇"} {sec.time ?? "-"} · {isPickup ? "등원" : "하원"}</span>
-              <span className="text-[16px] font-black">{boarded}/{all.length} 탑승{noshow > 0 ? ` · 결석 ${noshow}` : ""}{self > 0 ? ` · 자차 ${self}` : ""}</span>
+            <div className={`sticky top-[68px] z-[5] -mx-1 mb-3 flex items-center justify-between gap-2 rounded-[6px] px-4 py-3 ${isPickup ? "bg-blue-600" : "bg-orange-600"} text-white`}>
+              <span className="text-[19px] font-bold">{isPickup ? "⬆" : "⬇"} {sec.time ?? "-"} · {isPickup ? "등원" : "하원"}</span>
+              <span className="text-[16px] font-bold">{boarded}/{all.length} 탑승{noshow > 0 ? ` · 결석 ${noshow}` : ""}{self > 0 ? ` · 자차 ${self}` : ""}</span>
             </div>
 
-            {sec.vehicles.length === 0 && <p className="rounded-2xl bg-gray-50 px-4 py-5 text-center text-[16px] font-bold text-gray-400">이 구간에 배차된 학생이 없습니다.</p>}
+            {sec.vehicles.length === 0 && <p className="rounded-[6px] bg-[var(--doc-grid-head)] px-4 py-5 text-center text-[16px] font-bold text-[var(--doc-ink-3)]">이 구간에 배차된 학생이 없습니다.</p>}
 
             {sec.vehicles.map((v, vi) => {
               const vKey = `${sec.direction}:${vi}`;
@@ -211,10 +214,10 @@ export default function DriverRunClient({
               return (
               <div key={vi} className="mb-3">
                 <div className="mb-1.5 flex items-center gap-2">
-                  {sec.vehicles.length > 1 && <p className="flex-1 text-[15px] font-black text-gray-600">🚐 {v.vehicleName}{v.tripLabel ? ` · ${v.tripLabel}` : ""}</p>}
+                  {sec.vehicles.length > 1 && <p className="flex-1 text-[15px] font-bold text-[var(--doc-ink-2)]">🚐 {v.vehicleName}{v.tripLabel ? ` · ${v.tripLabel}` : ""}</p>}
                   {!isEditing && (
                     <button type="button" onClick={() => setEditVehicleKey(vKey)}
-                      className="ml-auto rounded-xl border-2 border-gray-300 px-3 py-1.5 text-[13px] font-black text-gray-600 active:bg-gray-100">
+                      className="ml-auto rounded-[3px] border-2 border-[var(--doc-rule)] px-3 py-1.5 text-[13px] font-bold text-[var(--doc-ink-2)] active:bg-[var(--doc-grid-head)]">
                       ↕ 순서 편집
                     </button>
                   )}
@@ -224,54 +227,54 @@ export default function DriverRunClient({
                         setReqModal({ defaultType: "ORDER", orderPayload: stops, targetId: vKey, targetName: `${v.vehicleName} 정류장 순서` });
                         setEditVehicleKey(null);
                       }}
-                        className="rounded-xl bg-blue-600 px-3 py-1.5 text-[13px] font-black text-white active:bg-blue-700">
+                        className="rounded-[3px] bg-blue-600 px-3 py-1.5 text-[13px] font-bold text-white active:bg-blue-700">
                         📨 순서 고정 요청
                       </button>
                       <button type="button" onClick={() => { setEditVehicleKey(null); setReorderedStops((r) => { const n = { ...r }; delete n[vKey]; return n; }); }}
-                        className="rounded-xl border-2 border-gray-300 px-3 py-1.5 text-[13px] font-black text-gray-600">
+                        className="rounded-[3px] border-2 border-[var(--doc-rule)] px-3 py-1.5 text-[13px] font-bold text-[var(--doc-ink-2)]">
                         취소
                       </button>
                     </div>
                   )}
                 </div>
-                <div className="mb-2 flex items-center gap-2 rounded-xl bg-gray-100 px-4 py-2.5 text-[15px] font-bold text-gray-700">
+                <div className="mb-2 flex items-center gap-2 rounded-[3px] bg-[var(--doc-grid-head)] px-4 py-2.5 text-[15px] font-bold text-[var(--doc-ink-2)]">
                   <span className="text-[18px]">{isPickup ? "🚏" : "🏫"}</span>{sec.startName} 출발{v.departTime ? ` · ${v.departTime}` : ""}
                 </div>
                 {isEditing && (
-                  <p className="mb-2 rounded-xl bg-blue-50 px-3 py-2 text-[13px] font-bold text-blue-700">↕ 버튼으로 순서를 바꾼 뒤 "순서 고정 요청"을 눌러주세요</p>
+                  <p className="mb-2 rounded-[3px] bg-[var(--doc-grid-head)] px-3 py-2 text-[13px] font-bold text-[var(--doc-ink-2)]">↕ 버튼으로 순서를 바꾼 뒤 "순서 고정 요청"을 눌러주세요</p>
                 )}
                 <ol className="space-y-2.5">
                   {stops.map((s, si) => {
                     if (!s.isHub) seq += 1;
                     return (
-                      <li key={si} className={`rounded-2xl border-2 p-3.5 ${s.isHub ? "border-green-300 bg-green-50" : isEditing ? "border-blue-200 bg-blue-50" : "border-gray-200 bg-white"}`}>
+                      <li key={si} className={`rounded-[6px] border-2 p-3.5 ${s.isHub ? "border-[var(--doc-accent)] bg-[var(--doc-accent-soft)]" : isEditing ? "border-[var(--doc-rule)] bg-[var(--doc-grid-head)]" : "border-[var(--doc-rule)] bg-[var(--doc-surface)]"}`}>
                         <div className="flex items-center gap-2.5">
                           {isEditing ? (
                             <div className="flex shrink-0 flex-col gap-0.5">
                               <button type="button" disabled={si === 0} onClick={() => moveStop(vKey, sec, vi, si, -1)}
-                                className="h-7 w-7 rounded-lg border border-gray-300 text-[16px] font-black text-gray-600 disabled:opacity-30">▲</button>
+                                className="h-7 w-7 rounded-[3px] border border-[var(--doc-rule)] text-[16px] font-bold text-[var(--doc-ink-2)] disabled:opacity-30">▲</button>
                               <button type="button" disabled={si === stops.length - 1} onClick={() => moveStop(vKey, sec, vi, si, 1)}
-                                className="h-7 w-7 rounded-lg border border-gray-300 text-[16px] font-black text-gray-600 disabled:opacity-30">▼</button>
+                                className="h-7 w-7 rounded-[3px] border border-[var(--doc-rule)] text-[16px] font-bold text-[var(--doc-ink-2)] disabled:opacity-30">▼</button>
                             </div>
                           ) : (
-                            <span className={`grid h-8 w-8 shrink-0 place-items-center rounded-full text-[15px] font-black text-white ${s.isHub ? "bg-green-600" : "bg-brand-orange-500"}`}>{s.isHub ? "🆓" : seq}</span>
+                            <span className={`grid h-8 w-8 shrink-0 place-items-center rounded-[3px] text-[15px] font-bold text-white ${s.isHub ? "bg-green-600" : "bg-brand-orange-500"}`}>{s.isHub ? "🆓" : seq}</span>
                           )}
-                          <span className="min-w-0 flex-1 text-[18px] font-black leading-tight text-gray-900">{s.label}</span>
-                          {s.etaLabel && !isEditing && <span className="shrink-0 text-[16px] font-black text-blue-600">{s.etaLabel}</span>}
+                          <span className="min-w-0 flex-1 text-[18px] font-bold leading-tight text-[var(--doc-ink)]">{s.label}</span>
+                          {s.etaLabel && !isEditing && <span className="shrink-0 text-[16px] font-bold text-[var(--doc-ink-2)]">{s.etaLabel}</span>}
                           {!isEditing && !s.isHub && (
                             <button type="button" onClick={() => setReqModal({ targetName: s.label, defaultType: "LOCATION" })}
-                              className="shrink-0 rounded-lg border border-gray-300 px-2 py-1 text-[12px] font-black text-gray-500 active:bg-gray-100">
+                              className="shrink-0 rounded-[3px] border border-[var(--doc-rule)] px-2 py-1 text-[12px] font-bold text-[var(--doc-ink-2)] active:bg-[var(--doc-grid-head)]">
                               요청
                             </button>
                           )}
                         </div>
                         {(() => {
                           const url = tmapNavigationCoordinateUrl({ latitude: s.lat, longitude: s.lng, name: s.label });
-                          return url ? <a href={url} className="mt-2 flex h-12 items-center justify-center gap-1.5 rounded-xl bg-blue-600 text-[16px] font-black text-white active:bg-blue-700">🧭 T맵 길안내</a> : null;
+                          return url ? <a href={url} className="mt-2 flex h-12 items-center justify-center gap-1.5 rounded-[3px] bg-blue-600 text-[16px] font-bold text-white active:bg-blue-700">🧭 T맵 길안내</a> : null;
                         })()}
-                        {s.isHub && s.students.length === 0 && <p className="mt-1.5 text-[15px] font-bold text-green-700">무료 거점(워크인, 정원 별도)</p>}
+                        {s.isHub && s.students.length === 0 && <p className="mt-1.5 text-[15px] font-bold text-[var(--doc-accent)]">무료 거점(워크인, 정원 별도)</p>}
                         {s.students.length > 0 && (
-                          <div className="mt-2.5 overflow-hidden rounded-xl bg-gray-50 divide-y divide-gray-200">
+                          <div className="mt-2.5 overflow-hidden rounded-[3px] bg-[var(--doc-grid-head)] divide-y divide-gray-200">
                             {s.students.map((st) => {
                               const status = map[st.requestId] ?? null;
                               const parent = digits(st.parentPhone), child = digits(st.childPhone);
@@ -283,32 +286,32 @@ export default function DriverRunClient({
                                   <div className="flex items-center gap-2">
                                     <div className="min-w-0 flex-1">
                                       <div className="flex flex-wrap items-baseline gap-1.5">
-                                        <span className="text-[19px] font-black text-gray-900">{st.name}</span>
-                                        {st.grade && <span className="text-[14px] text-gray-500">{st.grade}</span>}
-                                        {st.isAbsent && status !== "BOARDED" && status !== "SELF" && <span className="rounded-md bg-amber-400 px-2 py-0.5 text-[13px] font-black text-white">결석예정</span>}
-                                        {status === "NOSHOW" && <span className="rounded-md bg-red-500 px-2 py-0.5 text-[13px] font-black text-white">결석</span>}
-                                        {status === "SELF" && <span className="rounded-md bg-violet-600 px-2 py-0.5 text-[13px] font-black text-white">{selfLabel}</span>}
+                                        <span className="text-[19px] font-bold text-[var(--doc-ink)]">{st.name}</span>
+                                        {st.grade && <span className="text-[14px] text-[var(--doc-ink-2)]">{st.grade}</span>}
+                                        {st.isAbsent && status !== "BOARDED" && status !== "SELF" && <span className="rounded-[3px] bg-amber-400 px-2 py-0.5 text-[13px] font-bold text-white">결석예정</span>}
+                                        {status === "NOSHOW" && <span className="rounded-[3px] bg-red-500 px-2 py-0.5 text-[13px] font-bold text-white">결석</span>}
+                                        {status === "SELF" && <span className="rounded-[3px] bg-violet-600 px-2 py-0.5 text-[13px] font-bold text-white">{selfLabel}</span>}
                                       </div>
                                       <div className="mt-1 flex gap-3">
-                                        {parent && <a href={`tel:${parent}`} className="text-[15px] font-black text-blue-600">📞 학부모</a>}
-                                        {child && <a href={`tel:${child}`} className="text-[15px] font-black text-green-600">📞 학생</a>}
+                                        {parent && <a href={`tel:${parent}`} className="text-[15px] font-bold text-[var(--doc-ink-2)]">📞 학부모</a>}
+                                        {child && <a href={`tel:${child}`} className="text-[15px] font-bold text-[var(--doc-accent)]">📞 학생</a>}
                                       </div>
                                     </div>
                                     <button type="button" onClick={() => setReqModal({ targetId: st.requestId, targetName: st.name, defaultType: "REMOVE" })}
-                                      className="h-14 min-w-[48px] rounded-xl border-2 border-gray-200 text-[13px] font-black text-gray-500 active:bg-gray-100">
+                                      className="h-14 min-w-[48px] rounded-[3px] border-2 border-[var(--doc-rule)] text-[13px] font-bold text-[var(--doc-ink-2)] active:bg-[var(--doc-grid-head)]">
                                       요청
                                     </button>
                                     <button type="button" disabled={isBusy} onClick={() => { setMenuKey(null); toggle(sec.direction, st.requestId, st.name, "BOARDED"); }}
-                                      className={`h-14 min-w-[68px] rounded-xl text-[16px] font-black ${status === "BOARDED" ? "bg-green-600 text-white" : "border-2 border-green-400 text-green-700"}`}>{isPickup ? "탑승" : "하차"}</button>
+                                      className={`h-14 min-w-[68px] rounded-[3px] text-[16px] font-bold ${status === "BOARDED" ? "bg-green-600 text-white" : "border-2 border-[var(--doc-accent)] text-[var(--doc-accent)]"}`}>{isPickup ? "탑승" : "하차"}</button>
                                     <button type="button" onClick={() => setMenuKey(menuKey === rowKey ? null : rowKey)}
-                                      className={`h-14 min-w-[68px] rounded-xl text-[16px] font-black ${status === "NOSHOW" || status === "SELF" ? "bg-gray-700 text-white" : "border-2 border-gray-300 text-gray-600"}`}>미{isPickup ? "탑승" : "하차"}</button>
+                                      className={`h-14 min-w-[68px] rounded-[3px] text-[16px] font-bold ${status === "NOSHOW" || status === "SELF" ? "bg-gray-700 text-white" : "border-2 border-[var(--doc-rule)] text-[var(--doc-ink-2)]"}`}>미{isPickup ? "탑승" : "하차"}</button>
                                   </div>
                                   {menuKey === rowKey && (
                                     <div className="mt-2 flex gap-2">
                                       <button type="button" disabled={isBusy} onClick={() => { toggle(sec.direction, st.requestId, st.name, "NOSHOW"); setMenuKey(null); }}
-                                        className={`h-13 flex-1 rounded-xl py-3 text-[16px] font-black ${status === "NOSHOW" ? "bg-red-500 text-white" : "border-2 border-red-300 text-red-600"}`}>❌ 결석(안 옴)</button>
+                                        className={`h-13 flex-1 rounded-[3px] py-3 text-[16px] font-bold ${status === "NOSHOW" ? "bg-red-500 text-white" : "border-2 border-[var(--doc-crit)] text-[var(--doc-crit)]"}`}>❌ 결석(안 옴)</button>
                                       <button type="button" disabled={isBusy} onClick={() => { toggle(sec.direction, st.requestId, st.name, "SELF"); setMenuKey(null); }}
-                                        className={`h-13 flex-1 rounded-xl py-3 text-[16px] font-black ${status === "SELF" ? "bg-violet-600 text-white" : "border-2 border-violet-300 text-violet-700"}`}>🚗 {selfLabel}</button>
+                                        className={`h-13 flex-1 rounded-[3px] py-3 text-[16px] font-bold ${status === "SELF" ? "bg-violet-600 text-white" : "border-2 border-[var(--doc-rule)] text-[var(--doc-ink-2)]"}`}>🚗 {selfLabel}</button>
                                     </div>
                                   )}
                                 </div>
@@ -320,7 +323,7 @@ export default function DriverRunClient({
                     );
                   })}
                 </ol>
-                <div className="mt-2 flex items-center gap-2 rounded-xl bg-gray-100 px-4 py-2.5 text-[15px] font-bold text-gray-700">
+                <div className="mt-2 flex items-center gap-2 rounded-[3px] bg-[var(--doc-grid-head)] px-4 py-2.5 text-[15px] font-bold text-[var(--doc-ink-2)]">
                   <span className="text-[18px]">{isPickup ? "🏫" : "🚏"}</span>{sec.endName} {isPickup ? "도착" : "복귀"}{(isPickup ? v.arriveTime : v.depotTime) ? ` · ${isPickup ? v.arriveTime : v.depotTime}` : ""}
                 </div>
               </div>
@@ -329,7 +332,7 @@ export default function DriverRunClient({
           </section>
         );
       })}
-      <p className="mt-3 text-center text-[14px] font-semibold text-gray-400">탭 한 번으로 저장됩니다 · 다시 누르면 대기로 돌아갑니다</p>
+      <p className="mt-3 text-center text-[14px] font-semibold text-[var(--doc-ink-3)]">탭 한 번으로 저장됩니다 · 다시 누르면 대기로 돌아갑니다</p>
 
       {/* 관리자 요청 모달 */}
       {reqModal && (

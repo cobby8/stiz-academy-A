@@ -46,70 +46,70 @@ function StopList({ stops, boarding, setStatus, isEditing, onMoveStop, onReqStud
         const isPickup = s.direction === "BOARD";
         const url = tmapNavigationCoordinateUrl({ latitude: s.lat, longitude: s.lng, name: s.label });
         return (
-          <li key={si} className={`rounded-2xl border-2 p-3.5 ${isEditing ? "border-blue-200 bg-blue-50" : "border-gray-200 bg-white"}`}>
+          <li key={si} className={`rounded-[6px] border-2 p-3.5 ${isEditing ? "border-[var(--doc-rule)] bg-[var(--doc-grid-head)]" : "border-[var(--doc-rule)] bg-[var(--doc-surface)]"}`}>
             <div className="flex items-center gap-2.5">
               {isEditing ? (
                 <div className="flex shrink-0 flex-col gap-0.5">
                   <button type="button" disabled={si === 0} onClick={() => onMoveStop(si, -1)}
-                    className="h-7 w-7 rounded-lg border border-gray-300 text-[16px] font-black text-gray-600 disabled:opacity-30">▲</button>
+                    className="h-7 w-7 rounded-[3px] border border-[var(--doc-rule)] text-[16px] font-bold text-[var(--doc-ink-2)] disabled:opacity-30">▲</button>
                   <button type="button" disabled={si === stops.length - 1} onClick={() => onMoveStop(si, 1)}
-                    className="h-7 w-7 rounded-lg border border-gray-300 text-[16px] font-black text-gray-600 disabled:opacity-30">▼</button>
+                    className="h-7 w-7 rounded-[3px] border border-[var(--doc-rule)] text-[16px] font-bold text-[var(--doc-ink-2)] disabled:opacity-30">▼</button>
                 </div>
               ) : (
-                <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-brand-orange-500 text-[15px] font-black text-white">{si + 1}</span>
+                <span className="grid h-8 w-8 shrink-0 place-items-center rounded-[3px] bg-brand-orange-500 text-[15px] font-bold text-white">{si + 1}</span>
               )}
-              <span className="min-w-0 flex-1 text-[18px] font-black leading-tight text-gray-900">{s.label}</span>
-              {s.arriveTime && !isEditing && <span className="shrink-0 text-[16px] font-black text-blue-600">{s.arriveTime}</span>}
+              <span className="min-w-0 flex-1 text-[18px] font-bold leading-tight text-[var(--doc-ink)]">{s.label}</span>
+              {s.arriveTime && !isEditing && <span className="shrink-0 text-[16px] font-bold text-[var(--doc-ink-2)]">{s.arriveTime}</span>}
               {!isEditing && (
                 <button type="button" onClick={() => onReqStop(s)}
-                  className="shrink-0 rounded-lg border border-gray-300 px-2 py-1 text-[12px] font-black text-gray-500 active:bg-gray-100">
+                  className="shrink-0 rounded-[3px] border border-[var(--doc-rule)] px-2 py-1 text-[12px] font-bold text-[var(--doc-ink-2)] active:bg-[var(--doc-grid-head)]">
                   요청
                 </button>
               )}
             </div>
-            {!isEditing && url && <a href={url} className="mt-2 flex h-12 items-center justify-center gap-1.5 rounded-xl bg-blue-600 text-[16px] font-black text-white active:bg-blue-700">🧭 T맵 길안내</a>}
+            {!isEditing && url && <a href={url} className="mt-2 flex h-12 items-center justify-center gap-1.5 rounded-[3px] bg-blue-600 text-[16px] font-bold text-white active:bg-blue-700">🧭 T맵 길안내</a>}
             <div className="mt-2.5 space-y-2.5">
               {s.rows.map((st) => {
                 const status = boarding[st.rowId] ?? null;
                 const parent = digits(st.parentPhone), child = digits(st.studentPhone);
                 const selfLabel = isPickup ? "자차등원" : "자차하원";
                 return (
-                  <div key={st.rowId} className={`rounded-xl p-2.5 ${st.absent ? "bg-red-50" : "bg-gray-50"}`}>
+                  <div key={st.rowId} className={`rounded-[3px] p-2.5 ${st.absent ? "bg-[var(--doc-crit-soft)]" : "bg-[var(--doc-grid-head)]"}`}>
                     <div className="flex items-center gap-2">
                       <div className="min-w-0 flex-1">
-                        <span className={`text-[19px] font-black ${st.absent ? "text-gray-400 line-through" : "text-gray-900"}`}>{st.name}</span>
-                        {st.absent && <span className="ml-2 rounded-md bg-red-500 px-2 py-0.5 text-[13px] font-black text-white align-middle">오늘 결석</span>}
-                        {!st.absent && status === "NOSHOW" && <span className="ml-2 rounded-md bg-red-500 px-2 py-0.5 text-[13px] font-black text-white align-middle">결석</span>}
-                        {!st.absent && status === "SELF" && <span className="ml-2 rounded-md bg-violet-600 px-2 py-0.5 text-[13px] font-black text-white align-middle">{selfLabel}</span>}
+                        <span className={`text-[19px] font-bold ${st.absent ? "text-[var(--doc-ink-3)] line-through" : "text-[var(--doc-ink)]"}`}>{st.name}</span>
+                        {st.absent && <span className="ml-2 rounded-[3px] bg-red-500 px-2 py-0.5 text-[13px] font-bold text-white align-middle">오늘 결석</span>}
+                        {!st.absent && status === "NOSHOW" && <span className="ml-2 rounded-[3px] bg-red-500 px-2 py-0.5 text-[13px] font-bold text-white align-middle">결석</span>}
+                        {!st.absent && status === "SELF" && <span className="ml-2 rounded-[3px] bg-violet-600 px-2 py-0.5 text-[13px] font-bold text-white align-middle">{selfLabel}</span>}
                         {!st.absent && (
                           <div className="mt-1 flex gap-3">
-                            {parent && <a href={`tel:${parent}`} className="text-[15px] font-black text-blue-600">📞 학부모</a>}
-                            {child && <a href={`tel:${child}`} className="text-[15px] font-black text-green-600">📞 학생</a>}
+                            {parent && <a href={`tel:${parent}`} className="text-[15px] font-bold text-[var(--doc-ink-2)]">📞 학부모</a>}
+                            {child && <a href={`tel:${child}`} className="text-[15px] font-bold text-[var(--doc-accent)]">📞 학생</a>}
                           </div>
                         )}
                       </div>
                       {st.absent ? (
-                        <span className="rounded-xl border-2 border-red-300 px-3 py-2 text-[15px] font-black text-red-500">미{isPickup ? "탑승" : "하차"}(결석)</span>
+                        <span className="rounded-[3px] border-2 border-[var(--doc-crit)] px-3 py-2 text-[15px] font-bold text-[var(--doc-crit)]">미{isPickup ? "탑승" : "하차"}(결석)</span>
                       ) : (
                         <>
                           {/* 요청 버튼 */}
                           <button type="button" onClick={() => onReqStudent({ targetId: st.rowId, targetName: st.name, defaultType: "REMOVE" })}
-                            className="h-14 min-w-[48px] rounded-xl border-2 border-gray-200 text-[13px] font-black text-gray-500 active:bg-gray-100">
+                            className="h-14 min-w-[48px] rounded-[3px] border-2 border-[var(--doc-rule)] text-[13px] font-bold text-[var(--doc-ink-2)] active:bg-[var(--doc-grid-head)]">
                             요청
                           </button>
                           <button type="button" onClick={() => { setMenuKey(null); setStatus(st.rowId, st.name, "BOARDED"); }}
-                            className={`h-14 min-w-[68px] rounded-xl text-[16px] font-black ${status === "BOARDED" ? "bg-green-600 text-white" : "border-2 border-green-400 text-green-700"}`}>{isPickup ? "탑승" : "하차"}</button>
+                            className={`h-14 min-w-[68px] rounded-[3px] text-[16px] font-bold ${status === "BOARDED" ? "bg-green-600 text-white" : "border-2 border-[var(--doc-accent)] text-[var(--doc-accent)]"}`}>{isPickup ? "탑승" : "하차"}</button>
                           <button type="button" onClick={() => setMenuKey(menuKey === st.rowId ? null : st.rowId)}
-                            className={`h-14 min-w-[68px] rounded-xl text-[16px] font-black ${status === "NOSHOW" || status === "SELF" ? "bg-gray-700 text-white" : "border-2 border-gray-300 text-gray-600"}`}>미{isPickup ? "탑승" : "하차"}</button>
+                            className={`h-14 min-w-[68px] rounded-[3px] text-[16px] font-bold ${status === "NOSHOW" || status === "SELF" ? "bg-gray-700 text-white" : "border-2 border-[var(--doc-rule)] text-[var(--doc-ink-2)]"}`}>미{isPickup ? "탑승" : "하차"}</button>
                         </>
                       )}
                     </div>
                     {!st.absent && menuKey === st.rowId && (
                       <div className="mt-2 flex gap-2">
                         <button type="button" onClick={() => { setStatus(st.rowId, st.name, "NOSHOW"); setMenuKey(null); }}
-                          className={`flex-1 rounded-xl py-3 text-[16px] font-black ${status === "NOSHOW" ? "bg-red-500 text-white" : "border-2 border-red-300 text-red-600"}`}>❌ 결석(안 옴)</button>
+                          className={`flex-1 rounded-[3px] py-3 text-[16px] font-bold ${status === "NOSHOW" ? "bg-red-500 text-white" : "border-2 border-[var(--doc-crit)] text-[var(--doc-crit)]"}`}>❌ 결석(안 옴)</button>
                         <button type="button" onClick={() => { setStatus(st.rowId, st.name, "SELF"); setMenuKey(null); }}
-                          className={`flex-1 rounded-xl py-3 text-[16px] font-black ${status === "SELF" ? "bg-violet-600 text-white" : "border-2 border-violet-300 text-violet-700"}`}>🚗 {selfLabel}</button>
+                          className={`flex-1 rounded-[3px] py-3 text-[16px] font-bold ${status === "SELF" ? "bg-violet-600 text-white" : "border-2 border-[var(--doc-rule)] text-[var(--doc-ink-2)]"}`}>🚗 {selfLabel}</button>
                       </div>
                     )}
                   </div>
@@ -196,32 +196,32 @@ export default function RegularDriverClient({ token, date, classes, initialBoard
   const boarded = allRows.filter((r) => boarding[r.rowId] === "BOARDED").length;
 
   return (
-    <div className="mx-auto max-w-lg px-3 pb-28 text-gray-900" style={{ colorScheme: "light" }}>
-      <header className="sticky top-0 z-10 -mx-3 mb-3 border-b border-gray-200 bg-white px-4 py-4">
-        <p className="text-[20px] font-black text-gray-900">🚌 스티즈 정규 셔틀</p>
-        <p className="mt-0.5 text-[15px] font-bold text-gray-600">{fmtDate(date)} · 체크 {boarded}/{allRows.length}</p>
+    <div className="mx-auto max-w-lg px-3 pb-28 text-[var(--doc-ink)]" style={{ colorScheme: "light" }}>
+      <header className="sticky top-0 z-10 -mx-3 mb-3 border-b border-[var(--doc-rule)] bg-[var(--doc-surface)] px-4 py-4">
+        <p className="text-[20px] font-bold text-[var(--doc-ink)]">🚌 스티즈 정규 셔틀</p>
+        <p className="mt-0.5 text-[15px] font-bold text-[var(--doc-ink-2)]">{fmtDate(date)} · 체크 {boarded}/{allRows.length}</p>
       </header>
 
       {/* PWA 설치 배너 */}
       {showInstallBanner && (
-        <div className="mb-3 flex items-center gap-3 rounded-2xl border-2 border-indigo-300 bg-indigo-50 px-4 py-3">
+        <div className="mb-3 flex items-center gap-3 rounded-[6px] border-2 border-[var(--doc-rule)] bg-[var(--doc-grid-head)] px-4 py-3">
           <span className="text-[28px]">📲</span>
           <div className="flex-1">
-            <p className="text-[15px] font-black text-indigo-900">홈 화면에 추가하세요</p>
-            <p className="text-[12px] font-semibold text-indigo-700">앱처럼 빠르게 열 수 있어요</p>
+            <p className="text-[15px] font-bold text-[var(--doc-ink-2)]">홈 화면에 추가하세요</p>
+            <p className="text-[12px] font-semibold text-[var(--doc-ink-2)]">앱처럼 빠르게 열 수 있어요</p>
           </div>
           <button type="button" onClick={installPwa}
-            className="rounded-xl bg-indigo-600 px-4 py-2 text-[14px] font-black text-white active:bg-indigo-700">설치</button>
-          <button type="button" onClick={() => setShowInstallBanner(false)} className="text-[20px] text-indigo-300">✕</button>
+            className="rounded-[3px] bg-indigo-600 px-4 py-2 text-[14px] font-bold text-white active:bg-indigo-700">설치</button>
+          <button type="button" onClick={() => setShowInstallBanner(false)} className="text-[20px] text-[var(--doc-ink-2)]">✕</button>
         </div>
       )}
 
       {/* 운행 시작 전 */}
       {runState === "idle" && (
-        <div className="mb-4 rounded-2xl border-2 border-yellow-400 bg-yellow-50 p-5 text-center">
-          <p className="mb-3 text-[15px] font-bold text-gray-700">운행을 시작하면 위치가 관리자에게 공유됩니다</p>
+        <div className="mb-4 rounded-[6px] border-2 border-[var(--doc-warn)] bg-[var(--doc-grid-head)] p-5 text-center">
+          <p className="mb-3 text-[15px] font-bold text-[var(--doc-ink-2)]">운행을 시작하면 위치가 관리자에게 공유됩니다</p>
           <button type="button" onClick={handleRunStart}
-            className="h-16 w-full rounded-2xl bg-green-600 text-[20px] font-black text-white active:bg-green-700">
+            className="h-16 w-full rounded-[6px] bg-green-600 text-[20px] font-bold text-white active:bg-green-700">
             🚦 운행 시작
           </button>
         </div>
@@ -232,7 +232,7 @@ export default function RegularDriverClient({ token, date, classes, initialBoard
         <div className="mb-3">
           <GpsShareBar gpsState={gpsState} lastSentAt={lastSentAt} accuracy={accuracy} />
           <button type="button" onClick={handleRunEnd}
-            className="mt-2 h-13 w-full rounded-2xl border-2 border-red-300 bg-white py-3 text-[17px] font-black text-red-600 active:bg-red-50">
+            className="mt-2 h-13 w-full rounded-[6px] border-2 border-[var(--doc-crit)] bg-[var(--doc-surface)] py-3 text-[17px] font-bold text-[var(--doc-crit)] active:bg-[var(--doc-crit-soft)]">
             🏁 운행 종료
           </button>
         </div>
@@ -240,19 +240,19 @@ export default function RegularDriverClient({ token, date, classes, initialBoard
 
       {/* 운행 종료 후 */}
       {runState === "ended" && (
-        <div className="mb-4 rounded-2xl bg-gray-100 px-4 py-5 text-center">
-          <p className="text-[17px] font-black text-gray-600">✅ 운행이 종료되었습니다</p>
+        <div className="mb-4 rounded-[6px] bg-[var(--doc-grid-head)] px-4 py-5 text-center">
+          <p className="text-[17px] font-bold text-[var(--doc-ink-2)]">✅ 운행이 종료되었습니다</p>
         </div>
       )}
 
       <DriverDateNav date={date} prevDate={prevDate} nextDate={nextDate} today={today} />
 
-      {classes.length === 0 && <p className="rounded-2xl bg-gray-50 px-4 py-6 text-center text-[16px] font-bold text-gray-400">이 날은 운행이 없습니다.</p>}
+      {classes.length === 0 && <p className="rounded-[6px] bg-[var(--doc-grid-head)] px-4 py-6 text-center text-[16px] font-bold text-[var(--doc-ink-3)]">이 날은 운행이 없습니다.</p>}
 
       {classes.map((c) => (
         <section key={c.classTime} className="mb-6">
           {/* 저장 노선(원장 확정)이면 차량·회차 제목, 폴백이면 종전대로 수업시간 제목 */}
-          <div className="sticky top-[68px] z-[5] -mx-1 mb-3 rounded-2xl bg-brand-navy-900 px-4 py-3 text-[18px] font-black text-white">
+          <div className="sticky top-[68px] z-[5] -mx-1 mb-3 rounded-[6px] bg-brand-navy-900 px-4 py-3 text-[18px] font-bold text-white">
             {c.title ?? `🕒 ${c.classTime} 수업`}
           </div>
 
@@ -263,27 +263,27 @@ export default function RegularDriverClient({ token, date, classes, initialBoard
             return (
               <div className="mb-3">
                 <div className="mb-1.5 flex items-center gap-1.5">
-                  <p className="flex-1 text-[16px] font-black text-blue-700">
+                  <p className="flex-1 text-[16px] font-bold text-[var(--doc-ink-2)]">
                     ⬆ 등원(승차)
                     {/* 원장이 아직 노선을 확정하지 않은 요일 — 시트 명단 순서라는 걸 기사님께 알린다 */}
-                    {c.pending && <span className="ml-1.5 rounded-md bg-amber-100 px-1.5 py-0.5 text-[12px] font-black text-amber-700">임시 순서 · 확정 전</span>}
+                    {c.pending && <span className="ml-1.5 rounded-[3px] bg-[var(--doc-grid-head)] px-1.5 py-0.5 text-[12px] font-bold text-[var(--doc-warn)]">임시 순서 · 확정 전</span>}
                   </p>
                   {!isEditing && (
                     <button type="button" onClick={() => setEditSectionKey(key)}
-                      className="rounded-xl border-2 border-gray-300 px-3 py-1 text-[13px] font-black text-gray-600">↕ 순서 편집</button>
+                      className="rounded-[3px] border-2 border-[var(--doc-rule)] px-3 py-1 text-[13px] font-bold text-[var(--doc-ink-2)]">↕ 순서 편집</button>
                   )}
                   {isEditing && (
                     <div className="flex gap-2">
                       <button type="button" onClick={() => {
                         setReqModal({ defaultType: "ORDER", orderPayload: stops, targetId: key, targetName: `${c.classTime} 등원 순서` });
                         setEditSectionKey(null);
-                      }} className="rounded-xl bg-blue-600 px-3 py-1 text-[13px] font-black text-white">📨 순서 고정 요청</button>
+                      }} className="rounded-[3px] bg-blue-600 px-3 py-1 text-[13px] font-bold text-white">📨 순서 고정 요청</button>
                       <button type="button" onClick={() => { setEditSectionKey(null); setReorderedSections((r) => { const n = { ...r }; delete n[key]; return n; }); }}
-                        className="rounded-xl border-2 border-gray-300 px-3 py-1 text-[13px] font-black text-gray-600">취소</button>
+                        className="rounded-[3px] border-2 border-[var(--doc-rule)] px-3 py-1 text-[13px] font-bold text-[var(--doc-ink-2)]">취소</button>
                     </div>
                   )}
                 </div>
-                {isEditing && <p className="mb-2 rounded-xl bg-blue-50 px-3 py-2 text-[13px] font-bold text-blue-700">↕ 버튼으로 순서를 바꾼 뒤 "순서 고정 요청"을 눌러주세요</p>}
+                {isEditing && <p className="mb-2 rounded-[3px] bg-[var(--doc-grid-head)] px-3 py-2 text-[13px] font-bold text-[var(--doc-ink-2)]">↕ 버튼으로 순서를 바꾼 뒤 "순서 고정 요청"을 눌러주세요</p>}
                 <StopList stops={stops} boarding={boarding} setStatus={setStatus}
                   isEditing={isEditing}
                   onMoveStop={(si, dir) => moveStop(key, c.board, si, dir)}
@@ -301,26 +301,26 @@ export default function RegularDriverClient({ token, date, classes, initialBoard
             return (
               <div>
                 <div className="mb-1.5 flex items-center gap-1.5">
-                  <p className="flex-1 text-[16px] font-black text-orange-700">
+                  <p className="flex-1 text-[16px] font-bold text-[var(--doc-warn)]">
                     ⬇ 하원(하차)
-                    {c.pending && <span className="ml-1.5 rounded-md bg-amber-100 px-1.5 py-0.5 text-[12px] font-black text-amber-700">임시 순서 · 확정 전</span>}
+                    {c.pending && <span className="ml-1.5 rounded-[3px] bg-[var(--doc-grid-head)] px-1.5 py-0.5 text-[12px] font-bold text-[var(--doc-warn)]">임시 순서 · 확정 전</span>}
                   </p>
                   {!isEditing && (
                     <button type="button" onClick={() => setEditSectionKey(key)}
-                      className="rounded-xl border-2 border-gray-300 px-3 py-1 text-[13px] font-black text-gray-600">↕ 순서 편집</button>
+                      className="rounded-[3px] border-2 border-[var(--doc-rule)] px-3 py-1 text-[13px] font-bold text-[var(--doc-ink-2)]">↕ 순서 편집</button>
                   )}
                   {isEditing && (
                     <div className="flex gap-2">
                       <button type="button" onClick={() => {
                         setReqModal({ defaultType: "ORDER", orderPayload: stops, targetId: key, targetName: `${c.classTime} 하원 순서` });
                         setEditSectionKey(null);
-                      }} className="rounded-xl bg-blue-600 px-3 py-1 text-[13px] font-black text-white">📨 순서 고정 요청</button>
+                      }} className="rounded-[3px] bg-blue-600 px-3 py-1 text-[13px] font-bold text-white">📨 순서 고정 요청</button>
                       <button type="button" onClick={() => { setEditSectionKey(null); setReorderedSections((r) => { const n = { ...r }; delete n[key]; return n; }); }}
-                        className="rounded-xl border-2 border-gray-300 px-3 py-1 text-[13px] font-black text-gray-600">취소</button>
+                        className="rounded-[3px] border-2 border-[var(--doc-rule)] px-3 py-1 text-[13px] font-bold text-[var(--doc-ink-2)]">취소</button>
                     </div>
                   )}
                 </div>
-                {isEditing && <p className="mb-2 rounded-xl bg-blue-50 px-3 py-2 text-[13px] font-bold text-blue-700">↕ 버튼으로 순서를 바꾼 뒤 "순서 고정 요청"을 눌러주세요</p>}
+                {isEditing && <p className="mb-2 rounded-[3px] bg-[var(--doc-grid-head)] px-3 py-2 text-[13px] font-bold text-[var(--doc-ink-2)]">↕ 버튼으로 순서를 바꾼 뒤 "순서 고정 요청"을 눌러주세요</p>}
                 <StopList stops={stops} boarding={boarding} setStatus={setStatus}
                   isEditing={isEditing}
                   onMoveStop={(si, dir) => moveStop(key, c.alight, si, dir)}
@@ -333,7 +333,7 @@ export default function RegularDriverClient({ token, date, classes, initialBoard
         </section>
       ))}
 
-      <p className="mt-3 text-center text-[14px] font-semibold text-gray-400">탭 한 번으로 저장됩니다 · 다시 누르면 대기로 돌아갑니다</p>
+      <p className="mt-3 text-center text-[14px] font-semibold text-[var(--doc-ink-3)]">탭 한 번으로 저장됩니다 · 다시 누르면 대기로 돌아갑니다</p>
 
       {/* 관리자 요청 모달 */}
       {reqModal && (

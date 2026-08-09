@@ -36,10 +36,10 @@ export default function DriverHomeClient() {
 
   // 기사님 화면은 밝은 차 안에서 본다. 다른 운행 화면과 같이 밝은 테마로 고정한다.
   return (
-    <div className="min-h-screen bg-white text-gray-900" style={{ colorScheme: "light" }}>
+    <div className="min-h-screen bg-[var(--doc-surface)] text-[var(--doc-ink)]" style={{ colorScheme: "light" }}>
       <div className="mx-auto grid min-h-[80dvh] max-w-md place-items-center px-6 text-center">
         {checking ? (
-          <p className="text-base text-gray-500" aria-live="polite">
+          <p className="text-base text-[var(--doc-ink-2)]" aria-live="polite">
             운행 명단을 여는 중...
           </p>
         ) : (
@@ -47,10 +47,10 @@ export default function DriverHomeClient() {
             <p className="text-5xl" aria-hidden="true">
               🚌
             </p>
-            <h1 className="mt-3 text-xl font-black text-gray-900">
+            <h1 className="mt-3 text-xl font-bold text-[var(--doc-ink)]">
               받으신 운행 링크를 한 번 열어주세요
             </h1>
-            <p className="mt-2 text-base leading-7 text-gray-500">
+            <p className="mt-2 text-base leading-7 text-[var(--doc-ink-2)]">
               원장님께 받은 링크를 한 번만 열면, 다음부터는 이 아이콘만 눌러도
               그날 운행이 바로 열립니다.
             </p>

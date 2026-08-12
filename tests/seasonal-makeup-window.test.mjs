@@ -1,19 +1,14 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
-import ts from "typescript";
+import { loadTsModule } from "./_ts-module.mjs";
 
 // 원장 제보(2026-08-12): 8/13 결석을 미리 받아 보강을 배정하려는데 8/14 이후만 뜬다.
 // 결석은 **미리** 고지받는 경우가 있으므로 오늘~결석일 사이에도 잡을 수 있어야 한다.
 
-const source = await readFile("src/lib/seasonal/makeupWindow.ts", "utf8");
-const { seoulDow, seoulYmd, classAlreadyStarted, findNextClassDate, MAKEUP_WINDOW_DAYS } = await import(
-  `data:text/javascript;base64,${Buffer.from(
-    ts.transpileModule(source, {
-      compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 },
-    }).outputText,
-  ).toString("base64")}`
-);
+const { classAlreadyStarted, findNextClassDate, MAKEUP_WINDOW_DAYS } =
+  await loadTsModule("src/lib/seasonal/makeupWindow.ts");
+const { kstDow: seoulDow, toKstYmd: seoulYmd } = await loadTsModule("src/lib/datetime/kst.ts");
 
 const kst = (s) => new Date(s).getTime();
 const NOW = kst("2026-08-12T21:08:00+09:00"); // 실제 제보 시각(오늘 특강은 이미 끝난 뒤)

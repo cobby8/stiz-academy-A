@@ -40,6 +40,8 @@ const OPS_PATHS = [
     "/admin/apply",
     "/admin/shuttle",
     "/admin/payment-confirmations",
+    "/admin/payment-requests",
+    "/admin/enrollment-changes",
     "/admin/media-revocations",
 ];
 
@@ -55,6 +57,8 @@ const MORE_OPS_PATHS = [
     "/admin/staff",
     "/admin/shuttle",
     "/admin/payment-confirmations",
+    "/admin/payment-requests",
+    "/admin/enrollment-changes",
     "/admin/media-revocations",
 ];
 
@@ -206,6 +210,7 @@ export default function AdminShellClient({
                             <NavItem href="/admin/attendance" active={pathname.startsWith("/admin/attendance")} icon="✅" label="출결 관리" />
                             <NavItem href="/admin/absence" active={pathname.startsWith("/admin/absence")} icon="🙅" label="정규 결석 신고" />
                             <NavItem href="/admin/enrollment-changes" active={pathname.startsWith("/admin/enrollment-changes")} icon="🔁" label="수강 변경 신청" />
+                            <NavItem href="/admin/payment-requests" active={pathname.startsWith("/admin/payment-requests")} icon="🧾" label="입금 확인·영수증" />
                             <NavItem href="/admin/finance" active={pathname.startsWith("/admin/finance")} icon="💳" label="수납/청구" />
                             <NavItem href="/admin/seasonal" active={pathname.startsWith("/admin/seasonal") && !isShuttlePath(pathname)} icon="🏀" label="방학특강" />
                             <NavItem href="/admin/seasonal/dispatch" active={isShuttlePath(pathname)} icon="🚌" label="셔틀 관리" />

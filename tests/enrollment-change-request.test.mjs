@@ -227,3 +227,13 @@ test("차액 청구서는 반에 묶지 않는다", () => {
   // 적용일 전까지 학생은 아직 새 반 소속이 아니라 반 기준 집계에 잘못 잡힌다.
   assert.match(adminLib, /"classId", amount[\s\S]{0,200}VALUES \(gen_random_uuid\(\)::text, \$1, NULL/);
 });
+
+test("관리자 메뉴에서 도달할 수 있다", async () => {
+  // 만들어도 메뉴에 없으면 아무도 못 쓴다(이 프로젝트에서 실제로 있었던 문제).
+  const shell = await readFile("src/app/admin/AdminShellClient.tsx", "utf8");
+  assert.match(shell, /href="\/admin\/enrollment-changes"/);
+  assert.ok(
+    (shell.match(/"\/admin\/enrollment-changes"/g) || []).length >= 3,
+    "NavItem 과 탭 경로 배열 두 곳에 모두 등록돼야 합니다.",
+  );
+});

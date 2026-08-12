@@ -2,9 +2,10 @@ import { prisma } from "@/lib/prisma";
 import { randomUUID } from "node:crypto";
 import { loadSeasonalMakeupRooms } from "@/lib/seasonal/makeup-capacity";
 import { notMergedStudent } from "@/lib/studentVisibility";
+import { MAKEUP_WINDOW_DAYS, findNextClassDate } from "@/lib/seasonal/makeupWindow";
 
-// 방학특강 보강 라이브러리. 규칙: 결석일+2개월 이내, 결석 1건당 보강 1건, 정원(특강 12/정규반 capacity) 미만.
-export const MAKEUP_WINDOW_DAYS = 60;
+// 방학특강 보강 라이브러리. 규칙: 지금~결석일+2개월 사이, 결석 1건당 보강 1건, 정원(특강 12/정규반 capacity) 미만.
+export { MAKEUP_WINDOW_DAYS };
 
 // "2026년 초등 5학년", "초등 5학년", "5학년", "중등 2학년" → 비교 가능한 숫자(초1=1..초6=6, 중1=7..중3=9)
 export function gradeToNumber(raw?: string | null): number | null {
@@ -33,10 +34,6 @@ function parseDow(raw?: string | null): number | null {
   return null;
 }
 function num(v: unknown) { return v == null ? 0 : Number(v); }
-function seoulYmd(value: Date | string) {
-  const d = typeof value === "string" ? new Date(value) : value;
-  return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Seoul", year: "numeric", month: "2-digit", day: "2-digit" }).format(d);
-}
 function seoulLabel(value: Date | string) {
   const d = typeof value === "string" ? new Date(value) : value;
   const f = new Intl.DateTimeFormat("ko-KR", { timeZone: "Asia/Seoul", month: "numeric", day: "numeric", weekday: "short" });
@@ -78,7 +75,10 @@ export async function getMakeupOptions(enrollmentDateId: string) {
        FROM "SpecialProgramSessionDate" sd
       WHERE sd."offeringId" = $1
         AND sd.id <> $2
-        AND sd."startsAt" > $3::timestamptz
+        -- 시작점은 결석일이 아니라 **지금**이다. 결석을 미리 고지받으면(예: 8/20 결석을 8/12 신고)
+        -- 오늘~결석일 사이에도 보강을 잡을 수 있어야 한다. 이미 시작한 수업은 배정해도 갈 수 없어 뺀다.
+        AND sd."startsAt" > now()
+        -- 끝점은 약관대로 결석일($3) 기준 2개월.
         AND sd."startsAt" <= ($3::timestamptz + interval '60 days')
         AND NOT EXISTS (
           SELECT 1 FROM "SpecialProgramEnrollmentDate" e3
@@ -107,6 +107,7 @@ export async function getMakeupOptions(enrollmentDateId: string) {
   const childGrade = gradeToNumber(abs.childGrade);
   const absStart = new Date(abs.absentStartsAt);
   const windowEnd = new Date(absStart.getTime() + MAKEUP_WINDOW_DAYS * 86400000);
+  const nowMs = Date.now();
   const regular = classes
     .map((c) => {
       const grades = (c.grades || []).map((g: string) => gradeToNumber(g)).filter((x: number | null) => x != null) as number[];
@@ -115,17 +116,10 @@ export async function getMakeupOptions(enrollmentDateId: string) {
       const enrolled = num(c.enrolled);
       const cap = c.capacity == null ? null : Number(c.capacity);
       const dow = parseDow(c.dayOfWeek);
-      let nextDate: string | null = null;
-      if (dow != null) {
-        const cursor = new Date(absStart.getTime() + 86400000);
-        for (let i = 0; i < MAKEUP_WINDOW_DAYS; i++) {
-          const ymd = seoulYmd(cursor);
-          const d = new Date(ymd + "T00:00:00+09:00");
-          if (d.getUTCDay() === (dow % 7)) { nextDate = ymd; break; }
-          cursor.setTime(cursor.getTime() + 86400000);
-          if (cursor > windowEnd) break;
-        }
-      }
+      // 결석일이 아니라 **오늘**부터 그 반 요일의 첫 날을 찾는다(오늘 수업이 이미 시작했으면 다음 주).
+      const nextDate = findNextClassDate({
+        dayOfWeek: dow, startTime: c.startTime, nowMs, windowEndMs: windowEnd.getTime(),
+      });
       return {
         classId: c.id, name: c.name, instructor: c.instructor ?? null,
         dayOfWeek: c.dayOfWeek, startTime: c.startTime, endTime: c.endTime,

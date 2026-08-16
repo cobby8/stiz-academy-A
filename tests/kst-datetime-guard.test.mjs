@@ -113,12 +113,11 @@ test("규칙 2 — T00:00+09:00 에 getUTC* 를 붙이지 않는다(하루 밀�
 // 화면(use client)은 사용자 브라우저(=KST)에서 돌아 실사용상 맞으므로 대상에서 뺀다.
 const R3 = /new Date\([^)]*\)\s*\.\s*get(?:Day|Hours|Minutes)\(\)/;
 const R3_ALLOW = [
-  // ⚠️ 아래 3곳은 **확인된 버그**다(KST 00~09시에 전날 요일로 조회). 정리 예정.
-  "src/lib/adminReadPayloads.ts",
   // T12:00 을 기준점으로 잡아 현재는 맞지만 위태롭다 — kst.kstDow 로 옮길 것.
   "src/lib/queries.ts",
   "src/lib/staff-session-queries.ts",
 ];
+// 2026-08-16 정리: src/lib/adminReadPayloads.ts (대시보드 오늘 요일·오늘 수업 3곳) → kstDow(todayKst()) 로 교체.
 
 test("규칙 3 — 서버 코드가 서버 시간대에 기대지 않는다", () => {
   const bad = violations(scan(R3, (f) => !f.isClient), R3_ALLOW);
@@ -152,6 +151,6 @@ test("공용 모듈이 규칙에서 가리키는 것들을 제공한다", async 
 test("빚 목록은 줄어들기만 한다", () => {
   // 이 숫자를 올리려면 위반을 새로 들이는 것이다. 정리해서 내리는 것만 허용한다.
   assert.ok(R1_ALLOW.length <= 25, `R1 미정리 ${R1_ALLOW.length}개 — 새로 추가하지 말 것`);
-  assert.ok(R3_ALLOW.length <= 3, `R3 미정리 ${R3_ALLOW.length}개 — 새로 추가하지 말 것`);
+  assert.ok(R3_ALLOW.length <= 2, `R3 미정리 ${R3_ALLOW.length}개 — 새로 추가하지 말 것`);
   assert.ok(R4_ALLOW.length <= 5, `R4 미정리 ${R4_ALLOW.length}개 — 새로 추가하지 말 것`);
 });

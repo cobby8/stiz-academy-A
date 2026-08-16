@@ -1,4 +1,5 @@
 import { unstable_cache } from "next/cache";
+import { kstDow, todayKst } from "@/lib/datetime/kst";
 import { getInstagramRuntimeStatus } from "@/lib/instagram";
 import { getPaymentProviderPublicStatus } from "@/lib/payment-ledger";
 import { getScheduleSlotAdminData } from "@/lib/scheduleSlotPayload";
@@ -150,9 +151,11 @@ function getMonthLabels(date = new Date()) {
     });
 }
 
-function getTodayLabel(date = new Date()) {
+// 서버(Vercel)는 UTC 로 돌기 때문에 getDay() 를 쓰면 KST 00~09시에 전날 요일이 나온다.
+// 요일은 반드시 KST 달력 날짜에서 뽑는다.
+function getTodayLabel(ymd = todayKst()) {
     const days = ["일", "월", "화", "수", "목", "금", "토"];
-    return `${days[date.getDay()]}요일`;
+    return `${days[kstDow(ymd)]}요일`;
 }
 
 function getEmptyExtendedStats(date = new Date()) {
@@ -173,7 +176,7 @@ function getEmptyExtendedStats(date = new Date()) {
 
 async function getTodayClasses() {
     const days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-    const today = days[new Date().getDay()];
+    const today = days[kstDow(todayKst())]; // KST 기준 오늘 요일 (서버 시간대 개입 없음)
 
     try {
         const rows = await prisma.$queryRawUnsafe<AdminTodayClassRow[]>(
@@ -230,7 +233,7 @@ function readJsonArray<T>(value: unknown): T[] {
 
 async function loadDashboardPrimaryPayload() {
     const days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-    const today = days[new Date().getDay()];
+    const today = days[kstDow(todayKst())]; // KST 기준 오늘 요일 (서버 시간대 개입 없음)
 
     try {
         const rows = await prisma.$queryRawUnsafe<DashboardPrimaryRow[]>(

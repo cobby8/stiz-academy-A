@@ -412,3 +412,10 @@
 - **이유:** `migrate status` 확인 결과 `20260725120000_add_seasonal_enrollment_makeup`, `20260725130000_add_seasonal_enrollment_attendance` 두 건이 **파일에는 있는데 `_prisma_migrations`에는 없는 드리프트** 상태다. 이 상태에서 `migrate dev`를 실행하면 Prisma가 **DB 리셋을 제안**한다(운영 데이터 전멸 위험). 기존 두 마이그레이션도 `IF NOT EXISTS`로 작성된 것이 이 프로젝트의 확립된 관례이므로 같은 방식을 따랐다.
 - **주의(후속 과제):** 이 드리프트는 남아 있다. Vercel `migrate deploy`가 세 마이그레이션을 모두 재실행하지만 전부 멱등이라 무해하다. 그래도 `prisma migrate resolve --applied`로 정리해 두는 편이 안전하다.
 - **주의:** `SpecialProgramApplicationItem`에는 `CHECK ("priceSnapshot" = "tuitionPriceSnapshot" + "shuttleFeeSnapshot")` 제약이 있었다. 할인 컬럼만 추가하고 이 제약을 그대로 두면 **할인이 들어가는 순간 모든 저장이 실패**한다. 제약을 `= tuition - discount + shuttle`로 교체해야 한다.
+# 2026-08-26: 시트·랠리즈·홈페이지 3중 동기화 원장
+
+- 결정: 학부모 요청 원문은 홈페이지 운영 원장에 먼저 저장하고, 학생별 명령으로 나눈 뒤 시트·랠리즈·홈페이지의 반영 상태를 각각 추적한다.
+- 이유: 세 시스템 중 일부만 바뀐 상태를 완료로 오인하면 다음 달 청구에서 같은 오류가 반복된다. 택배 배송조회처럼 목적지별 상태를 따로 기록해야 누락 지점을 바로 찾을 수 있다.
+- 결정: 외부 반영은 미리보기와 관리자 승인 뒤에만 수행하고, 한 곳이라도 실패하면 `PARTIAL` 또는 `HELD`로 남긴다.
+- 결정: 동일 요청은 SHA-256 idempotency key로 중복 저장·중복 실행을 막는다.
+- 결정: 신규 운영 테이블은 서버 전용으로 사용하며 RLS를 켜고 `anon`, `authenticated` 직접 권한을 회수한다.

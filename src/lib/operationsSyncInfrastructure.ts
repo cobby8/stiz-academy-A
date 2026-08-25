@@ -1,0 +1,64 @@
+import { prisma } from "@/lib/prisma";
+
+let infrastructureReady = false;
+
+/**
+ * 배포 순서와 무관하게 관리자 입력함을 열 수 있도록 필요한 원장 테이블을 준비한다.
+ * 같은 SQL을 여러 번 실행해도 결과가 바뀌지 않는 IF NOT EXISTS 방식이다.
+ */
+export async function ensureOperationsSyncInfrastructure() {
+  if (infrastructureReady) return;
+
+  const statements = [
+    `CREATE TABLE IF NOT EXISTS "OperationsRequest" (
+      id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+      "sourceText" TEXT NOT NULL,
+      "targetMonth" TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'DRAFT' CHECK (status IN ('DRAFT','APPROVED','PENDING','PARTIAL','SYNCED','HELD')),
+      "requestedByUserId" TEXT NOT NULL REFERENCES "User"(id),
+      "createdAt" TIMESTAMPTZ NOT NULL DEFAULT now(),
+      "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT now()
+    )`,
+    `CREATE TABLE IF NOT EXISTS "OperationsCommand" (
+      id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+      "requestId" TEXT NOT NULL REFERENCES "OperationsRequest"(id) ON DELETE CASCADE,
+      "idempotencyKey" TEXT NOT NULL UNIQUE,
+      "sourceText" TEXT NOT NULL,
+      "studentId" TEXT REFERENCES "Student"(id),
+      "studentName" TEXT,
+      kind TEXT NOT NULL,
+      "effectiveMonth" TEXT NOT NULL,
+      confidence TEXT NOT NULL CHECK (confidence IN ('HIGH','MEDIUM','LOW')),
+      status TEXT NOT NULL DEFAULT 'PENDING' CHECK (status IN ('PENDING','HELD','PARTIAL','SYNCED')),
+      "holdReason" TEXT,
+      "beforeJson" JSONB,
+      "afterJson" JSONB,
+      "createdAt" TIMESTAMPTZ NOT NULL DEFAULT now(),
+      "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT now()
+    )`,
+    `CREATE TABLE IF NOT EXISTS "OperationsSyncAttempt" (
+      id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+      "commandId" TEXT NOT NULL REFERENCES "OperationsCommand"(id) ON DELETE CASCADE,
+      target TEXT NOT NULL CHECK (target IN ('SHEET','RALLYZ','WEBSITE')),
+      status TEXT NOT NULL DEFAULT 'PENDING' CHECK (status IN ('PENDING','SUCCEEDED','FAILED','SKIPPED')),
+      attempts INTEGER NOT NULL DEFAULT 0,
+      "externalReference" TEXT,
+      error TEXT,
+      "verifiedAt" TIMESTAMPTZ,
+      "createdAt" TIMESTAMPTZ NOT NULL DEFAULT now(),
+      "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT now(),
+      UNIQUE ("commandId", target)
+    )`,
+    `CREATE INDEX IF NOT EXISTS "OperationsRequest_status_createdAt_idx" ON "OperationsRequest" (status, "createdAt" DESC)`,
+    `CREATE INDEX IF NOT EXISTS "OperationsCommand_requestId_idx" ON "OperationsCommand" ("requestId")`,
+    `CREATE INDEX IF NOT EXISTS "OperationsCommand_studentId_idx" ON "OperationsCommand" ("studentId")`,
+    `CREATE INDEX IF NOT EXISTS "OperationsSyncAttempt_commandId_idx" ON "OperationsSyncAttempt" ("commandId")`,
+    `ALTER TABLE "OperationsRequest" ENABLE ROW LEVEL SECURITY`,
+    `ALTER TABLE "OperationsCommand" ENABLE ROW LEVEL SECURITY`,
+    `ALTER TABLE "OperationsSyncAttempt" ENABLE ROW LEVEL SECURITY`,
+    `REVOKE ALL ON "OperationsRequest", "OperationsCommand", "OperationsSyncAttempt" FROM anon, authenticated`,
+  ];
+
+  for (const statement of statements) await prisma.$executeRawUnsafe(statement);
+  infrastructureReady = true;
+}

@@ -204,9 +204,13 @@ export async function applyOperationsWebsite(requestId: string) {
   return { ok: true as const, applied };
 }
 
-export async function recordOperationsExternalCheck(commandId: string, target: "SHEET" | "RALLYZ", succeeded: boolean) {
+export async function recordOperationsExternalCheck(commandId: string, target: "RALLYZ", succeeded: boolean) {
   await requireAdmin();
   await ensureOperationsSyncInfrastructure();
+  const sheet = await prisma.$queryRawUnsafe<Array<{ status: string }>>(
+    `SELECT status FROM "OperationsSyncAttempt" WHERE "commandId"=$1 AND target='SHEET'`, commandId,
+  );
+  if (sheet[0]?.status !== "SUCCEEDED") throw new Error("구글 시트 반영과 재확인을 먼저 완료해 주세요.");
   await prisma.$executeRawUnsafe(
     `UPDATE "OperationsSyncAttempt" SET status=$3, attempts=attempts+1, "verifiedAt"=CASE WHEN $3='SUCCEEDED' THEN now() ELSE NULL END, "updatedAt"=now()
       WHERE "commandId"=$1 AND target=$2`, commandId, target, succeeded ? "SUCCEEDED" : "FAILED",

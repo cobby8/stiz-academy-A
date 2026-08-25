@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import {
   applyOperationsWebsite,
   approveOperationsRequest,
+  applyOperationsSheet,
   createOperationsRequest,
   recordOperationsExternalCheck,
 } from "@/app/actions/operations-sync";
@@ -70,6 +71,11 @@ export default function OperationsSyncClient({ initialRequests }: { initialReque
     );
   }
 
+  function applySheet(commandId: string, studentName: string | null) {
+    if (!window.confirm(`${studentName || "해당 학생"}의 이름·적용 월·생년월일/전화가 일치하는 구글 시트 행을 휴원/퇴원으로 실제 변경합니다. 실행할까요?`)) return;
+    runRequestAction(() => applyOperationsSheet(commandId), "구글 시트를 변경하고 저장 결과를 재확인했습니다.");
+  }
+
   return (
     <div className="mx-auto max-w-6xl space-y-6">
       <header>
@@ -106,7 +112,7 @@ export default function OperationsSyncClient({ initialRequests }: { initialReque
             <div className="mt-4 overflow-x-auto">
               <table className="w-full min-w-[760px] text-left text-sm">
                 <thead><tr className="border-b border-gray-200 text-xs text-gray-500 dark:border-gray-700"><th className="p-2">학생</th><th className="p-2">변경</th><th className="p-2">적용 월</th><th className="p-2">시트</th><th className="p-2">랠리즈</th><th className="p-2">홈페이지</th><th className="p-2">판정</th></tr></thead>
-                <tbody>{request.commands.map((command) => <tr key={command.id} className="border-b border-gray-100 align-top last:border-0 dark:border-gray-800"><td className="p-2 font-black">{command.studentName || "미확인"}{command.beforeJson?.enrollments?.length ? <p className="mt-1 text-xs font-medium text-gray-500">{command.beforeJson.enrollments.map((row) => `${row.className} ${row.status}`).join(" · ")} → {command.afterJson?.enrollments?.[0]?.status}</p> : null}</td><td className="p-2">{KIND_LABEL[command.kind] || command.kind}</td><td className="p-2">{command.effectiveMonth}</td>{(["SHEET", "RALLYZ", "WEBSITE"] as const).map((target) => { const status = command.targets?.find((item) => item.target === target)?.status || "PENDING"; const sheetDone = command.targets?.find((item) => item.target === "SHEET")?.status === "SUCCEEDED"; const canConfirm = ["APPROVED", "PENDING", "PARTIAL"].includes(request.status) && target !== "WEBSITE" && status !== "SUCCEEDED" && command.status !== "HELD" && (target === "SHEET" || sheetDone); return <td key={target} className="p-2"><span className="rounded-full bg-amber-50 px-2 py-1 text-xs font-black text-amber-700 dark:bg-amber-950/40 dark:text-amber-200">{TARGET_LABEL[target]} · {status}</span>{canConfirm ? <button type="button" disabled={isPending} onClick={() => confirmExternal(command.id, target, command.studentName)} className="mt-2 block min-h-9 rounded-lg border border-gray-300 px-2 text-xs font-black dark:border-gray-600">실제 반영 확인</button> : null}</td>; })}<td className="p-2">{command.holdReason ? <span className="font-bold text-red-600">확인보류: {command.holdReason}</span> : command.status === "SYNCED" ? <span className="font-bold text-emerald-600">3곳 일치</span> : <span className="font-bold text-blue-600">반영 대기</span>}</td></tr>)}</tbody>
+                <tbody>{request.commands.map((command) => <tr key={command.id} className="border-b border-gray-100 align-top last:border-0 dark:border-gray-800"><td className="p-2 font-black">{command.studentName || "미확인"}{command.beforeJson?.enrollments?.length ? <p className="mt-1 text-xs font-medium text-gray-500">{command.beforeJson.enrollments.map((row) => `${row.className} ${row.status}`).join(" · ")} → {command.afterJson?.enrollments?.[0]?.status}</p> : null}</td><td className="p-2">{KIND_LABEL[command.kind] || command.kind}</td><td className="p-2">{command.effectiveMonth}</td>{(["SHEET", "RALLYZ", "WEBSITE"] as const).map((target) => { const status = command.targets?.find((item) => item.target === target)?.status || "PENDING"; const sheetDone = command.targets?.find((item) => item.target === "SHEET")?.status === "SUCCEEDED"; const canConfirm = ["APPROVED", "PENDING", "PARTIAL"].includes(request.status) && target !== "WEBSITE" && status !== "SUCCEEDED" && command.status !== "HELD" && (target === "SHEET" || sheetDone); return <td key={target} className="p-2"><span className="rounded-full bg-amber-50 px-2 py-1 text-xs font-black text-amber-700 dark:bg-amber-950/40 dark:text-amber-200">{TARGET_LABEL[target]} · {status}</span>{canConfirm ? <button type="button" disabled={isPending} onClick={() => target === "SHEET" ? applySheet(command.id, command.studentName) : confirmExternal(command.id, target, command.studentName)} className="mt-2 block min-h-9 rounded-lg border border-gray-300 px-2 text-xs font-black dark:border-gray-600">{target === "SHEET" ? "시트 자동 반영" : "실제 반영 확인"}</button> : null}</td>; })}<td className="p-2">{command.holdReason ? <span className="font-bold text-red-600">확인보류: {command.holdReason}</span> : command.status === "SYNCED" ? <span className="font-bold text-emerald-600">3곳 일치</span> : <span className="font-bold text-blue-600">반영 대기</span>}</td></tr>)}</tbody>
               </table>
             </div>
           </article>

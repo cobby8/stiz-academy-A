@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/auth-guard";
 import { parseOperationsRequest, SYNC_TARGETS } from "@/lib/operationsSync";
 import { ensureOperationsSyncInfrastructure } from "@/lib/operationsSyncInfrastructure";
+import { applySheetEnrollmentStatus } from "@/lib/googleSheetsOperations";
 
 type OperationsRequestRow = {
   id: string;
@@ -213,6 +214,56 @@ export async function recordOperationsExternalCheck(commandId: string, target: "
   await refreshOperationsStatuses(commandId);
   revalidatePath("/admin/operations-sync");
   return { ok: true as const };
+}
+
+export async function applyOperationsSheet(commandId: string) {
+  await requireAdmin();
+  await ensureOperationsSyncInfrastructure();
+  const rows = await prisma.$queryRawUnsafe<Array<{
+    id: string; studentName: string | null; studentId: string | null; kind: string; effectiveMonth: string;
+    birthDate: Date | null; parentPhone: string | null; requestStatus: string; attemptStatus: string;
+  }>>(
+    `SELECT c.id, c."studentName", c."studentId", c.kind, c."effectiveMonth", s."birthDate",
+            u.phone AS "parentPhone", r.status AS "requestStatus", a.status AS "attemptStatus"
+       FROM "OperationsCommand" c
+       JOIN "OperationsRequest" r ON r.id=c."requestId"
+       JOIN "OperationsSyncAttempt" a ON a."commandId"=c.id AND a.target='SHEET'
+       LEFT JOIN "Student" s ON s.id=c."studentId"
+       LEFT JOIN "User" u ON u.id=s."parentId"
+      WHERE c.id=$1`, commandId,
+  );
+  const row = rows[0];
+  if (!row || !row.studentName || !row.studentId || !row.birthDate) throw new Error("학생 식별 정보를 확정할 수 없습니다.");
+  if (!['APPROVED', 'PENDING', 'PARTIAL'].includes(row.requestStatus)) throw new Error("먼저 변경 계획을 승인해 주세요.");
+  if (!['PAUSE', 'WITHDRAW'].includes(row.kind)) throw new Error("이 변경 종류는 아직 시트 자동 반영을 지원하지 않습니다.");
+  if (row.attemptStatus === "SUCCEEDED") return { ok: true as const, skipped: true };
+
+  try {
+    const result = await applySheetEnrollmentStatus({
+      commandId: row.id,
+      studentName: row.studentName,
+      birthDate: row.birthDate,
+      parentPhone: row.parentPhone,
+      targetMonth: row.effectiveMonth,
+      kind: row.kind as "PAUSE" | "WITHDRAW",
+    });
+    await prisma.$executeRawUnsafe(
+      `UPDATE "OperationsSyncAttempt" SET status='SUCCEEDED', attempts=attempts+1, "externalReference"=$2,
+        error=NULL, "verifiedAt"=now(), "updatedAt"=now() WHERE "commandId"=$1 AND target='SHEET'`,
+      commandId, `${result.spreadsheetId}:${result.rows.join(",")}`,
+    );
+    await refreshOperationsStatuses(commandId);
+    revalidatePath("/admin/operations-sync");
+    return { ok: true as const, skipped: false };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "구글 시트 반영 실패";
+    await prisma.$executeRawUnsafe(
+      `UPDATE "OperationsSyncAttempt" SET status='FAILED', attempts=attempts+1, error=$2, "updatedAt"=now() WHERE "commandId"=$1 AND target='SHEET'`,
+      commandId, message.slice(0, 1000),
+    );
+    await refreshOperationsStatuses(commandId);
+    throw new Error(message);
+  }
 }
 
 async function refreshOperationsStatuses(commandId: string) {

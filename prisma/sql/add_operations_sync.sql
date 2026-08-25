@@ -7,6 +7,8 @@ CREATE TABLE IF NOT EXISTS "OperationsRequest" (
   "targetMonth" TEXT NOT NULL,
   status TEXT NOT NULL DEFAULT 'DRAFT' CHECK (status IN ('DRAFT','APPROVED','PENDING','PARTIAL','SYNCED','HELD')),
   "requestedByUserId" TEXT NOT NULL REFERENCES "User"(id),
+  "approvedByUserId" TEXT REFERENCES "User"(id),
+  "approvedAt" TIMESTAMPTZ,
   "createdAt" TIMESTAMPTZ NOT NULL DEFAULT now(),
   "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT now()
 );
@@ -47,6 +49,9 @@ CREATE INDEX IF NOT EXISTS "OperationsRequest_status_createdAt_idx" ON "Operatio
 CREATE INDEX IF NOT EXISTS "OperationsCommand_requestId_idx" ON "OperationsCommand" ("requestId");
 CREATE INDEX IF NOT EXISTS "OperationsCommand_studentId_idx" ON "OperationsCommand" ("studentId");
 CREATE INDEX IF NOT EXISTS "OperationsSyncAttempt_commandId_idx" ON "OperationsSyncAttempt" ("commandId");
+
+ALTER TABLE "OperationsRequest" ADD COLUMN IF NOT EXISTS "approvedByUserId" TEXT REFERENCES "User"(id);
+ALTER TABLE "OperationsRequest" ADD COLUMN IF NOT EXISTS "approvedAt" TIMESTAMPTZ;
 
 ALTER TABLE "OperationsRequest" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "OperationsCommand" ENABLE ROW LEVEL SECURITY;

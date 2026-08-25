@@ -1,7 +1,12 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { createOperationsRequest } from "@/app/actions/operations-sync";
+import {
+  applyOperationsWebsite,
+  approveOperationsRequest,
+  createOperationsRequest,
+  recordOperationsExternalCheck,
+} from "@/app/actions/operations-sync";
 
 type SyncAttempt = { target: "SHEET" | "RALLYZ" | "WEBSITE"; status: string };
 type Command = {
@@ -12,6 +17,8 @@ type Command = {
   confidence: string;
   status: string;
   holdReason: string | null;
+  beforeJson: { enrollments?: Array<{ id: string; status: string; className: string }> } | null;
+  afterJson: { enrollments?: Array<{ id: string; status: string; className: string }> } | null;
   targets: SyncAttempt[];
 };
 type RequestRow = { id: string; sourceText: string; targetMonth: string; status: string; createdAt: string; commands: Command[] };
@@ -42,6 +49,27 @@ export default function OperationsSyncClient({ initialRequests }: { initialReque
     });
   }
 
+  function runRequestAction(action: () => Promise<{ ok: true } | { ok: true; ready: number } | { ok: true; applied: number }>, success: string) {
+    startTransition(async () => {
+      try {
+        await action();
+        setMessage(success);
+        window.location.reload();
+      } catch (error) {
+        setMessage(error instanceof Error ? error.message : "작업을 완료하지 못했습니다.");
+      }
+    });
+  }
+
+  function confirmExternal(commandId: string, target: "SHEET" | "RALLYZ", studentName: string | null) {
+    const label = TARGET_LABEL[target];
+    if (!window.confirm(`${studentName || "해당 학생"}의 ${label} 실제 반영 결과를 직접 확인했습니까?`)) return;
+    runRequestAction(
+      () => recordOperationsExternalCheck(commandId, target, true),
+      `${label} 반영 확인을 기록했습니다.`,
+    );
+  }
+
   return (
     <div className="mx-auto max-w-6xl space-y-6">
       <header>
@@ -69,12 +97,16 @@ export default function OperationsSyncClient({ initialRequests }: { initialReque
           <article key={request.id} className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-700 dark:bg-gray-900">
             <div className="flex flex-wrap items-start justify-between gap-2">
               <div><p className="font-black text-gray-950 dark:text-white">{request.targetMonth} 요청</p><p className="mt-1 whitespace-pre-wrap text-sm text-gray-600 dark:text-gray-300">{request.sourceText}</p></div>
-              <span className="rounded-full bg-gray-100 px-3 py-1 text-xs font-black text-gray-700 dark:bg-gray-800 dark:text-gray-200">{request.status}</span>
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="rounded-full bg-gray-100 px-3 py-1 text-xs font-black text-gray-700 dark:bg-gray-800 dark:text-gray-200">{request.status}</span>
+                {(request.status === "DRAFT" || request.status === "HELD") && <button type="button" disabled={isPending} onClick={() => runRequestAction(() => approveOperationsRequest(request.id), "변경 전·후 미리보기를 확정했습니다.")} className="min-h-10 rounded-xl border border-gray-300 px-3 text-xs font-black dark:border-gray-600">미리보기 승인</button>}
+                {(["APPROVED", "PENDING", "PARTIAL"].includes(request.status)) && <button type="button" disabled={isPending} onClick={() => { if (window.confirm("시트와 랠리즈 확인 결과대로 홈페이지 수강 상태를 최종 변경할까요?")) runRequestAction(() => applyOperationsWebsite(request.id), "홈페이지 최종 반영과 3중 상태 검증을 완료했습니다."); }} className="min-h-10 rounded-xl bg-[var(--brand-accent)] px-3 text-xs font-black text-[var(--brand-accent-contrast)]">홈페이지 최종 반영</button>}
+              </div>
             </div>
             <div className="mt-4 overflow-x-auto">
               <table className="w-full min-w-[760px] text-left text-sm">
                 <thead><tr className="border-b border-gray-200 text-xs text-gray-500 dark:border-gray-700"><th className="p-2">학생</th><th className="p-2">변경</th><th className="p-2">적용 월</th><th className="p-2">시트</th><th className="p-2">랠리즈</th><th className="p-2">홈페이지</th><th className="p-2">판정</th></tr></thead>
-                <tbody>{request.commands.map((command) => <tr key={command.id} className="border-b border-gray-100 last:border-0 dark:border-gray-800"><td className="p-2 font-black">{command.studentName || "미확인"}</td><td className="p-2">{KIND_LABEL[command.kind] || command.kind}</td><td className="p-2">{command.effectiveMonth}</td>{(["SHEET", "RALLYZ", "WEBSITE"] as const).map((target) => { const status = command.targets?.find((item) => item.target === target)?.status || "PENDING"; return <td key={target} className="p-2"><span className="rounded-full bg-amber-50 px-2 py-1 text-xs font-black text-amber-700 dark:bg-amber-950/40 dark:text-amber-200">{TARGET_LABEL[target]} · {status}</span></td>; })}<td className="p-2">{command.holdReason ? <span className="font-bold text-red-600">확인보류: {command.holdReason}</span> : <span className="font-bold text-blue-600">반영 대기</span>}</td></tr>)}</tbody>
+                <tbody>{request.commands.map((command) => <tr key={command.id} className="border-b border-gray-100 align-top last:border-0 dark:border-gray-800"><td className="p-2 font-black">{command.studentName || "미확인"}{command.beforeJson?.enrollments?.length ? <p className="mt-1 text-xs font-medium text-gray-500">{command.beforeJson.enrollments.map((row) => `${row.className} ${row.status}`).join(" · ")} → {command.afterJson?.enrollments?.[0]?.status}</p> : null}</td><td className="p-2">{KIND_LABEL[command.kind] || command.kind}</td><td className="p-2">{command.effectiveMonth}</td>{(["SHEET", "RALLYZ", "WEBSITE"] as const).map((target) => { const status = command.targets?.find((item) => item.target === target)?.status || "PENDING"; const sheetDone = command.targets?.find((item) => item.target === "SHEET")?.status === "SUCCEEDED"; const canConfirm = ["APPROVED", "PENDING", "PARTIAL"].includes(request.status) && target !== "WEBSITE" && status !== "SUCCEEDED" && command.status !== "HELD" && (target === "SHEET" || sheetDone); return <td key={target} className="p-2"><span className="rounded-full bg-amber-50 px-2 py-1 text-xs font-black text-amber-700 dark:bg-amber-950/40 dark:text-amber-200">{TARGET_LABEL[target]} · {status}</span>{canConfirm ? <button type="button" disabled={isPending} onClick={() => confirmExternal(command.id, target, command.studentName)} className="mt-2 block min-h-9 rounded-lg border border-gray-300 px-2 text-xs font-black dark:border-gray-600">실제 반영 확인</button> : null}</td>; })}<td className="p-2">{command.holdReason ? <span className="font-bold text-red-600">확인보류: {command.holdReason}</span> : command.status === "SYNCED" ? <span className="font-bold text-emerald-600">3곳 일치</span> : <span className="font-bold text-blue-600">반영 대기</span>}</td></tr>)}</tbody>
               </table>
             </div>
           </article>

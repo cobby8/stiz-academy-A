@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import type { RegularShuttleStop } from "@/lib/shuttle/regularSheet";
 import RegularRouteSection, { type ShuttleGeo } from "@/components/shuttle/RegularRouteSection";
+import { maskPhone, regularShuttleChangeMessage, type RegularShuttleChange } from "@/lib/regular/regularShuttleDiff";
 
 // ── 카카오 지도 SDK(장소검색) 로더 ─────────────────────────────
 // REST 키는 401이라 브라우저 JS SDK로만 좌표를 찾을 수 있다(방학특강과 동일 방식).
@@ -70,15 +71,23 @@ function fmtImported(iso: string | null): string {
   return `${g("month")}/${g("day")} ${g("hour")}:${g("minute")}`;
 }
 
-export default function RegularShuttleClient({ initialStops, importedAt: initialImportedAt, defaultSheetUrl, geo }: {
+export default function RegularShuttleClient({ initialStops, importedAt: initialImportedAt, defaultSheetUrl, geo, initialMonth, months, initialCompareMonth, initialComparison }: {
   initialStops: RegularShuttleStop[];
   importedAt: string | null;
   defaultSheetUrl: string;
   geo: ShuttleGeo;
+  initialMonth: string | null;
+  months: string[];
+  initialCompareMonth: string | null;
+  initialComparison: RegularShuttleChange[];
 }) {
   const [stops, setStops] = useState<RegularShuttleStop[]>(initialStops);
   const [importedAt, setImportedAt] = useState<string | null>(initialImportedAt);
   const [sheetUrl, setSheetUrl] = useState(defaultSheetUrl);
+  const [serviceMonth, setServiceMonth] = useState(initialMonth ?? new Date().toISOString().slice(0, 7));
+  const [availableMonths, setAvailableMonths] = useState(months);
+  const [compareMonth, setCompareMonth] = useState(initialCompareMonth ?? "");
+  const [comparison, setComparison] = useState<RegularShuttleChange[]>(initialComparison);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
@@ -116,15 +125,31 @@ export default function RegularShuttleClient({ initialStops, importedAt: initial
     setBusy(true); setMsg(null); setErr(null);
     try {
       const r = await fetch("/api/admin/shuttle/regular-import", {
-        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sheetUrl }),
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sheetUrl, serviceMonth }),
       });
       const j = await r.json();
       if (!r.ok) throw new Error(j?.error || "가져오지 못했습니다.");
-      setMsg(`가져왔습니다 · ${j.imported}개 정차${j.title ? ` (${j.title})` : ""}`);
+      const notes = [`가져왔습니다 · ${j.imported}개 정차${j.title ? ` (${j.title})` : ""}`];
+      if (j.excluded?.length) notes.push(`휴원·퇴원 제외 ${j.excluded.length}명: ${j.excluded.join(", ")}`);
+      if (j.held?.length) notes.push(`확인보류 ${j.held.length}명: ${j.held.join(", ")}`);
+      setMsg(notes.join(" · "));
       // 새로고침 없이 다시 읽어 반영
-      const g = await fetch("/api/admin/shuttle/regular", { cache: "no-store" }).then((x) => x.json()).catch(() => null);
-      if (g?.stops) { setStops(g.stops); setImportedAt(g.importedAt ?? null); }
+      const g = await fetch(`/api/admin/shuttle/regular?month=${encodeURIComponent(serviceMonth)}${compareMonth ? `&compareTo=${encodeURIComponent(compareMonth)}` : ""}`, { cache: "no-store" }).then((x) => x.json()).catch(() => null);
+      if (g?.stops) { setStops(g.stops); setImportedAt(g.importedAt ?? null); setAvailableMonths(g.months ?? []); setComparison(g.comparison ?? []); }
     } catch (e: any) { setErr(e?.message || "가져오지 못했습니다."); }
+    finally { setBusy(false); }
+  }
+
+  async function loadMonth(month: string, against = compareMonth) {
+    setBusy(true); setErr(null); setMsg(null);
+    try {
+      const query = `/api/admin/shuttle/regular?month=${encodeURIComponent(month)}${against ? `&compareTo=${encodeURIComponent(against)}` : ""}`;
+      const r = await fetch(query, { cache: "no-store" });
+      const j = await r.json();
+      if (!r.ok) throw new Error(j?.error || "차량표를 불러오지 못했습니다.");
+      setServiceMonth(month); setStops(j.stops ?? []); setImportedAt(j.importedAt ?? null);
+      setAvailableMonths(j.months ?? []); setComparison(j.comparison ?? []);
+    } catch (e: unknown) { setErr(e instanceof Error ? e.message : "차량표를 불러오지 못했습니다."); }
     finally { setBusy(false); }
   }
 
@@ -143,7 +168,7 @@ export default function RegularShuttleClient({ initialStops, importedAt: initial
 
   // 저장 후 목록을 다시 읽어 로컬 상태를 최신화(순서·시각 반영).
   async function refreshStops() {
-    const g = await fetch("/api/admin/shuttle/regular", { cache: "no-store" }).then((x) => x.json()).catch(() => null);
+    const g = await fetch(`/api/admin/shuttle/regular?month=${encodeURIComponent(serviceMonth)}`, { cache: "no-store" }).then((x) => x.json()).catch(() => null);
     if (g?.stops) { setStops(g.stops); setImportedAt(g.importedAt ?? null); }
   }
 
@@ -193,13 +218,47 @@ export default function RegularShuttleClient({ initialStops, importedAt: initial
             <h3 className="text-base font-black text-gray-900 dark:text-white">정규 셔틀 운행리스트</h3>
             <p className="mt-0.5 text-[12.5px] text-gray-500 dark:text-gray-400">구글 시트를 앱으로 가져와 요일별 타임라인으로 봅니다.{importedAt ? ` · 마지막 가져오기 ${fmtImported(importedAt)}` : " · 아직 가져오지 않음"}</p>
           </div>
+          <div className="flex flex-wrap items-end gap-2">
+            <label className="flex flex-col gap-1 text-[11px] font-bold text-gray-500">확인 월
+              <select value={serviceMonth} onChange={(e) => void loadMonth(e.target.value)} className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-bold dark:border-gray-600 dark:bg-gray-900">
+                {availableMonths.map((month) => <option key={month} value={month}>{month}</option>)}
+                {!availableMonths.includes(serviceMonth) && <option value={serviceMonth}>{serviceMonth}</option>}
+              </select>
+            </label>
+            <label className="flex flex-col gap-1 text-[11px] font-bold text-gray-500">비교 월
+              <select value={compareMonth} onChange={(e) => { setCompareMonth(e.target.value); void loadMonth(serviceMonth, e.target.value); }} className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-bold dark:border-gray-600 dark:bg-gray-900">
+                <option value="">비교 안 함</option>
+                {availableMonths.filter((month) => month !== serviceMonth).map((month) => <option key={month} value={month}>{month}</option>)}
+              </select>
+            </label>
+          </div>
         </div>
+
+        {compareMonth && (
+          <details className="mt-3 rounded-xl border border-blue-200 bg-blue-50/60 dark:border-blue-800 dark:bg-blue-950/20" open>
+            <summary className="cursor-pointer px-3 py-2 text-sm font-black text-blue-900 dark:text-blue-100">{compareMonth} → {serviceMonth} 차량 변동 {comparison.length}명</summary>
+            <div className="space-y-2 border-t border-blue-200 p-3 dark:border-blue-800">
+              {comparison.length === 0 && <p className="text-xs font-bold text-gray-500">학생별 등·하원 시간과 정류장 변동이 없습니다.</p>}
+              {comparison.map((change) => (
+                <div key={change.key} className="rounded-lg bg-white p-3 text-xs shadow-sm dark:bg-gray-900">
+                  <div className="flex flex-wrap items-center gap-2"><b className="text-sm">{change.studentName}</b><span>{maskPhone(change.parentPhone)}</span><span className="rounded bg-blue-100 px-1.5 py-0.5 font-black text-blue-700">{change.kind === "ADDED" ? "추가" : change.kind === "REMOVED" ? "제외" : "변경"}</span></div>
+                  <p className="mt-1 text-gray-500">기존: {change.before ?? "없음"}</p><p className="mt-0.5 font-bold text-gray-800 dark:text-gray-100">변경: {change.after ?? "없음"}</p>
+                  {regularShuttleChangeMessage(change, serviceMonth) && <pre className="mt-2 whitespace-pre-wrap rounded bg-gray-50 p-2 font-sans text-[11px] text-gray-600 dark:bg-gray-800 dark:text-gray-300">{regularShuttleChangeMessage(change, serviceMonth)}</pre>}
+                </div>
+              ))}
+              <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs font-bold text-amber-800">문자는 자동 발송되지 않습니다. 대상·변경값·문구 미리보기 후 별도 승인이 필요합니다.</p>
+            </div>
+          </details>
+        )}
 
         {/* 시트 가져오기·좌표 채우기 — 최초 1회만 쓰는 준비 작업이라 접어 둔다. */}
         <details className="mt-3 rounded-xl border border-gray-200 bg-gray-50 dark:border-gray-700 dark:bg-gray-900/40" open={stops.length === 0}>
           <summary className="cursor-pointer select-none px-3 py-2 text-[12px] font-black text-gray-600 dark:text-gray-300">⚙️ 시트 가져오기 · 좌표 채우기 (최초 1회)</summary>
           <div className="border-t border-gray-200 p-3 dark:border-gray-700">
             <div className="flex flex-wrap items-end gap-2">
+              <label className="flex w-36 flex-col gap-1 text-[11px] font-bold text-gray-500">적용 월
+                <input type="month" value={serviceMonth} onChange={(e) => setServiceMonth(e.target.value)} className="rounded-lg border border-gray-200 px-3 py-2 text-[12px] font-semibold dark:border-gray-600 dark:bg-gray-900 dark:text-white" />
+              </label>
               <label className="flex min-w-[220px] flex-1 flex-col gap-1 text-[11px] font-bold text-gray-500">구글 시트 URL
                 <input value={sheetUrl} onChange={(e) => setSheetUrl(e.target.value)} placeholder="https://docs.google.com/spreadsheets/..." className="rounded-lg border border-gray-200 px-3 py-2 text-[12px] font-semibold dark:border-gray-600 dark:bg-gray-900 dark:text-white" />
               </label>

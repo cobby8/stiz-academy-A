@@ -2,7 +2,13 @@ import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/auth-guard";
 import { parseRegularShuttleSheet, type RegularShuttleStop } from "./regularSheet";
 
-// 정규 셔틀 운행리스트: 구글 시트 → 앱 DB 이관(replace) + 조회. PgBouncer 때문에 $queryRawUnsafe/$executeRawUnsafe 고정.
+// 정규 셔틀 운행리스트: 구글 시트 → 앱 DB 월별 이관 + 조회. PgBouncer 때문에 $queryRawUnsafe/$executeRawUnsafe 고정.
+
+export function normalizeServiceMonth(value: string | null | undefined): string {
+  const month = String(value ?? "").trim();
+  if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(month)) throw new Error("적용 월은 YYYY-MM 형식이어야 합니다.");
+  return month;
+}
 
 // 구글 시트 URL(편집/보기)을 CSV export URL로 바꾼다.
 export function toCsvExportUrl(sheetUrl: string): string | null {
@@ -12,41 +18,108 @@ export function toCsvExportUrl(sheetUrl: string): string | null {
   return `https://docs.google.com/spreadsheets/d/${id}/export?format=csv&gid=${gid}`;
 }
 
-/** 시트를 가져와 파싱한 뒤 RegularShuttleStop 테이블을 통째로 교체한다(원장 전용). */
-export async function importRegularShuttleFromSheet(sheetUrl: string): Promise<{ imported: number; title: string | null }> {
+/** 시트를 가져와 파싱한 뒤 해당 월의 RegularShuttleStop만 교체한다(원장 전용). */
+type RosterIdentity = { id: string; name: string; studentPhone: string | null; parentPhones: string[]; active: boolean };
+function phoneDigits(value: string | null | undefined): string { return String(value ?? "").replace(/\D/g, ""); }
+function normalizedName(value: string | null | undefined): string { return String(value ?? "").replace(/\s/g, "").toLowerCase(); }
+
+async function reconcileActiveStudents(stops: RegularShuttleStop[]): Promise<{ stops: RegularShuttleStop[]; excluded: string[]; held: string[] }> {
+  const rows = await prisma.$queryRawUnsafe<Record<string, unknown>[]>(
+    `SELECT s."id", s."name", s."phone" AS "studentPhone", u."phone" AS "userPhone",
+            COALESCE(array_agg(DISTINCT g."phone") FILTER (WHERE g."phone" IS NOT NULL), '{}') AS "guardianPhones",
+            bool_or(e."status"='ACTIVE') AS "active"
+       FROM "Student" s
+       LEFT JOIN "User" u ON u."id"=s."parentId"
+       LEFT JOIN "Guardian" g ON g."studentId"=s."id"
+       LEFT JOIN "Enrollment" e ON e."studentId"=s."id"
+      WHERE s."mergedIntoStudentId" IS NULL
+      GROUP BY s."id",s."name",s."phone",u."phone"`,
+  );
+  const identities: RosterIdentity[] = rows.map((row) => ({
+    id: String(row.id), name: String(row.name ?? ""), studentPhone: row.studentPhone ? String(row.studentPhone) : null,
+    parentPhones: [row.userPhone, ...(Array.isArray(row.guardianPhones) ? row.guardianPhones : [])].map((v) => String(v ?? "")).filter(Boolean),
+    active: row.active === true,
+  }));
+  const byName = new Map<string, RosterIdentity[]>();
+  for (const identity of identities) {
+    const key = normalizedName(identity.name); byName.set(key, [...(byName.get(key) ?? []), identity]);
+  }
+  const excluded = new Set<string>(); const held = new Set<string>();
+  const kept = stops.filter((stop) => {
+    if (!stop.studentName || !["BOARD", "ALIGHT"].includes(stop.direction)) return true;
+    const candidates = byName.get(normalizedName(stop.studentName)) ?? [];
+    const parentPhone = phoneDigits(stop.parentPhone); const studentPhone = phoneDigits(stop.studentPhone);
+    const matched = candidates.filter((identity) =>
+      (parentPhone && identity.parentPhones.some((phone) => phoneDigits(phone) === parentPhone))
+      || (studentPhone && phoneDigits(identity.studentPhone) === studentPhone),
+    );
+    const resolved = matched.length === 1 ? matched[0] : (!parentPhone && !studentPhone && candidates.length === 1 ? candidates[0] : null);
+    if (!resolved) { held.add(stop.studentName); return true; }
+    if (!resolved.active) { excluded.add(stop.studentName); return false; }
+    return true;
+  });
+  return { stops: kept, excluded: [...excluded].sort(), held: [...held].sort() };
+}
+
+export async function importRegularShuttleFromSheet(sheetUrl: string, serviceMonth: string): Promise<{ imported: number; title: string | null; serviceMonth: string; excluded: string[]; held: string[] }> {
   await requireAdmin();
+  const month = normalizeServiceMonth(serviceMonth);
   const csvUrl = toCsvExportUrl(sheetUrl);
   if (!csvUrl) throw new Error("올바른 구글 시트 URL이 아닙니다.");
   const res = await fetch(csvUrl, { cache: "no-store", redirect: "follow" });
   if (!res.ok) throw new Error("시트를 불러오지 못했습니다. '링크 있는 모든 사용자' 공개인지 확인해주세요.");
   const csv = await res.text();
   if (/<html/i.test(csv.slice(0, 200))) throw new Error("시트가 공개되어 있지 않습니다(로그인 페이지 응답).");
-  const { title, stops } = parseRegularShuttleSheet(csv);
-  if (stops.length === 0) throw new Error("시트에서 유효한 운행 정차를 찾지 못했습니다. 형식을 확인해주세요.");
+  const parsed = parseRegularShuttleSheet(csv);
+  if (parsed.stops.length === 0) throw new Error("시트에서 유효한 운행 정차를 찾지 못했습니다. 형식을 확인해주세요.");
+  const reconciled = await reconcileActiveStudents(parsed.stops);
+  const stops = reconciled.stops;
 
-  // 통째로 교체: 기존 삭제 후 새로 삽입. (좌표는 후속 지오코딩 단계에서 채운다.)
-  await prisma.$executeRawUnsafe(`DELETE FROM "RegularShuttleStop"`);
+  // 같은 정류장 좌표는 이전 스냅샷에서 승계한다. 해당 월만 교체하므로 과거 비교 원장은 보존된다.
+  const coords = await prisma.$queryRawUnsafe<{ stopName: string; latitude: number; longitude: number }[]>(
+    `SELECT DISTINCT ON ("stopName") "stopName","latitude","longitude"
+       FROM "RegularShuttleStop"
+      WHERE "latitude" IS NOT NULL AND "longitude" IS NOT NULL
+      ORDER BY "stopName", "importedAt" DESC`,
+  );
+  const coordByName = new Map(coords.map((row) => [row.stopName, row]));
+  await prisma.$executeRawUnsafe(`DELETE FROM "RegularShuttleStop" WHERE "serviceMonth"=$1`, month);
   for (const s of stops) {
+    const coord = coordByName.get(s.stopName);
     await prisma.$executeRawUnsafe(
       `INSERT INTO "RegularShuttleStop"
-        ("weekday","classTime","arriveTime","stopName","direction","studentName","studentPhone","parentPhone","note","sortOrder")
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
+        ("serviceMonth","weekday","classTime","arriveTime","stopName","direction","studentName","studentPhone","parentPhone","note","sortOrder","latitude","longitude")
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,
+      month,
       s.weekday, s.classTime, s.arriveTime, s.stopName, s.direction,
       s.studentName, s.studentPhone, s.parentPhone, s.note, s.sortOrder,
+      coord?.latitude ?? null, coord?.longitude ?? null,
     );
   }
-  return { imported: stops.length, title };
+  return { imported: stops.length, title: parsed.title, serviceMonth: month, excluded: reconciled.excluded, held: reconciled.held };
+}
+
+/** 저장된 월 목록. 최신 월부터 표시한다. */
+export async function getRegularShuttleMonths(): Promise<string[]> {
+  try {
+    const rows = await prisma.$queryRawUnsafe<{ serviceMonth: string }[]>(
+      `SELECT DISTINCT "serviceMonth" FROM "RegularShuttleStop" ORDER BY "serviceMonth" DESC`,
+    );
+    return rows.map((row) => String(row.serviceMonth)).filter((month) => /^\d{4}-\d{2}$/.test(month));
+  } catch { return []; }
 }
 
 /** 좌표(latitude)가 아직 없는 '고유 정류장 이름' 목록을 돌려준다(빈 이름 제외). 1회용 좌표 채우기 화면용. */
-export async function getRegularStopsWithoutCoords(): Promise<string[]> {
+export async function getRegularStopsWithoutCoords(serviceMonth?: string): Promise<string[]> {
   try {
     // latitude 가 null 인 행들의 정류장 이름을 중복 없이(대소문자·공백 유지) 조회.
     const rows = await prisma.$queryRawUnsafe<{ stopName: string }[]>(
       `SELECT DISTINCT "stopName"
          FROM "RegularShuttleStop"
         WHERE "latitude" IS NULL AND COALESCE(TRIM("stopName"), '') <> ''
+          AND ($1::text IS NULL OR "serviceMonth"=$1)
         ORDER BY "stopName" ASC`,
+      serviceMonth ?? null,
     );
     return rows.map((r) => String(r.stopName ?? "").trim()).filter(Boolean);
   } catch {
@@ -93,15 +166,20 @@ export async function saveRegularStopOrder(
 }
 
 /** 저장된 정규 셔틀 정차를 요일 순·시간 순으로 돌려준다. */
-export async function getRegularShuttleStops(): Promise<{ stops: RegularShuttleStop[]; importedAt: string | null }> {
+export async function getRegularShuttleStops(serviceMonth?: string): Promise<{ stops: RegularShuttleStop[]; importedAt: string | null; serviceMonth: string | null; months: string[] }> {
   try {
+    const months = await getRegularShuttleMonths();
+    const month = serviceMonth ? normalizeServiceMonth(serviceMonth) : (months[0] ?? null);
+    if (!month) return { stops: [], importedAt: null, serviceMonth: null, months };
     const rows = await prisma.$queryRawUnsafe<Record<string, unknown>[]>(
-      `SELECT "id","weekday","classTime","arriveTime","stopName","direction","studentName","studentPhone","parentPhone","note","sortOrder","latitude","longitude","importedAt"
-         FROM "RegularShuttleStop" ORDER BY "weekday" ASC, "sortOrder" ASC`,
+      `SELECT "id","serviceMonth","weekday","classTime","arriveTime","stopName","direction","studentName","studentPhone","parentPhone","note","sortOrder","latitude","longitude","importedAt"
+         FROM "RegularShuttleStop" WHERE "serviceMonth"=$1 ORDER BY "weekday" ASC, "sortOrder" ASC`,
+      month,
     );
     const WD = ["일", "월", "화", "수", "목", "금", "토"];
     const stops: RegularShuttleStop[] = rows.map((r) => ({
       id: r.id != null ? String(r.id) : undefined,
+      serviceMonth: String(r.serviceMonth ?? month),
       weekday: Number(r.weekday),
       weekdayLabel: WD[Number(r.weekday)] ?? "",
       classTime: (r.classTime as string | null) ?? null,
@@ -117,8 +195,8 @@ export async function getRegularShuttleStops(): Promise<{ stops: RegularShuttleS
       longitude: r.longitude != null ? Number(r.longitude) : null,
     }));
     const importedAt = rows[0]?.importedAt ? new Date(String(rows[0].importedAt)).toISOString() : null;
-    return { stops, importedAt };
+    return { stops, importedAt, serviceMonth: month, months };
   } catch {
-    return { stops: [], importedAt: null };
+    return { stops: [], importedAt: null, serviceMonth: null, months: [] };
   }
 }

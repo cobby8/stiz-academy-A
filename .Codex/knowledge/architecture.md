@@ -183,3 +183,9 @@ STIZ 농구교실 다산점의 홈페이지와 학원관리 플랫폼이다. 일
 - **발견자**: developer
 - **내용**: `SpecialProgramOffering.capacity`는 그 반 하나의 인원 상한이 아니다. 승인 검사 `ensureSpecialProgramOperationalCapacity`(`src/app/api/admin/seasonal/route.ts:551~598`)가 쓰는 실제 의미는 **"`linkedClassId`로 묶인 같은 시즌 형제 반(주2회·주3회·주5회 등)을 모두 합쳐, 한 요일에 코트에 들어올 수 있는 최대 인원"**이다. 판정 기준은 `item.status='APPROVED'` DISTINCT 항목 수 + `COALESCE(cardinality(app."selectedWeekdays"),0)=0 OR <요일> = ANY(app."selectedWeekdays")`(요일 미선택 = 전 요일 등원). 반면 `countApprovedStudents`의 "반 전체 N명"은 **반 1개 · 전체 기간** 기준이라 축이 다르며, 그래서 "반 전체 13명 / 정원 12" 같은 모순 표시가 나왔다. 같은 기준의 요일별 점유 집계는 `src/lib/seasonal/attendance.ts`의 `getCourtOccupancyByWeekday()`(7요일 VALUES × LEFT JOIN 단일 쿼리, N+1 없음)로 제공하며 board/roster 응답의 `courtOccupied`/`courtCapacity`로 내려간다. 실측(2026 여름): 초등 고학년 그룹 월 15 / 화 11 / 수 13 / 목 11 / 금 10 (정원 12) — 월·수는 이미 초과 상태.
 - **참조횟수**: 0
+# 정규 셔틀 월별 운영 원장 (2026-08-26)
+
+- `RegularShuttleStop.serviceMonth`가 구글 차량 시트의 월별 스냅샷을 보존한다. 새 가져오기는 전체 테이블이 아니라 해당 월만 교체한다.
+- `RegularDispatchRoute`는 `serviceMonth + dayOfWeek + direction` 단위로 노선을 저장해 월 변경 시 과거 배차를 덮어쓰지 않는다.
+- `/admin/shuttle/regular`에서 확인 월과 비교 월을 선택하고 학생별 추가·제외·시간/정류장 변경을 확인한다.
+- 정규 자동 배차 엔진은 기존 방학특강 `RouteSection`과 배차 코어를 재사용하되 `serviceMonth`를 명시적으로 전달한다.

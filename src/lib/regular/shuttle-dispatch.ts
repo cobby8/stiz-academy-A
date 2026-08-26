@@ -53,6 +53,8 @@ function toDispatchRider(r: RegularShuttleRider): DispatchRiderInput {
 
 export type ComputeRegularDispatchOptions = {
   direction: DispatchDirection;
+  /** 차량표 적용 월('YYYY-MM'). 없으면 최신 월. */
+  serviceMonth?: string;
   /** Class.dayOfWeek 문자열("Mon" 등). date 보다 우선한다. */
   dayOfWeek?: string;
   /** 'YYYY-MM-DD'. dayOfWeek 미지정 시 이 날짜의 요일로 명단을 뽑는다. */
@@ -75,6 +77,7 @@ export async function computeRegularDispatch(
   // 명단 = 그 요일(또는 날짜의 요일) × 방향의 정규 정합 라이더. 좌표 없는 이용자는 roster.unassigned 로 분리돼 온다.
   const roster = await getRegularShuttleRiders({
     direction,
+    serviceMonth: opts.serviceMonth,
     dayOfWeek: opts.dayOfWeek,
     date: opts.date,
   });

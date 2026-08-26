@@ -6,9 +6,9 @@ export const dynamic = "force-dynamic";
 // 정규 셔틀 운행리스트를 구글 시트에서 앱 DB로 가져온다(replace). requireAdmin은 라이브러리에서 강제.
 export async function POST(request: Request) {
   try {
-    const body = await request.json().catch(() => null) as { sheetUrl?: string } | null;
-    if (!body?.sheetUrl) return NextResponse.json({ error: "시트 URL이 필요합니다." }, { status: 400 });
-    const result = await importRegularShuttleFromSheet(body.sheetUrl);
+    const body = await request.json().catch(() => null) as { sheetUrl?: string; serviceMonth?: string } | null;
+    if (!body?.sheetUrl || !body.serviceMonth) return NextResponse.json({ error: "시트 URL과 적용 월이 필요합니다." }, { status: 400 });
+    const result = await importRegularShuttleFromSheet(body.sheetUrl, body.serviceMonth);
     return NextResponse.json({ ok: true, ...result });
   } catch (e) {
     console.error("[regular-import POST]", e);

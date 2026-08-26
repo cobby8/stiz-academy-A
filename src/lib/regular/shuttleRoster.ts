@@ -37,6 +37,8 @@ import {
 
 export type GetRegularShuttleRidersOptions = {
   direction: RegularShuttleDirection;
+  /** 차량표 적용 월('YYYY-MM'). 없으면 저장된 최신 월. */
+  serviceMonth?: string;
   /** Class.dayOfWeek 문자열("Mon" 등). date보다 우선한다. */
   dayOfWeek?: string;
   /** 'YYYY-MM-DD'. dayOfWeek 미지정 시 이 날짜의 요일로 계산한다. */
@@ -180,12 +182,14 @@ export async function getRegularShuttleRiders(
        ) st ON true
       WHERE rss."weekday" = $1
         AND rss."direction" = $2
+        AND rss."serviceMonth" = COALESCE($4, (SELECT MAX("serviceMonth") FROM "RegularShuttleStop"))
         AND rss."studentName" IS NOT NULL
         AND btrim(rss."studentName") <> ''
       ORDER BY rss."sortOrder" ASC, rss."stopName" ASC`,
     weekdayIdx,
     stopDir,
     dayOfWeek,
+    opts.serviceMonth ?? null,
   );
 
   const raw = rows.map(toRawRider);
@@ -197,13 +201,15 @@ export async function getRegularShuttleRiders(
  * 소스: RegularShuttleStop — 학생 정차(BOARD/ALIGHT, studentName 있음)가 하나라도 있는 요일.
  * 좌표 유무는 보지 않는다(지오코딩 전이라도 요일 탭은 떠야 한다).
  */
-export async function getRegularShuttleWeekdays(): Promise<string[]> {
+export async function getRegularShuttleWeekdays(serviceMonth?: string): Promise<string[]> {
   const rows = await prisma.$queryRawUnsafe<RawRow[]>(
     `SELECT DISTINCT rss."weekday" AS "weekday"
-       FROM "RegularShuttleStop" rss
+      FROM "RegularShuttleStop" rss
       WHERE rss."direction" IN ('BOARD', 'ALIGHT')
+        AND rss."serviceMonth" = COALESCE($1, (SELECT MAX("serviceMonth") FROM "RegularShuttleStop"))
         AND rss."studentName" IS NOT NULL
         AND btrim(rss."studentName") <> ''`,
+    serviceMonth ?? null,
   );
   // weekday(0=일 … 6=토) → 요일명. 월(Mon)~일(Sun) 순으로 정렬해 돌려준다(요일 탭 표시 순서).
   const ORDER = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];

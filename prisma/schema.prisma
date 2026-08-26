@@ -2374,6 +2374,7 @@ model SeasonalDispatchRoute {
 // 상세 근거는 prisma/migrations/20260727120000_add_regular_dispatch_route/migration.sql 참고.
 model RegularDispatchRoute {
   id            String   @id @default(dbgenerated("(gen_random_uuid())::text"))
+  serviceMonth  String   @default("2026-09") // 'YYYY-MM' — 월별 차량표 스냅샷
   dayOfWeek     String // 'Mon' | 'Tue' | 'Wed' | 'Thu' | 'Fri' | 'Sat' | 'Sun'
   direction     String // 'PICKUP' | 'DROPOFF'
   payload       Json // 조정된 vehicles 스냅샷(정차 순서·시각·경로 포함)
@@ -2383,7 +2384,7 @@ model RegularDispatchRoute {
   createdAt     DateTime @default(now()) @db.Timestamptz(6)
   updatedAt     DateTime @default(now()) @updatedAt @db.Timestamptz(6)
 
-  @@unique([dayOfWeek, direction]) // 요일·방향당 저장 1건
+  @@unique([serviceMonth, dayOfWeek, direction]) // 월·요일·방향당 저장 1건
 }
 
 // 기사님 전용 링크 — 토큰 → (날짜×방향). 상세: prisma/migrations/20260727000000_add_shuttle_run_link_and_boarding
@@ -2450,6 +2451,7 @@ model DriverLocation {
 // 정규 수업 셔틀 운행리스트(구글 시트 이관본). 요일별 하루 타임라인의 정차 하나 = 1행.
 model RegularShuttleStop {
   id           String   @id @default(dbgenerated("(gen_random_uuid())::text"))
+  serviceMonth String   @default("2026-09") // 'YYYY-MM' — 가져온 차량 시트의 적용 월
   weekday      Int
   classTime    String?
   arriveTime   String?
@@ -2464,7 +2466,7 @@ model RegularShuttleStop {
   longitude    Float?
   importedAt   DateTime @default(now())
 
-  @@index([weekday, sortOrder])
+  @@index([serviceMonth, weekday, sortOrder])
 }
 
 // 예약 발송 대기열 — "보낼 문자를 미리 얼려 두는" 큐.

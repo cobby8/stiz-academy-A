@@ -10,10 +10,10 @@ export const dynamic = "force-dynamic";
 export async function POST(request: Request) {
   try {
     await requireAdmin();
-    const body = await request.json().catch(() => ({})) as { direction?: string; date?: string | null };
+    const body = await request.json().catch(() => ({})) as { direction?: string; date?: string | null; serviceMonth?: string | null };
     const direction: DispatchDirection = body.direction === "DROPOFF" ? "DROPOFF" : "PICKUP";
     // RouteSection 의 date prop = 요일 문자열. computeRegularDispatch 는 dayOfWeek 로 받는다.
-    const suggestion = await computeRegularDispatch({ direction, dayOfWeek: body.date ?? undefined });
+    const suggestion = await computeRegularDispatch({ direction, dayOfWeek: body.date ?? undefined, serviceMonth: body.serviceMonth ?? undefined });
     return NextResponse.json(suggestion, { headers: { "Cache-Control": "no-store" } });
   } catch (e) {
     console.error("[regular dispatch POST]", e);

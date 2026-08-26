@@ -14,11 +14,12 @@ const DOW_LABEL: Record<string, string> = {
   Mon: "월요일", Tue: "화요일", Wed: "수요일", Thu: "목요일", Fri: "금요일", Sat: "토요일", Sun: "일요일",
 };
 
-export default function RegularDispatchClient({ weekdays, initialDay, initialPickup, initialDropoff }: {
+export default function RegularDispatchClient({ weekdays, initialDay, initialPickup, initialDropoff, serviceMonth }: {
   weekdays: string[];            // 셔틀 학생이 있는 요일 목록("Mon" 등, 월→일 정렬)
   initialDay: string;            // 최초 표시 요일
   initialPickup: DispatchSuggestion;
   initialDropoff: DispatchSuggestion;
+  serviceMonth: string;
 }) {
   const [day, setDay] = useState<string>(initialDay);
 
@@ -46,8 +47,8 @@ export default function RegularDispatchClient({ weekdays, initialDay, initialPic
 
         {/* 하루 타임라인: 등원 → 하원. date prop 자리에 요일 문자열을 넘긴다(RouteSection 은 이를 저장/조회 키로만 쓴다). */}
         <div className="mt-2 space-y-3">
-          <RouteSection initial={initialPickup} date={day} refreshKey={0} apiBase={REGULAR_API} rosterEditable={false} />
-          <RouteSection initial={initialDropoff} date={day} refreshKey={0} apiBase={REGULAR_API} rosterEditable={false} />
+          <RouteSection initial={initialPickup} date={day} refreshKey={0} apiBase={REGULAR_API} rosterEditable={false} serviceMonth={serviceMonth} />
+          <RouteSection initial={initialDropoff} date={day} refreshKey={0} apiBase={REGULAR_API} rosterEditable={false} serviceMonth={serviceMonth} />
         </div>
       </div>
     </div>

@@ -57,6 +57,7 @@ export type SavedRegularDispatchRoute = {
 export async function getSavedRegularDispatchRoute(
   dayOfWeek: string,
   direction: string,
+  serviceMonth?: string,
 ): Promise<SavedRegularDispatchRoute | null> {
   const dow = normDow(dayOfWeek), dir = normDir(direction);
   if (!dow || !dir) return null;
@@ -64,9 +65,10 @@ export async function getSavedRegularDispatchRoute(
     const rows = await prisma.$queryRawUnsafe<Record<string, unknown>[]>(
       `SELECT "payload", "classStart", "classEnd", "updatedAt"
          FROM "RegularDispatchRoute"
-        WHERE "dayOfWeek" = $1 AND "direction" = $2
+        WHERE "serviceMonth" = COALESCE($3, (SELECT MAX("serviceMonth") FROM "RegularShuttleStop"))
+          AND "dayOfWeek" = $1 AND "direction" = $2
         LIMIT 1`,
-      dow, dir,
+      dow, dir, serviceMonth ?? null,
     );
     const r = rows[0];
     if (!r) return null;
@@ -79,7 +81,7 @@ export async function getSavedRegularDispatchRoute(
     try {
       // 유효 라이더 = 그 요일 × 방향 정규 명단. 좌표 없는 이용자(unassigned)도 "유효 재적"으로 쳐서
       // reconcile 이 살려 두게 한다(좌표만 나중에 채우면 자연 복귀). 식별키 = studentId(= shuttleRequestId 대입).
-      const roster = await getRegularShuttleRiders({ direction: dir, dayOfWeek: dow });
+      const roster = await getRegularShuttleRiders({ direction: dir, dayOfWeek: dow, serviceMonth });
       const allRiders = [...roster.riders, ...roster.unassigned];
       const validIds = new Set(allRiders.map((rider) => rider.studentId));
       // studentId → 현재 명단 라벨(저장본의 얼어붙은 정차 라벨을 텍스트만 자동갱신).
@@ -206,6 +208,7 @@ export async function getConfirmedRegularDispatchEtas(
 /** 조정된 정규 노선을 저장(덮어쓰기). 원장/관리자만. */
 export async function saveRegularDispatchRoute(input: {
   dayOfWeek: string; direction: string; vehicles: unknown[];
+  serviceMonth?: string;
   classStart?: string | null; classEnd?: string | null;
 }): Promise<{ savedAt: string | null }> {
   const admin = await requireAdmin();
@@ -213,17 +216,18 @@ export async function saveRegularDispatchRoute(input: {
   if (!dow || !dir) throw new Error("요일 또는 방향이 올바르지 않습니다.");
   const vehicles = Array.isArray(input.vehicles) ? input.vehicles : [];
   const payloadJson = JSON.stringify({ vehicles });
+  const serviceMonth = input.serviceMonth ?? new Date().toISOString().slice(0, 7);
   const rows = await prisma.$queryRawUnsafe<Record<string, unknown>[]>(
-    `INSERT INTO "RegularDispatchRoute" ("dayOfWeek","direction","payload","classStart","classEnd","savedByUserId","updatedAt")
-     VALUES ($1, $2, $3::jsonb, $4, $5, $6, now())
-     ON CONFLICT ("dayOfWeek","direction") DO UPDATE SET
+    `INSERT INTO "RegularDispatchRoute" ("serviceMonth","dayOfWeek","direction","payload","classStart","classEnd","savedByUserId","updatedAt")
+     VALUES ($1, $2, $3, $4::jsonb, $5, $6, $7, now())
+     ON CONFLICT ("serviceMonth","dayOfWeek","direction") DO UPDATE SET
        "payload" = EXCLUDED."payload",
        "classStart" = EXCLUDED."classStart",
        "classEnd" = EXCLUDED."classEnd",
        "savedByUserId" = EXCLUDED."savedByUserId",
        "updatedAt" = now()
      RETURNING "updatedAt"`,
-    dow, dir, payloadJson,
+    serviceMonth, dow, dir, payloadJson,
     input.classStart ?? null, input.classEnd ?? null, admin.appUserId ?? null,
   );
   return { savedAt: isoOrNull(rows[0]?.updatedAt) };
@@ -238,11 +242,12 @@ export async function getRegularDispatchForView(
   dayOfWeek: string,
   direction: "PICKUP" | "DROPOFF",
   allowTmap: boolean,
+  serviceMonth?: string,
 ): Promise<DispatchSuggestion> {
   const dow = normDow(dayOfWeek) ?? "Mon";
   // 먼저 T맵 없이 기준정보를 얻는다(직선 추정 base).
-  const base = await computeRegularDispatch({ direction, dayOfWeek: dow, localOnly: true });
-  const saved = await getSavedRegularDispatchRoute(dow, direction);
+  const base = await computeRegularDispatch({ direction, dayOfWeek: dow, serviceMonth, localOnly: true });
+  const saved = await getSavedRegularDispatchRoute(dow, direction, serviceMonth);
   if (saved && Array.isArray(saved.vehicles) && saved.vehicles.length) {
     return {
       ...base,
@@ -255,5 +260,5 @@ export async function getRegularDispatchForView(
     };
   }
   // 저장본이 없을 때만: 관리자 첫 진입은 T맵으로 계산, 그 외는 직선 추정 base.
-  return allowTmap ? computeRegularDispatch({ direction, dayOfWeek: dow, localOnly: false }) : base;
+  return allowTmap ? computeRegularDispatch({ direction, dayOfWeek: dow, serviceMonth, localOnly: false }) : base;
 }

@@ -4,6 +4,7 @@
 
 export type RegularShuttleStop = {
   id?: string;              // DB 행 id(조회 시 채워짐). 순서·시각 저장에 쓴다.
+  serviceMonth?: string;    // 'YYYY-MM'. 월별 차량표 스냅샷
   weekday: number;          // 0=일 … 6=토 (월=1)
   weekdayLabel: string;     // '월'…'금'
   classTime: string | null; // '17:00~18:00' 등(2호점 경유 행은 없을 수 있음)

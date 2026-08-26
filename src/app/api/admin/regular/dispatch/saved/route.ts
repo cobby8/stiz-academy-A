@@ -13,7 +13,8 @@ export async function GET(request: Request) {
     const url = new URL(request.url);
     const dayOfWeek = url.searchParams.get("date") ?? ""; // RouteSection 은 date=요일 로 보낸다
     const direction = url.searchParams.get("direction") ?? "PICKUP";
-    const saved = await getSavedRegularDispatchRoute(dayOfWeek, direction);
+    const serviceMonth = url.searchParams.get("serviceMonth") ?? undefined;
+    const saved = await getSavedRegularDispatchRoute(dayOfWeek, direction, serviceMonth);
     return NextResponse.json({ saved }, { headers: { "Cache-Control": "no-store" } });
   } catch (e) {
     console.error("[regular dispatch/saved GET]", e);
@@ -24,13 +25,14 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     const body = await request.json().catch(() => null) as {
-      date?: string; direction?: string; vehicles?: unknown[]; classStart?: string | null; classEnd?: string | null;
+      date?: string; direction?: string; vehicles?: unknown[]; classStart?: string | null; classEnd?: string | null; serviceMonth?: string;
     } | null;
     if (!body?.date || !body.direction || !Array.isArray(body.vehicles)) {
       return NextResponse.json({ error: "요청 형식이 올바르지 않습니다." }, { status: 400 });
     }
     const { savedAt } = await saveRegularDispatchRoute({
       dayOfWeek: body.date, direction: body.direction, vehicles: body.vehicles,
+      serviceMonth: body.serviceMonth,
       classStart: body.classStart ?? null, classEnd: body.classEnd ?? null,
     });
     return NextResponse.json({ ok: true, savedAt });

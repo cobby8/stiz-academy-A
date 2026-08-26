@@ -126,7 +126,7 @@ function relocateInPlace(
 //   정규 셔틀은 "/api/admin/regular/dispatch" 를 주입해 같은 UI 를 재사용한다.
 // rosterEditable: 명단 편집(무료탑승 드래그·학생 상세 모달) 허용 여부. 방학특강만 true(기본).
 //   정규는 명단 편집 엔드포인트/상세 모달이 방학특강 전용이라 false 로 끈다(회귀 방지).
-export default function RouteSection({ initial, date, refreshKey, apiBase = "/api/admin/seasonal/dispatch", rosterEditable = true }: { initial: DispatchSuggestion; date: string; refreshKey: number; apiBase?: string; rosterEditable?: boolean }) {
+export default function RouteSection({ initial, date, refreshKey, apiBase = "/api/admin/seasonal/dispatch", rosterEditable = true, serviceMonth }: { initial: DispatchSuggestion; date: string; refreshKey: number; apiBase?: string; rosterEditable?: boolean; serviceMonth?: string }) {
   const direction = initial.direction;
   const isPickup = direction === "PICKUP";
   const [sug, setSug] = useState<DispatchSuggestion>(initial);
@@ -159,7 +159,7 @@ export default function RouteSection({ initial, date, refreshKey, apiBase = "/ap
     try {
       const r = await fetch(apiBase, {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ direction, date: forDate || null }),
+        body: JSON.stringify({ direction, date: forDate || null, serviceMonth: serviceMonth ?? null }),
       });
       const j = await r.json();
       if (!r.ok) throw new Error(j?.error || "실패");
@@ -172,7 +172,7 @@ export default function RouteSection({ initial, date, refreshKey, apiBase = "/ap
 
   async function loadAndApplySaved(forDate: string): Promise<boolean> {
     try {
-      const r = await fetch(`${apiBase}/saved?date=${encodeURIComponent(forDate)}&direction=${direction}`, { cache: "no-store" });
+      const r = await fetch(`${apiBase}/saved?date=${encodeURIComponent(forDate)}&direction=${direction}${serviceMonth ? `&serviceMonth=${encodeURIComponent(serviceMonth)}` : ""}`, { cache: "no-store" });
       const j = await r.json();
       if (!r.ok || !j?.saved) return false;
       const saved = j.saved as { vehicles: DispatchSuggestion["vehicles"]; classStart: string | null; classEnd: string | null; savedAt: string | null; added?: DispatchChange[]; locationChanged?: DispatchChange[] };
@@ -213,7 +213,7 @@ export default function RouteSection({ initial, date, refreshKey, apiBase = "/ap
     try {
       const r = await fetch(`${apiBase}/saved`, {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ date: sug.date, direction: sug.direction, vehicles: sug.vehicles, classStart: sug.classStart, classEnd: sug.classEnd }),
+        body: JSON.stringify({ date: sug.date, direction: sug.direction, vehicles: sug.vehicles, classStart: sug.classStart, classEnd: sug.classEnd, serviceMonth: serviceMonth ?? null }),
       });
       const j = await r.json();
       if (!r.ok) throw new Error(j?.error || "저장 실패");

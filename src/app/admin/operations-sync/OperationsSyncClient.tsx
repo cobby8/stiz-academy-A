@@ -8,6 +8,11 @@ import {
   createOperationsRequest,
   recordOperationsExternalCheck,
 } from "@/app/actions/operations-sync";
+import {
+  applyRallyzAttendanceSync,
+  previewRallyzAttendanceSync,
+  type RallyzAttendanceSyncRunRow,
+} from "@/app/actions/rallyz-attendance-sync";
 
 type SyncAttempt = { target: "SHEET" | "RALLYZ" | "WEBSITE"; status: string };
 type Command = {
@@ -31,10 +36,11 @@ const KIND_LABEL: Record<string, string> = {
 };
 const TARGET_LABEL = { SHEET: "시트", RALLYZ: "랠리즈", WEBSITE: "홈페이지" } as const;
 
-export default function OperationsSyncClient({ initialRequests }: { initialRequests: RequestRow[] }) {
+export default function OperationsSyncClient({ initialRequests, initialAttendanceRuns }: { initialRequests: RequestRow[]; initialAttendanceRuns: RallyzAttendanceSyncRunRow[] }) {
   const [sourceText, setSourceText] = useState("");
   const [targetMonth, setTargetMonth] = useState(new Date().toISOString().slice(0, 7));
   const [message, setMessage] = useState("");
+  const [attendanceJson, setAttendanceJson] = useState("");
   const [isPending, startTransition] = useTransition();
 
   function submit() {
@@ -77,6 +83,19 @@ export default function OperationsSyncClient({ initialRequests }: { initialReque
     runRequestAction(() => applyOperationsSheet(commandId), "구글 시트를 변경하고 저장 결과를 재확인했습니다.");
   }
 
+  function previewAttendance() {
+    startTransition(async () => {
+      try {
+        await previewRallyzAttendanceSync(attendanceJson);
+        setMessage("랠리즈 출석 대조가 끝났습니다. 보류 항목을 확인한 뒤 확정 반영해 주세요.");
+        setAttendanceJson("");
+        window.location.reload();
+      } catch (error) {
+        setMessage(error instanceof Error ? error.message : "출석 자료를 대조하지 못했습니다.");
+      }
+    });
+  }
+
   return (
     <div className="mx-auto max-w-6xl space-y-6">
       <header>
@@ -96,6 +115,19 @@ export default function OperationsSyncClient({ initialRequests }: { initialReque
         <div className="mt-4 flex items-center justify-between gap-3">
           <p role="status" className="text-sm font-bold text-amber-700 dark:text-amber-300">{message || "저장하면 미리보기 명령만 생성되며 자동 반영되지 않습니다."}</p>
           <button type="button" disabled={isPending || !sourceText.trim()} onClick={submit} className="min-h-11 rounded-xl bg-[var(--brand-accent)] px-5 font-black text-[var(--brand-accent-contrast)] disabled:opacity-50">{isPending ? "분석 중…" : "변경 계획 만들기"}</button>
+        </div>
+      </section>
+
+      <section className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-700 dark:bg-gray-900">
+        <h2 className="text-lg font-black text-gray-950 dark:text-white">랠리즈 출석 가져오기</h2>
+        <p className="mt-1 text-sm text-gray-500">랠리즈에서 읽은 날짜·반·학생·상태 JSON을 먼저 대조합니다. 조퇴·미처리와 기존 수동 출석 충돌은 자동으로 보류됩니다.</p>
+        <textarea value={attendanceJson} onChange={(event) => setAttendanceJson(event.target.value)} rows={6} placeholder={'[{"date":"2026-08-26","className":"3. 수요일 3교시","studentName":"김시현","status":"출석"}]'} className="mt-4 w-full resize-y rounded-xl border border-gray-300 bg-white px-3 py-3 font-mono text-sm dark:border-gray-600 dark:bg-gray-950" />
+        <div className="mt-3 flex justify-end"><button type="button" disabled={isPending || !attendanceJson.trim()} onClick={previewAttendance} className="min-h-11 rounded-xl border border-gray-300 px-4 font-black disabled:opacity-50 dark:border-gray-600">출석 대조하기</button></div>
+        <div className="mt-5 space-y-3">
+          {initialAttendanceRuns.map((run) => <article key={run.id} className="rounded-xl border border-gray-200 p-4 dark:border-gray-700">
+            <div className="flex flex-wrap items-center justify-between gap-2"><p className="font-black">{run.sourceDate} · {run.status}</p>{run.items.some((item) => item.status === "PENDING") ? <button type="button" disabled={isPending} onClick={() => { if (window.confirm("보류되지 않은 랠리즈 출석을 홈페이지에 반영할까요? 기존 수동 기록은 덮어쓰지 않습니다.")) runRequestAction(() => applyRallyzAttendanceSync(run.id), "랠리즈 출석을 홈페이지에 반영했습니다."); }} className="min-h-10 rounded-xl bg-[var(--brand-accent)] px-3 text-xs font-black text-[var(--brand-accent-contrast)]">확정 반영</button> : null}</div>
+            <div className="mt-3 overflow-x-auto"><table className="w-full min-w-[620px] text-left text-sm"><thead><tr className="border-b text-xs text-gray-500"><th className="p-2">학생</th><th className="p-2">반</th><th className="p-2">랠리즈</th><th className="p-2">홈페이지</th><th className="p-2">판정</th></tr></thead><tbody>{run.items.map((item) => <tr key={item.id} className="border-b last:border-0 dark:border-gray-800"><td className="p-2 font-black">{item.studentName}</td><td className="p-2">{item.sourceClassName}</td><td className="p-2">{item.sourceStatus}</td><td className="p-2">{item.siteStatus || "자동변환 안 함"}</td><td className="p-2">{item.holdReason ? <span className="font-bold text-red-600">확인보류: {item.holdReason}</span> : <span className="font-bold text-emerald-600">{item.status}</span>}</td></tr>)}</tbody></table></div>
+          </article>)}
         </div>
       </section>
 

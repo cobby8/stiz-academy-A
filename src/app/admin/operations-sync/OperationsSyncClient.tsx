@@ -21,6 +21,10 @@ type Command = {
   studentName: string | null;
   kind: string;
   effectiveMonth: string;
+  effectiveDate: string | null;
+  fromClassName: string | null;
+  toClassName: string | null;
+  canExecute: boolean;
   confidence: string;
   status: string;
   holdReason: string | null;
@@ -36,6 +40,9 @@ const KIND_LABEL: Record<string, string> = {
   SHUTTLE_CHANGE: "셔틀 변경", CONTACT_UPDATE: "연락처 변경", BILLING_CORRECTION: "청구 수정", UNKNOWN: "확인 필요",
 };
 const TARGET_LABEL = { SHEET: "시트", RALLYZ: "랠리즈", WEBSITE: "홈페이지" } as const;
+// 서버가 KST 현재일로 계산한 값만 사용한다. 브라우저 시계는 실행 가능 여부를 결정하지 않는다.
+const isFutureCommand = (command: Command) => Boolean(command.effectiveDate && !command.canExecute);
+const requestHasFutureCommand = (request: RequestRow) => request.commands.some((command) => command.status !== "HELD" && isFutureCommand(command));
 
 export default function OperationsSyncClient({ initialRequests, initialAttendanceRuns, linkStudents }: { initialRequests: RequestRow[]; initialAttendanceRuns: RallyzAttendanceSyncRunRow[]; linkStudents: ParentRequestLinkStudent[] }) {
   const [sourceText, setSourceText] = useState("");
@@ -47,8 +54,8 @@ export default function OperationsSyncClient({ initialRequests, initialAttendanc
   function submit() {
     startTransition(async () => {
       try {
-        const result = await createOperationsRequest(sourceText, targetMonth);
-        setMessage(`${result.commandCount}개의 변경 명령을 만들었습니다. 외부 시스템에는 아직 반영하지 않았습니다.`);
+        await createOperationsRequest(sourceText, targetMonth);
+        setMessage("직접 입력 요청을 저장했습니다.");
         setSourceText("");
         window.location.reload();
       } catch (error) {
@@ -79,9 +86,9 @@ export default function OperationsSyncClient({ initialRequests, initialAttendanc
     );
   }
 
-  function applySheet(commandId: string, studentName: string | null) {
-    if (!window.confirm(`${studentName || "해당 학생"}의 이름·적용 월·생년월일/전화가 일치하는 구글 시트 행을 휴원/퇴원으로 실제 변경합니다. 실행할까요?`)) return;
-    runRequestAction(() => applyOperationsSheet(commandId), "구글 시트를 변경하고 저장 결과를 재확인했습니다.");
+  function applySheet(command: Command) {
+    if (!window.confirm(`${command.studentName || "해당 학생"}의 ${command.fromClassName || "확정 수업"}을 ${command.effectiveDate || "확정일"} 기준으로 구글 시트에서 휴원/퇴원 처리합니다. 다른 수업이 같은 행에 있으면 자동 반영하지 않습니다. 실행할까요?`)) return;
+    runRequestAction(() => applyOperationsSheet(command.id), "구글 시트를 변경하고 저장 결과를 재확인했습니다.");
   }
 
   function previewAttendance() {
@@ -101,7 +108,7 @@ export default function OperationsSyncClient({ initialRequests, initialAttendanc
     <div className="mx-auto max-w-6xl space-y-6">
       <header>
         <h1 className="text-2xl font-black text-gray-950 dark:text-white">3중 동기화 입력함</h1>
-        <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">학부모 요청을 붙여넣고 시트·랠리즈·홈페이지의 반영 계획을 함께 관리합니다.</p>
+        <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">학부모가 확인한 적용일·대상 수업을 기준으로 시트·랠리즈·홈페이지의 반영 계획을 관리합니다.</p>
       </header>
 
       <ParentRequestLinkPanel students={linkStudents} />
@@ -112,12 +119,12 @@ export default function OperationsSyncClient({ initialRequests, initialAttendanc
             <input type="month" value={targetMonth} onChange={(event) => setTargetMonth(event.target.value)} className="mt-2 w-full rounded-xl border border-gray-300 bg-white px-3 py-2 dark:border-gray-600 dark:bg-gray-950" />
           </label>
           <label className="text-sm font-bold text-gray-700 dark:text-gray-200">학부모 요청
-            <textarea value={sourceText} onChange={(event) => setSourceText(event.target.value)} rows={5} placeholder="예: 김민서 9월 휴원, 서정빈 셔틀 탑승" className="mt-2 w-full resize-y rounded-xl border border-gray-300 bg-white px-3 py-3 dark:border-gray-600 dark:bg-gray-950" />
+            <textarea disabled value={sourceText} onChange={(event) => setSourceText(event.target.value)} rows={5} placeholder="학생별 학부모 요청 링크를 생성해 접수해 주세요." className="mt-2 w-full resize-y rounded-xl border border-gray-300 bg-gray-100 px-3 py-3 text-gray-500 dark:border-gray-600 dark:bg-gray-800" />
           </label>
         </div>
         <div className="mt-4 flex items-center justify-between gap-3">
-          <p role="status" className="text-sm font-bold text-amber-700 dark:text-amber-300">{message || "저장하면 미리보기 명령만 생성되며 자동 반영되지 않습니다."}</p>
-          <button type="button" disabled={isPending || !sourceText.trim()} onClick={submit} className="min-h-11 rounded-xl bg-[var(--brand-accent)] px-5 font-black text-[var(--brand-accent-contrast)] disabled:opacity-50">{isPending ? "분석 중…" : "변경 계획 만들기"}</button>
+          <p role="status" className="text-sm font-bold text-amber-700 dark:text-amber-300">{message || "직접 입력은 적용일·대상 반이 빠질 수 있어 중단했습니다. 위에서 학생별 요청 링크를 생성해 주세요."}</p>
+          <button type="button" disabled onClick={submit} className="min-h-11 rounded-xl bg-gray-300 px-5 font-black text-gray-600 disabled:opacity-70">직접 입력 중단</button>
         </div>
       </section>
 
@@ -142,7 +149,7 @@ export default function OperationsSyncClient({ initialRequests, initialAttendanc
               <div className="flex flex-wrap items-center gap-2">
                 <span className="rounded-full bg-gray-100 px-3 py-1 text-xs font-black text-gray-700 dark:bg-gray-800 dark:text-gray-200">{request.status}</span>
                 {(["DRAFT", "HELD", "PARTIAL"].includes(request.status)) && <button type="button" disabled={isPending} onClick={() => runRequestAction(() => approveOperationsRequest(request.id), request.status === "DRAFT" ? "데이터 변경 미리보기를 승인했습니다. 청구서와 알림은 계속 보류됩니다." : "현재 수강 상태로 미리보기를 다시 만들었습니다. 내용을 확인한 뒤 반영해 주세요.")} className="min-h-10 rounded-xl border border-gray-300 px-3 text-xs font-black dark:border-gray-600">{request.status === "DRAFT" ? "데이터 변경만 승인" : "현재 상태로 재검토"}</button>}
-                {(["APPROVED", "PENDING", "PARTIAL"].includes(request.status)) && <button type="button" disabled={isPending} onClick={() => { if (window.confirm("시트와 랠리즈 확인 결과대로 홈페이지 수강 상태를 최종 변경할까요?")) runRequestAction(() => applyOperationsWebsite(request.id), "홈페이지 최종 반영과 3중 상태 검증을 완료했습니다."); }} className="min-h-10 rounded-xl bg-[var(--brand-accent)] px-3 text-xs font-black text-[var(--brand-accent-contrast)]">홈페이지 최종 반영</button>}
+                {(["APPROVED", "PENDING", "PARTIAL"].includes(request.status)) && <button type="button" disabled={isPending || requestHasFutureCommand(request)} title={requestHasFutureCommand(request) ? `적용일 ${request.commands.filter(isFutureCommand).map((command) => command.effectiveDate).sort()[0]}부터 실행할 수 있습니다.` : undefined} onClick={() => { if (window.confirm("시트와 랠리즈 확인 결과대로 홈페이지 수강 상태를 최종 변경할까요?")) runRequestAction(() => applyOperationsWebsite(request.id), "홈페이지 최종 반영과 3중 상태 검증을 완료했습니다."); }} className="min-h-10 rounded-xl bg-[var(--brand-accent)] px-3 text-xs font-black text-[var(--brand-accent-contrast)] disabled:opacity-40">홈페이지 최종 반영</button>}
               </div>
             </div>
             <div className="mt-3 grid gap-2 sm:grid-cols-2">
@@ -152,7 +159,7 @@ export default function OperationsSyncClient({ initialRequests, initialAttendanc
             <div className="mt-4 overflow-x-auto">
               <table className="w-full min-w-[760px] text-left text-sm">
                 <thead><tr className="border-b border-gray-200 text-xs text-gray-500 dark:border-gray-700"><th className="p-2">학생</th><th className="p-2">변경</th><th className="p-2">적용 월</th><th className="p-2">시트</th><th className="p-2">랠리즈</th><th className="p-2">홈페이지</th><th className="p-2">판정</th></tr></thead>
-                <tbody>{request.commands.map((command) => <tr key={command.id} className="border-b border-gray-100 align-top last:border-0 dark:border-gray-800"><td className="p-2 font-black">{command.studentName || "미확인"}{command.beforeJson?.enrollments?.length ? <p className="mt-1 text-xs font-medium text-gray-500">{command.beforeJson.enrollments.map((row) => `${row.className} ${row.status}`).join(" · ")} → {command.afterJson?.enrollments?.[0]?.status}</p> : null}</td><td className="p-2">{KIND_LABEL[command.kind] || command.kind}</td><td className="p-2">{command.effectiveMonth}</td>{(["SHEET", "RALLYZ", "WEBSITE"] as const).map((target) => { const status = command.targets?.find((item) => item.target === target)?.status || "PENDING"; const sheetDone = command.targets?.find((item) => item.target === "SHEET")?.status === "SUCCEEDED"; const canConfirm = ["APPROVED", "PENDING", "PARTIAL"].includes(request.status) && target !== "WEBSITE" && status !== "SUCCEEDED" && command.status !== "HELD" && (target === "SHEET" || sheetDone); return <td key={target} className="p-2"><span className="rounded-full bg-amber-50 px-2 py-1 text-xs font-black text-amber-700 dark:bg-amber-950/40 dark:text-amber-200">{TARGET_LABEL[target]} · {status}</span>{canConfirm ? <button type="button" disabled={isPending} onClick={() => target === "SHEET" ? applySheet(command.id, command.studentName) : confirmRallyz(command)} className="mt-2 block min-h-9 rounded-lg border border-gray-300 px-2 text-xs font-black dark:border-gray-600">{target === "SHEET" ? "시트 자동 반영" : "랠리즈 처리 후 확인"}</button> : null}</td>; })}<td className="p-2">{command.holdReason ? <span className="font-bold text-red-600">확인보류: {command.holdReason}</span> : command.status === "SYNCED" ? <span className="font-bold text-emerald-600">3곳 일치</span> : <span className="font-bold text-blue-600">반영 대기</span>}</td></tr>)}</tbody>
+                <tbody>{request.commands.map((command) => <tr key={command.id} className="border-b border-gray-100 align-top last:border-0 dark:border-gray-800"><td className="p-2 font-black">{command.studentName || "미확인"}{command.beforeJson?.enrollments?.length ? <p className="mt-1 text-xs font-medium text-gray-500">{command.beforeJson.enrollments.map((row) => `${row.className} ${row.status}`).join(" · ")} → {command.afterJson?.enrollments?.[0]?.status}</p> : null}</td><td className="p-2">{KIND_LABEL[command.kind] || command.kind}<p className="mt-1 text-xs text-gray-500">{command.fromClassName || "현재 반 미확정"}{command.toClassName ? ` → ${command.toClassName}` : ""}</p></td><td className="p-2"><span className="font-black">{command.effectiveDate || "날짜 미확정"}</span>{isFutureCommand(command) ? <p className="mt-1 text-xs font-bold text-amber-700">{command.effectiveDate}부터 실행 가능</p> : null}</td>{(["SHEET", "RALLYZ", "WEBSITE"] as const).map((target) => { const status = command.targets?.find((item) => item.target === target)?.status || "PENDING"; const sheetDone = command.targets?.find((item) => item.target === "SHEET")?.status === "SUCCEEDED"; const canOffer = ["APPROVED", "PENDING", "PARTIAL"].includes(request.status) && target !== "WEBSITE" && status !== "SUCCEEDED" && command.status !== "HELD" && (target === "SHEET" || sheetDone); const future = isFutureCommand(command); return <td key={target} className="p-2"><span className="rounded-full bg-amber-50 px-2 py-1 text-xs font-black text-amber-700 dark:bg-amber-950/40 dark:text-amber-200">{TARGET_LABEL[target]} · {status}</span>{canOffer ? <button type="button" disabled={isPending || future} title={future ? `${command.effectiveDate}부터 실행할 수 있습니다.` : undefined} onClick={() => target === "SHEET" ? applySheet(command) : confirmRallyz(command)} className="mt-2 block min-h-9 rounded-lg border border-gray-300 px-2 text-xs font-black disabled:opacity-40 dark:border-gray-600">{target === "SHEET" ? "시트 자동 반영" : "랠리즈 처리 후 확인"}</button> : null}</td>; })}<td className="p-2">{command.holdReason ? <span className="font-bold text-red-600">확인보류: {command.holdReason}</span> : command.status === "SYNCED" ? <span className="font-bold text-emerald-600">3곳 일치</span> : <span className="font-bold text-blue-600">반영 대기</span>}</td></tr>)}</tbody>
               </table>
             </div>
           </article>

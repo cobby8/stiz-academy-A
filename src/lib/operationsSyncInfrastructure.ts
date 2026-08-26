@@ -97,6 +97,9 @@ export async function ensureOperationsSyncInfrastructure() {
     `ALTER TABLE "OperationsRequest" ADD COLUMN IF NOT EXISTS "submittedAt" TIMESTAMPTZ`,
     `ALTER TABLE "OperationsCommand" ADD COLUMN IF NOT EXISTS "billingStatus" TEXT NOT NULL DEFAULT 'HELD'`,
     `ALTER TABLE "OperationsCommand" ADD COLUMN IF NOT EXISTS "notificationStatus" TEXT NOT NULL DEFAULT 'HELD'`,
+    // 외부 시스템 호출 중에는 짧은 임대 토큰을 잡아 동시 실행을 막는다.
+    `ALTER TABLE "OperationsSyncAttempt" ADD COLUMN IF NOT EXISTS "processingToken" TEXT`,
+    `ALTER TABLE "OperationsSyncAttempt" ADD COLUMN IF NOT EXISTS "processingStartedAt" TIMESTAMPTZ`,
     `CREATE TABLE IF NOT EXISTS "ParentOperationsRequestLink" (
       id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
       "studentId" TEXT NOT NULL REFERENCES "Student"(id) ON DELETE CASCADE,

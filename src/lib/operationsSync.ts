@@ -62,9 +62,25 @@ export function operationsRequestKey(input: {
   kind: OperationsKind;
   effectiveMonth: string;
   scope?: string;
+  effectiveDate?: string | null;
+  fromClassId?: string | null;
+  toClassId?: string | null;
+  shuttleIntent?: string | null;
+  details?: string | null;
 }): string {
+  const legacyFields = [
+    input.scope || "ADMIN",
+    input.sourceText.trim().replace(/\s+/g, " "),
+    input.studentName || "",
+    input.kind,
+    input.effectiveMonth,
+  ];
+  const hasStructuredIdentity = Boolean(
+    input.effectiveDate || input.fromClassId || input.toClassId || input.shuttleIntent || input.details,
+  );
   return createHash("sha256")
-    .update([input.scope || "ADMIN", input.sourceText.trim().replace(/\s+/g, " "), input.studentName || "", input.kind, input.effectiveMonth].join("|"))
+    // 구조화 필드가 없는 기존 관리자 명령은 배포 전 키와 동일하게 유지한다.
+    .update((hasStructuredIdentity ? [...legacyFields, input.effectiveDate || "", input.fromClassId || "", input.toClassId || "", input.shuttleIntent || "", input.details?.trim().replace(/\s+/g, " ") || ""] : legacyFields).join("|"))
     .digest("hex");
 }
 

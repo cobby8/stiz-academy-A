@@ -24,9 +24,10 @@ test("공개 토큰은 원문 대신 SHA-256 해시만 DB에 저장한다", () =
   assert.match(schema, /tokenHash\s+String\s+@unique/);
 });
 
-test("만료·취소된 링크는 미리보기와 제출 모두 거부한다", () => {
+test("만료·취소·사용 완료 링크는 제출을 거부하고 미리보기 상태를 구분한다", () => {
   assert.match(action, /if \(row\.expiresAt\.getTime\(\) <= Date\.now\(\)\) return \{ status: "EXPIRED" \}/);
-  assert.match(action, /if \(!row \|\| row\.revokedAt\) return \{ status: "INVALID" \}/);
+  assert.match(action, /if \(!row\) return \{ status: "INVALID" \}/);
+  assert.match(action, /if \(row\.revokedAt\) return \{ status: row\.lastUsedAt \? "USED" : "INVALID" \}/);
   assert.match(action, /l\."revokedAt" IS NULL AND l\."expiresAt">now\(\)/);
   assert.match(action, /SET "revokedAt"=now\(\)/);
 });
@@ -111,7 +112,7 @@ test("홈페이지 반영은 승인 당시 상태와 영향 행 수가 모두 �
   assert.match(applyBody, /beforeJson/);
   assert.match(applyBody, /WHERE id=\$1 AND status=\$3/);
   assert.match(applyBody, /if \(affected !== 1\) throw new Error\(`ENROLLMENT_CONFLICT:/);
-  assert.match(applyBody, /target='WEBSITE' AND status='PENDING'/);
+  assert.match(applyBody, /target='WEBSITE' AND "processingToken"=\$2 AND status IN \('PENDING','FAILED'\)/);
   assert.match(applyBody, /if \(attemptAffected !== 1\) throw new Error\("WEBSITE_ATTEMPT_CONFLICT"\)/);
   assert.match(applyBody, /await prisma\.\$transaction/);
   assert.match(applyBody, /markWebsiteConflict/);
@@ -121,8 +122,8 @@ test("상태 집계는 사람이 재검토해야 하는 HELD를 보존한다", (
   const refreshStart = adminAction.indexOf("function refreshOperationsStatuses");
   assert.notEqual(refreshStart, -1);
   const refreshBody = adminAction.slice(refreshStart);
-  assert.match(refreshBody, /c\.status AS "commandStatus"/);
-  assert.match(refreshBody, /row\.commandStatus === "HELD"\s*\? "HELD"/);
+  assert.match(refreshBody, /status AS "commandStatus"/);
+  assert.match(refreshBody, /command\.commandStatus === "HELD"\s*\? "HELD"/);
   assert.match(refreshBody, /allHeld \? "HELD" : hasHeld \|\| hasPartial \? "PARTIAL"/);
 });
 

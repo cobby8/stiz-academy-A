@@ -1,7 +1,8 @@
 import { google } from "googleapis";
 // @ts-expect-error -- Node 타입 제거 기반 단위 테스트는 런타임 확장자를 요구한다.
 import { parseGoogleServiceAccount } from "./googleServiceAccount.ts";
-import { toKstYmd } from "./datetime/kst";
+// @ts-expect-error -- Node 타입 제거 기반 단위 테스트는 런타임 확장자를 요구한다.
+import { toKstYmd } from "./datetime/kst.ts";
 
 const DEFAULT_SPREADSHEET_ID = "12xfQWT6OYa0hH2Ajei7E48CF2aUh6vZ8WWeFeocZrzY";
 const REGISTRATION_SHEET = "등록";
@@ -14,6 +15,9 @@ type SheetIdentity = {
   parentPhone: string | null;
   targetMonth: string;
   kind: "PAUSE" | "WITHDRAW";
+  className: string;
+  classDayOfWeek: string;
+  classSlotKey: string | null;
 };
 
 function digits(value: unknown) {
@@ -31,7 +35,35 @@ function birthKey(value: unknown) {
   return `${parts[0]}-${String(Number(parts[1])).padStart(2, "0")}-${String(Number(parts[2])).padStart(2, "0")}`;
 }
 
-export function findSheetEnrollmentRows(rows: unknown[][], input: Pick<SheetIdentity, "studentName" | "birthDate" | "parentPhone" | "targetMonth">) {
+const SHEET_DAY_COLUMN: Record<string, number> = {
+  MONDAY: 17, MON: 17, "월": 17, "월요일": 17,
+  TUESDAY: 18, TUE: 18, "화": 18, "화요일": 18,
+  WEDNESDAY: 19, WED: 19, "수": 19, "수요일": 19,
+  THURSDAY: 20, THU: 20, "목": 20, "목요일": 20,
+  FRIDAY: 21, FRI: 21, "금": 21, "금요일": 21,
+  SATURDAY: 22, SAT: 22, "토": 22, "토요일": 22,
+  SUNDAY: 23, SUN: 23, "일": 23, "일요일": 23,
+};
+
+function classMatches(row: unknown[], input: Pick<SheetIdentity, "className" | "classDayOfWeek" | "classSlotKey">) {
+  const column = SHEET_DAY_COLUMN[String(input.classDayOfWeek).trim().toUpperCase()];
+  if (column === undefined) return false;
+  const cell = String(row[column] || "").replace(/\s+/g, "");
+  const period = `${input.className} ${input.classSlotKey || ""}`.match(/(\d{1,2})(?:\s*교시|$)/)?.[1];
+  return Boolean(cell) && (!period || cell.includes(`${period}교시`) || cell === period);
+}
+
+export function assertSheetRowHasOnlySelectedClass(row: unknown[], classDayOfWeek: string) {
+  const targetDayColumn = SHEET_DAY_COLUMN[String(classDayOfWeek).trim().toUpperCase()];
+  if (targetDayColumn === undefined) throw new Error("선택한 수업의 요일을 시트 열과 연결할 수 없습니다.");
+  const hasOtherClass = Array.from({ length: 7 }, (_, offset) => 17 + offset)
+    .some((column) => column !== targetDayColumn && String(row[column] || "").trim());
+  if (hasOtherClass) {
+    throw new Error("SHEET_SHARED_STATUS_CONFLICT:선택한 수업 행에 다른 요일 수업도 있어 공통 상태를 자동 변경할 수 없습니다. 시트에서 수업별 행을 분리하거나 직접 확인해 주세요.");
+  }
+}
+
+export function findSheetEnrollmentRows(rows: unknown[][], input: Pick<SheetIdentity, "studentName" | "birthDate" | "parentPhone" | "targetMonth"> & Partial<Pick<SheetIdentity, "className" | "classDayOfWeek" | "classSlotKey">>) {
   const expectedBirth = toKstYmd(input.birthDate);
   const expectedPhone = digits(input.parentPhone);
   const expectedMonth = monthLabel(input.targetMonth);
@@ -41,7 +73,8 @@ export function findSheetEnrollmentRows(rows: unknown[][], input: Pick<SheetIden
     if (String(row[3] || "").trim() !== input.studentName || String(row[7] || "").trim() !== expectedMonth) continue;
     const birthMatches = birthKey(row[24]) === expectedBirth;
     const phoneMatches = expectedPhone.length >= 8 && digits(row[27]).endsWith(expectedPhone.slice(-8));
-    if (birthMatches || phoneMatches) matches.push(index + 1);
+    const hasClassScope = Boolean(input.className && input.classDayOfWeek);
+    if ((birthMatches || phoneMatches) && (!hasClassScope || classMatches(row, input as SheetIdentity))) matches.push(index + 1);
   }
   return matches;
 }
@@ -70,6 +103,8 @@ export async function applySheetEnrollmentStatus(input: SheetIdentity) {
   const targetValue = input.kind === "PAUSE" ? "휴원" : "퇴원";
   const matches = findSheetEnrollmentRows(rows, input);
   if (matches.length === 0) throw new Error("등록 시트에서 이름·적용 월·생년월일/전화가 일치하는 행을 찾지 못했습니다.");
+  if (matches.length !== 1) throw new Error("등록 시트에서 대상 수업 행이 여러 건입니다. 자동 반영하지 않고 확인이 필요합니다.");
+  assertSheetRowHasOnlySelectedClass(rows[matches[0] - 1] || [], input.classDayOfWeek);
 
   const requests = matches
     .filter((rowNumber) => String(rows[rowNumber - 1]?.[8] || "").trim() !== targetValue)

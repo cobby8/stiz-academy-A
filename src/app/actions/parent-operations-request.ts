@@ -18,7 +18,7 @@ export type ParentOperationsLinkPreview = {
   status: "ACTIVE";
   studentName: string;
   expiresAt: string;
-} | { status: "EXPIRED" | "INVALID" };
+} | { status: "USED" | "EXPIRED" | "INVALID" };
 
 export type ActiveParentOperationsLink = {
   id: string;
@@ -119,13 +119,15 @@ export async function getActiveParentOperationsRequestLinks(): Promise<ActivePar
 export async function getParentOperationsLinkPreview(token: string): Promise<ParentOperationsLinkPreview> {
   if (!token || token.length > 200) return { status: "INVALID" };
   await ensureOperationsSyncInfrastructure();
-  const rows = await prisma.$queryRawUnsafe<Array<{ studentName: string; expiresAt: Date; revokedAt: Date | null }>>(
-    `SELECT s.name AS "studentName", l."expiresAt", l."revokedAt" FROM "ParentOperationsRequestLink" l
+  const rows = await prisma.$queryRawUnsafe<Array<{ studentName: string; expiresAt: Date; revokedAt: Date | null; lastUsedAt: Date | null }>>(
+    `SELECT s.name AS "studentName", l."expiresAt", l."revokedAt", l."lastUsedAt" FROM "ParentOperationsRequestLink" l
       JOIN "Student" s ON s.id=l."studentId"
      WHERE l."tokenHash"=$1 LIMIT 1`, tokenHash(token),
   );
   const row = rows[0];
-  if (!row || row.revokedAt) return { status: "INVALID" };
+  if (!row) return { status: "INVALID" };
+  // 제출로 소진된 링크와 관리자가 취소한 링크를 구분해 학부모에게 정확한 상태를 안내한다.
+  if (row.revokedAt) return { status: row.lastUsedAt ? "USED" : "INVALID" };
   if (row.expiresAt.getTime() <= Date.now()) return { status: "EXPIRED" };
   return { status: "ACTIVE", studentName: row.studentName, expiresAt: row.expiresAt.toISOString() };
 }
@@ -160,6 +162,11 @@ export async function submitParentOperationsRequest(token: string, sourceText: s
       studentName: link.studentName,
       kind: command.kind,
       effectiveMonth: command.effectiveDate.slice(0, 7),
+      effectiveDate: command.effectiveDate,
+      fromClassId: command.fromClassId,
+      toClassId: command.toClassId,
+      shuttleIntent: command.shuttleIntent,
+      details: command.details,
       scope: `PARENT_LINK:${link.id}`,
     }),
   }));

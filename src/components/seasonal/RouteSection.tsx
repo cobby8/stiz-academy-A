@@ -228,7 +228,7 @@ export default function RouteSection({ initial, date, refreshKey, apiBase = "/ap
     if (typeof window !== "undefined" && !window.confirm("이 요일의 저장된 노선을 삭제할까요? 삭제하면 자동 제안이 다시 기준이 됩니다.")) return;
     setSaving(true); setSaveMsg(null); setErr(null);
     try {
-      const r = await fetch(`${apiBase}/saved?date=${encodeURIComponent(sug.date)}&direction=${direction}`, { method: "DELETE" });
+      const r = await fetch(`${apiBase}/saved?date=${encodeURIComponent(sug.date)}&direction=${direction}${serviceMonth ? `&serviceMonth=${encodeURIComponent(serviceMonth)}` : ""}`, { method: "DELETE" });
       const j = await r.json().catch(() => ({}));
       if (!r.ok) throw new Error(j?.error || "삭제 실패");
       setSavedAt(null); setLoadedFromSaved(false); setSaveMsg("저장 노선을 삭제했습니다");

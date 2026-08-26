@@ -233,6 +233,19 @@ export async function saveRegularDispatchRoute(input: {
   return { savedAt: isoOrNull(rows[0]?.updatedAt) };
 }
 
+/** 해당 월·요일·방향의 저장 노선만 삭제한다. 자동 제안 원본 차량표는 삭제하지 않는다. */
+export async function deleteRegularDispatchRoute(dayOfWeek: string, direction: string, serviceMonth?: string): Promise<boolean> {
+  await requireAdmin();
+  const dow = normDow(dayOfWeek), dir = normDir(direction);
+  if (!dow || !dir) throw new Error("요일 또는 방향이 올바르지 않습니다.");
+  const month = serviceMonth ?? new Date().toISOString().slice(0, 7);
+  const count = await prisma.$executeRawUnsafe(
+    `DELETE FROM "RegularDispatchRoute" WHERE "serviceMonth"=$1 AND "dayOfWeek"=$2 AND "direction"=$3`,
+    month, dow, dir,
+  );
+  return Number(count) > 0;
+}
+
 /**
  * 조회용 노선(요일 × 방향) — 방학특강 getDispatchForView 의 정규판.
  *   1) 저장본이 있으면 그대로(reconcile 반영) 쓴다(T맵 0회).

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import RouteSection from "@/components/seasonal/RouteSection";
 import type { DispatchSuggestion } from "@/lib/seasonal/shuttle-optimize";
 
@@ -14,19 +15,28 @@ const DOW_LABEL: Record<string, string> = {
   Mon: "월요일", Tue: "화요일", Wed: "수요일", Thu: "목요일", Fri: "금요일", Sat: "토요일", Sun: "일요일",
 };
 
-export default function RegularDispatchClient({ weekdays, initialDay, initialPickup, initialDropoff, serviceMonth }: {
+export default function RegularDispatchClient({ weekdays, initialDay, initialPickup, initialDropoff, serviceMonth, months }: {
   weekdays: string[];            // 셔틀 학생이 있는 요일 목록("Mon" 등, 월→일 정렬)
   initialDay: string;            // 최초 표시 요일
   initialPickup: DispatchSuggestion;
   initialDropoff: DispatchSuggestion;
   serviceMonth: string;
+  months: string[];
 }) {
+  const router = useRouter();
   const [day, setDay] = useState<string>(initialDay);
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-4">
       <div className="rounded-2xl border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-800">
-        <h3 className="text-base font-black text-gray-900 dark:text-white">정규 셔틀 배차 · 하루 타임라인</h3>
+        <div className="flex flex-wrap items-end justify-between gap-2">
+          <h3 className="text-base font-black text-gray-900 dark:text-white">정규 셔틀 배차 · 하루 타임라인</h3>
+          <label className="flex flex-col gap-1 text-[11px] font-bold text-gray-500">배차 월
+            <select value={serviceMonth} onChange={(event) => router.push(`/admin/shuttle/regular-dispatch?month=${encodeURIComponent(event.target.value)}`)} className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-bold dark:border-gray-600 dark:bg-gray-900">
+              {months.map((month) => <option key={month} value={month}>{month}</option>)}
+            </select>
+          </label>
+        </div>
         {/* 조작 설명은 뺐다. 좌표의 출처(학생 신청서)는 데이터 출처 정보라 반드시 남긴다. */}
         <p className="mt-0.5 text-[12.5px] text-gray-500 dark:text-gray-400">
           좌표는 <b>학생 신청서</b>에서 자동으로 가져옵니다.

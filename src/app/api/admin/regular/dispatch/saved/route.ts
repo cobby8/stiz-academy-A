@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/auth-guard";
-import { getSavedRegularDispatchRoute, saveRegularDispatchRoute } from "@/lib/regular/regularDispatchRoute";
+import { deleteRegularDispatchRoute, getSavedRegularDispatchRoute, saveRegularDispatchRoute } from "@/lib/regular/regularDispatchRoute";
 
 export const dynamic = "force-dynamic";
 
@@ -41,5 +41,21 @@ export async function POST(request: Request) {
     const msg = String((e as { message?: string })?.message ?? "");
     const status = /원장|권한|로그인|인증|Unauthorized|Forbidden/i.test(msg) ? 403 : 500;
     return NextResponse.json({ error: status === 403 ? msg : "노선을 저장하지 못했습니다." }, { status });
+  }
+}
+
+export async function DELETE(request: Request) {
+  try {
+    const url = new URL(request.url);
+    const deleted = await deleteRegularDispatchRoute(
+      url.searchParams.get("date") ?? "",
+      url.searchParams.get("direction") ?? "",
+      url.searchParams.get("serviceMonth") ?? undefined,
+    );
+    return NextResponse.json({ ok: true, deleted });
+  } catch (e) {
+    console.error("[regular dispatch/saved DELETE]", e);
+    const msg = String((e as { message?: string })?.message ?? "");
+    return NextResponse.json({ error: msg || "저장 노선을 삭제하지 못했습니다." }, { status: 400 });
   }
 }

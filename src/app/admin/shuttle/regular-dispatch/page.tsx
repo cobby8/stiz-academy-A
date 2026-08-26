@@ -11,9 +11,10 @@ export const dynamic = "force-dynamic";
 
 // 정규 셔틀 동적배차(신청서 좌표 기반) — 방학특강 배차 화면을 요일 기준으로 재사용한다.
 // 구글시트 정규 셔틀(/admin/shuttle/regular)과는 별개의 새 화면(정합 명단 소스).
-export default async function RegularDispatchPage() {
+export default async function RegularDispatchPage({ searchParams }: { searchParams: Promise<{ month?: string }> }) {
   const months = await getRegularShuttleMonths();
-  const serviceMonth = months[0] ?? new Date().toISOString().slice(0, 7);
+  const requestedMonth = (await searchParams).month;
+  const serviceMonth = requestedMonth && months.includes(requestedMonth) ? requestedMonth : (months[0] ?? new Date().toISOString().slice(0, 7));
   const weekdays = await getRegularShuttleWeekdays(serviceMonth);
   const initialDay = weekdays[0] ?? "Mon";
 
@@ -41,6 +42,7 @@ export default async function RegularDispatchPage() {
         initialPickup={initialPickup}
         initialDropoff={initialDropoff}
         serviceMonth={serviceMonth}
+        months={months}
       />
     </>
   );

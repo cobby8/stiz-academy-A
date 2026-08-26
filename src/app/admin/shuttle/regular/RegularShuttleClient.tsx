@@ -88,6 +88,8 @@ export default function RegularShuttleClient({ initialStops, importedAt: initial
   const [availableMonths, setAvailableMonths] = useState(months);
   const [compareMonth, setCompareMonth] = useState(initialCompareMonth ?? "");
   const [comparison, setComparison] = useState<RegularShuttleChange[]>(initialComparison);
+  const [previewChange, setPreviewChange] = useState<RegularShuttleChange | null>(null);
+  const [previewCopied, setPreviewCopied] = useState(false);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
@@ -164,6 +166,19 @@ export default function RegularShuttleClient({ initialStops, importedAt: initial
       try { await navigator.clipboard.writeText(url); setMsg("기사님 운행 링크를 복사했습니다(매일 열면 오늘 요일 운행)"); }
       catch { setMsg(`기사님 링크: ${url}`); }
     } catch (e: any) { setErr(e?.message || "링크를 만들지 못했습니다."); }
+  }
+
+  // 문자 발송과 분리된 미리보기 전용 복사 기능이다. 이 화면에서는 외부 발송을 실행하지 않는다.
+  async function copyChangeMessage() {
+    if (!previewChange) return;
+    const message = regularShuttleChangeMessage(previewChange, serviceMonth);
+    if (!message) return;
+    try {
+      await navigator.clipboard.writeText(message);
+      setPreviewCopied(true);
+    } catch {
+      setErr("문구를 복사하지 못했습니다. 문구를 길게 눌러 직접 복사해 주세요.");
+    }
   }
 
   // 저장 후 목록을 다시 읽어 로컬 상태를 최신화(순서·시각 반영).
@@ -243,12 +258,46 @@ export default function RegularShuttleClient({ initialStops, importedAt: initial
                 <div key={change.key} className="rounded-lg bg-white p-3 text-xs shadow-sm dark:bg-gray-900">
                   <div className="flex flex-wrap items-center gap-2"><b className="text-sm">{change.studentName}</b><span>{maskPhone(change.parentPhone)}</span><span className="rounded bg-blue-100 px-1.5 py-0.5 font-black text-blue-700">{change.kind === "ADDED" ? "추가" : change.kind === "REMOVED" ? "제외" : "변경"}</span></div>
                   <p className="mt-1 text-gray-500">기존: {change.before ?? "없음"}</p><p className="mt-0.5 font-bold text-gray-800 dark:text-gray-100">변경: {change.after ?? "없음"}</p>
-                  {regularShuttleChangeMessage(change, serviceMonth) && <pre className="mt-2 whitespace-pre-wrap rounded bg-gray-50 p-2 font-sans text-[11px] text-gray-600 dark:bg-gray-800 dark:text-gray-300">{regularShuttleChangeMessage(change, serviceMonth)}</pre>}
+                  {regularShuttleChangeMessage(change, serviceMonth) && (
+                    <button
+                      type="button"
+                      onClick={() => { setPreviewChange(change); setPreviewCopied(false); }}
+                      className="mt-2 rounded-lg border border-blue-200 px-3 py-1.5 font-black text-blue-700 hover:bg-blue-50 dark:border-blue-700 dark:text-blue-200 dark:hover:bg-blue-950/40"
+                    >
+                      문자 미리보기
+                    </button>
+                  )}
                 </div>
               ))}
               <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs font-bold text-amber-800">문자는 자동 발송되지 않습니다. 대상·변경값·문구 미리보기 후 별도 승인이 필요합니다.</p>
             </div>
           </details>
+        )}
+
+        {previewChange && (
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="shuttle-message-preview-title"
+            className="fixed inset-0 z-50 flex items-end justify-center bg-black/55 p-3 sm:items-center"
+            onMouseDown={(e) => { if (e.target === e.currentTarget) setPreviewChange(null); }}
+          >
+            <div className="w-full max-w-lg rounded-2xl bg-white p-4 shadow-2xl dark:bg-gray-900">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <h4 id="shuttle-message-preview-title" className="text-base font-black text-gray-900 dark:text-white">{previewChange.studentName} 문자 미리보기</h4>
+                  <p className="mt-0.5 text-xs text-gray-500">{maskPhone(previewChange.parentPhone)} · 확인 및 복사만 가능합니다.</p>
+                </div>
+                <button type="button" onClick={() => setPreviewChange(null)} aria-label="문자 미리보기 닫기" className="rounded-lg px-2 py-1 text-xl font-bold text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800">×</button>
+              </div>
+              <pre className="mt-3 max-h-[55vh] overflow-y-auto whitespace-pre-wrap rounded-xl bg-gray-50 p-3 font-sans text-sm leading-6 text-gray-700 dark:bg-gray-800 dark:text-gray-200">{regularShuttleChangeMessage(previewChange, serviceMonth)}</pre>
+              <p className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-xs font-bold text-amber-800">이 화면에서는 문자가 발송되지 않습니다. 실제 발송은 별도 승인 후 진행합니다.</p>
+              <div className="mt-3 flex justify-end gap-2">
+                <button type="button" onClick={() => setPreviewChange(null)} className="rounded-xl border border-gray-200 px-4 py-2 text-sm font-bold text-gray-600 dark:border-gray-700 dark:text-gray-200">닫기</button>
+                <button type="button" onClick={() => void copyChangeMessage()} className="rounded-xl bg-brand-navy-900 px-4 py-2 text-sm font-black text-white dark:bg-brand-neon-lime dark:text-brand-navy-900">{previewCopied ? "✓ 복사됨" : "문구 복사"}</button>
+              </div>
+            </div>
+          </div>
         )}
 
         {/* 시트 가져오기·좌표 채우기 — 최초 1회만 쓰는 준비 작업이라 접어 둔다. */}

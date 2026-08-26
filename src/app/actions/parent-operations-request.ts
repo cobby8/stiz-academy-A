@@ -4,8 +4,15 @@ import { createHash, randomBytes } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { requireAdmin } from "@/lib/auth-guard";
 import { prisma } from "@/lib/prisma";
-import { operationsRequestKey, parseOperationsRequest, SYNC_TARGETS } from "@/lib/operationsSync";
+import { operationsRequestKey, SYNC_TARGETS } from "@/lib/operationsSync";
 import { ensureOperationsSyncInfrastructure } from "@/lib/operationsSyncInfrastructure";
+import {
+  interpretParentOperationsRequest as interpretRequest,
+  validateConfirmedParentOperationsDraft,
+  type ConfirmedParentOperationsDraft,
+  type ParentClassOption,
+  type ParentEnrollmentContext,
+} from "@/lib/parentOperationsInterpretation";
 
 export type ParentOperationsLinkPreview = {
   status: "ACTIVE";
@@ -21,6 +28,53 @@ export type ActiveParentOperationsLink = {
 };
 
 const tokenHash = (token: string) => createHash("sha256").update(token).digest("hex");
+
+type ValidParentLink = { id: string; studentId: string; studentName: string; createdByUserId: string };
+
+function validatePublicRequestInput(token: string, sourceText: string, targetMonth: string) {
+  const text = sourceText.trim().replace(/\r\n/g, "\n");
+  if (!token || token.length > 200) throw new Error("유효하지 않은 요청 링크입니다.");
+  if (!text || text.length > 2000) throw new Error("요청 내용은 1~2,000자로 입력해 주세요.");
+  if (!/^20\d{2}-(0[1-9]|1[0-2])$/.test(targetMonth)) throw new Error("적용 월을 확인해 주세요.");
+  return text;
+}
+
+async function getValidParentLink(token: string): Promise<ValidParentLink> {
+  const links = await prisma.$queryRawUnsafe<ValidParentLink[]>(
+    `SELECT l.id,l."studentId",s.name AS "studentName",l."createdByUserId" FROM "ParentOperationsRequestLink" l
+      JOIN "Student" s ON s.id=l."studentId"
+     WHERE l."tokenHash"=$1 AND l."revokedAt" IS NULL AND l."expiresAt">now() LIMIT 1`, tokenHash(token),
+  );
+  if (!links[0]) throw new Error("요청 링크가 만료되었거나 취소되었습니다.");
+  return links[0];
+}
+
+async function getInterpretationContext(studentId: string) {
+  const [enrollments, classes] = await Promise.all([
+    prisma.$queryRawUnsafe<ParentEnrollmentContext[]>(
+      `SELECT e.id AS "enrollmentId",c.id AS "classId",c.name AS "className",e.status,
+              c."dayOfWeek",c."startTime",c."endTime",c."slotKey"
+         FROM "Enrollment" e JOIN "Class" c ON c.id=e."classId"
+        WHERE e."studentId"=$1 AND e.status IN ('ACTIVE','PAUSED') AND c."dayOfWeek"<>'Seasonal'
+        ORDER BY c."dayOfWeek",c."startTime"`, studentId,
+    ),
+    prisma.$queryRawUnsafe<ParentClassOption[]>(
+      `SELECT c.id AS "classId",c.name AS "className",p.name AS "programName",
+              c."dayOfWeek",c."startTime",c."endTime",c."slotKey"
+         FROM "Class" c JOIN "Program" p ON p.id=c."programId"
+        WHERE c."dayOfWeek"<>'Seasonal' AND p."deletedAt" IS NULL
+          AND c."programId" IN (
+            SELECT DISTINCT current_class."programId"
+              FROM "Enrollment" current_enrollment
+              JOIN "Class" current_class ON current_class.id=current_enrollment."classId"
+             WHERE current_enrollment."studentId"=$1 AND current_enrollment.status IN ('ACTIVE','PAUSED')
+          )
+        ORDER BY c."dayOfWeek",c."startTime",c.name`,
+      studentId,
+    ),
+  ]);
+  return { enrollments, classes };
+}
 
 export async function createParentOperationsRequestLink(studentId: string, expiresInDays = 7) {
   const admin = await requireAdmin();
@@ -76,32 +130,36 @@ export async function getParentOperationsLinkPreview(token: string): Promise<Par
   return { status: "ACTIVE", studentName: row.studentName, expiresAt: row.expiresAt.toISOString() };
 }
 
-export async function submitParentOperationsRequest(token: string, sourceText: string, targetMonth: string) {
-  const text = sourceText.trim().replace(/\r\n/g, "\n");
-  if (!token || token.length > 200) throw new Error("유효하지 않은 요청 링크입니다.");
-  if (!text || text.length > 2000) throw new Error("요청 내용은 1~2,000자로 입력해 주세요.");
-  if (!/^20\d{2}-(0[1-9]|1[0-2])$/.test(targetMonth)) throw new Error("적용 월을 확인해 주세요.");
+/** 자연어는 저장하지 않고 현재 수강·실제 개설반에 맞춘 수정 가능한 초안만 만든다. */
+export async function interpretParentOperationsRequest(token: string, sourceText: string, targetMonth: string) {
+  const text = validatePublicRequestInput(token, sourceText, targetMonth);
   await ensureOperationsSyncInfrastructure();
+  const link = await getValidParentLink(token);
+  const context = await getInterpretationContext(link.studentId);
+  return {
+    studentName: `${link.studentName.slice(0, 1)}○${link.studentName.slice(-1)}`,
+    currentEnrollments: context.enrollments.map((item) => ({ id: item.classId, label: `${item.className} · ${item.status === "PAUSED" ? "휴원" : "수강 중"}` })),
+    availableClasses: context.classes.map((item) => ({ id: item.classId, label: `${item.className} · ${item.dayOfWeek} ${item.startTime}` })),
+    draft: interpretRequest({ sourceText: text, targetMonth, ...context }),
+  };
+}
 
-  const links = await prisma.$queryRawUnsafe<Array<{ id: string; studentId: string; studentName: string; createdByUserId: string }>>(
-    `SELECT l.id,l."studentId",s.name AS "studentName",l."createdByUserId" FROM "ParentOperationsRequestLink" l
-      JOIN "Student" s ON s.id=l."studentId"
-     WHERE l."tokenHash"=$1 AND l."revokedAt" IS NULL AND l."expiresAt">now() LIMIT 1`, tokenHash(token),
-  );
-  const link = links[0];
-  if (!link) throw new Error("요청 링크가 만료되었거나 취소되었습니다.");
-
-  const parsed = parseOperationsRequest(text, targetMonth);
-  if (!parsed.length) throw new Error("처리할 요청을 찾지 못했습니다.");
+export async function submitParentOperationsRequest(token: string, sourceText: string, targetMonth: string, confirmedDraft?: ConfirmedParentOperationsDraft) {
+  const text = validatePublicRequestInput(token, sourceText, targetMonth);
+  await ensureOperationsSyncInfrastructure();
+  const link = await getValidParentLink(token);
+  const context = await getInterpretationContext(link.studentId);
+  if (!confirmedDraft) throw new Error("해석된 요청 내용을 확인하고 수정한 뒤 보내 주세요.");
+  const confirmed = validateConfirmedParentOperationsDraft(confirmedDraft, { sourceText: text, targetMonth, ...context });
   const requestId = crypto.randomUUID();
-  const commands = parsed.map((command) => ({
+  const commands = confirmed.commands.map((command) => ({
     ...command,
     studentName: link.studentName,
     idempotencyKey: operationsRequestKey({
       sourceText: command.sourceText,
       studentName: link.studentName,
       kind: command.kind,
-      effectiveMonth: command.effectiveMonth,
+      effectiveMonth: command.effectiveDate.slice(0, 7),
       scope: `PARENT_LINK:${link.id}`,
     }),
   }));
@@ -119,13 +177,22 @@ export async function submitParentOperationsRequest(token: string, sourceText: s
       );
       for (const command of commands) {
         const commandId = crypto.randomUUID();
-        const holdReason = command.holdReason || (command.kind === "UNKNOWN" ? "변경 종류를 확인해야 합니다." : null);
+        const holdReason = command.kind === "UNKNOWN" ? "기타 요청은 원장이 내용을 확인해야 합니다." : null;
         await tx.$executeRawUnsafe(
           `INSERT INTO "OperationsCommand"
-            (id,"requestId","idempotencyKey","sourceText","studentId","studentName",kind,"effectiveMonth",confidence,status,"holdReason","billingStatus","notificationStatus")
-           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,'HELD','HELD')`,
+            (id,"requestId","idempotencyKey","sourceText","studentId","studentName",kind,"effectiveMonth",confidence,status,"holdReason","afterJson","billingStatus","notificationStatus")
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12::jsonb,'HELD','HELD')`,
           commandId, requestId, command.idempotencyKey, command.sourceText, link.studentId, link.studentName,
-          command.kind, command.effectiveMonth, holdReason ? "LOW" : command.confidence, holdReason ? "HELD" : "PENDING", holdReason,
+          command.kind, command.effectiveDate.slice(0, 7), holdReason ? "LOW" : command.confidence,
+          holdReason ? "HELD" : "PENDING", holdReason, JSON.stringify({
+            effectiveDate: command.effectiveDate,
+            fromClassId: command.fromClassId,
+            toClassId: command.toClassId,
+            shuttleIntent: command.shuttleIntent,
+            details: command.details,
+            warnings: command.warnings,
+            parentConfirmed: true,
+          }),
         );
         for (const target of SYNC_TARGETS) {
           await tx.$executeRawUnsafe(
@@ -136,7 +203,7 @@ export async function submitParentOperationsRequest(token: string, sourceText: s
       }
       await tx.$executeRawUnsafe(
         `INSERT INTO "OperationsAuditLog" (id,"requestId","linkId",action,"actorType","detailsJson") VALUES ($1,$2,$3,'REQUEST_SUBMITTED','PARENT_LINK',$4::jsonb)`,
-        crypto.randomUUID(), requestId, link.id, JSON.stringify({ targetMonth, commandCount: commands.length }),
+        crypto.randomUUID(), requestId, link.id, JSON.stringify({ targetMonth, commandCount: commands.length, parentConfirmed: true }),
       );
     });
   } catch (error) {

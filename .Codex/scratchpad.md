@@ -292,8 +292,51 @@
 | developer | `src/lib/seasonal/shuttle-optimize.ts` | (해소) T맵 커밋 `5c82ac0`이 공용 대상자 필터를 다시 삭제 — 같은 사고 5회째. 게이트웨이 교체로 자동 해소 | 완료 |
 | developer | `src/app/admin/seasonal/shuttle/ShuttleRosterClient.tsx` | **미탑승 기본 숨김·CSV 탑승자만·파일명이 워킹트리에서 사라짐**(HEAD 10곳 → 0곳). 기사님 CSV에 미탑승자가 실릴 수 있음. 담당자 확인 필요 | 대기 |
 | developer | `prisma/schema.prisma` · `shuttle-roster.ts` | 동시 편집으로 내 변경이 2회 덮였다. 병렬 작업 시 같은 파일 배정 금지 필요 | 보고 |
+| reviewer | `src/lib/parentOperationsInterpretation.ts:78-117` | 쉼표 없는 복합 요청에서 셔틀 명령만 남고 수업 변경이 누락됨. 접속사·서술어 기준 다중 의도 추출과 회귀 테스트 필요 | 필수 수정 |
+| reviewer | `src/app/request/[token]/ParentRequestForm.tsx:37-39`, `src/lib/parentOperationsInterpretation.ts:173-182` | 아무 필드 수정만으로 모든 blocking 질문을 지울 수 있고 서버가 종류별 필수 필드·관계를 재검증하지 않음 | 필수 수정 |
+| reviewer | `src/lib/parentOperationsInterpretation.ts:175` | confirmed payload의 적용일을 정규식만 검사해 2월 31일 같은 비실재 날짜 허용 | 필수 수정 |
+| reviewer | `src/app/request/[token]/ParentRequestForm.tsx:74,79` | 셔틀 UI 값 `USE`와 서버 계약 `START` 불일치, `EXEMPT` 선택지도 없음 | 필수 수정 |
 
-### 테스트 결과 (tester) — 2026-08-27 학부모 요청 링크 최종 재검증
+### 리뷰 결과 (reviewer) — 2026-08-27 학부모 자연어 요청 확인·수정
+
+📊 종합 판정: 수정 필요
+
+✅ 잘된 점:
+- 공개 제출은 `DRAFT`만 만들고 청구·알림은 `HELD`로 고정되며, 외부 시스템 반영 함수는 호출하지 않는다.
+- 링크 학생 ID를 서버에서 다시 결합하고, 실제 반 ID 허용 목록과 1회용 링크 선점을 서버에서 검사한다.
+- 관련 보안·해석 테스트 20건은 모두 통과했다.
+
+🔴 필수 수정:
+- [`src/lib/parentOperationsInterpretation.ts:78-117`] 쉼표 없는 “수업을 옮기고 셔틀은 안 탈게요”가 `SHUTTLE_STOP` 하나로 축약되어 수업 변경이 조용히 누락된다. 화면 예문도 이 실패 형태다. 다중 의도를 각각 추출하고 무손실 회귀 테스트를 추가해야 한다.
+- [`src/app/request/[token]/ParentRequestForm.tsx:37-39`] 어떤 필드 하나를 수정해도 해당 명령의 모든 경고·질문을 지워 제출 차단을 우회한다. 서버의 [`src/lib/parentOperationsInterpretation.ts:173-182`]도 `CLASS_CHANGE.fromClassId`, 상태 변경 대상 반, 셔틀 종류와 의도의 일치를 강제하지 않는다. 클라이언트 표시 상태를 신뢰하지 말고 서버에서 종류별 필수조건을 재계산해야 한다.
+- [`src/lib/parentOperationsInterpretation.ts:175`] 적용일을 정규식과 월 접두사만 검사해 `2026-02-31`을 허용한다. 달력에 실재하는 날짜인지 서버에서 검증해야 한다.
+- [`src/app/request/[token]/ParentRequestForm.tsx:74,79`] 서버의 셔틀 값은 `START/STOP/EXEMPT/CHANGE`인데 UI는 `USE/STOP/CHANGE`라 시작·면제가 빈 선택으로 보이고 `USE`라는 잘못된 값이 저장될 수 있다. 단일 계약으로 통일해야 한다.
+
+🟡 권장 수정:
+- [`src/app/actions/parent-operations-request.ts:132-136`, `src/app/request/[token]/page.tsx:17`] 공개 해석 응답은 학생 실명 전체와 현재 수강·전체 정규반 시간표를 반환한다. 학생명은 계속 마스킹하고 반 선택 데이터는 필요한 공개 필드 및 실제 운영 가능한 반으로 최소화하는 편이 안전하다.
+- 낮은 confidence 자체는 서버 제출 차단 조건이 아니다. 학부모가 명시적으로 각 항목을 확인했다는 별도 서버 검증 가능한 값 또는 모든 필수 필드 재검증으로 경계를 분명히 해야 한다.
+
+### 리뷰 결과 (reviewer) — 2026-08-27 자연어 요청 수정분 재검토
+
+📊 종합 판정: 통과
+
+✅ 잘된 점:
+- 접속사로 이어 쓴 수업 변경·셔틀 요청을 두 명령으로 분리하며, 화면 예시 문장까지 회귀 테스트로 고정했다.
+- 클라이언트 질문 배열을 신뢰하지 않고 서버가 명령 종류별 현재 반·희망 반·셔틀 의도 관계를 다시 검증한다.
+- 서버가 달력에 실제 존재하는 날짜를 검사해 월말 초과 날짜를 거부한다.
+- 셔틀 값이 `START/STOP/EXEMPT/CHANGE`로 UI와 서버에서 일치한다.
+- 공개 응답의 학생 이름은 마스킹되며, 반 선택지는 현재 수강 프로그램 범위와 필요한 표시 필드로 축소됐다.
+- 공개 제출은 계속 `DRAFT`, 청구·알림은 `HELD`이며 외부 반영 호출은 없다.
+
+🔴 필수 수정:
+- 없음.
+
+🟡 권장 수정:
+- 없음.
+
+검증: 자연어 해석·공개 링크 보안 회귀 테스트 27건 통과, `tsc --noEmit` 통과.
+
+### 테스트 결과 (tester) — 2026-08-27 자연어 확인·수정 기능 최종 재검증
 
 | 테스트 항목 | 결과 | 비고 |
 |-----------|------|------|
@@ -308,11 +351,16 @@
 | 마이그레이션·런타임 DDL | ✅ 통과 | 기능 테이블 의존 순서 확인, 런타임 FK DROP/ADD 제거 확인 |
 | 상태머신 재검토 | ✅ 통과 | HELD 보존, 현재 수강 상태 snapshot 재생성, WEBSITE FAILED만 PENDING 초기화 |
 | 재검토 UI·멱등 인덱스 | ✅ 통과 | HELD/PARTIAL 재검토 버튼, migration·runtime unique index 확인 |
+| 복수 자연어 해석 | ✅ 통과 | 쉼표 유무와 무관하게 수업 변경·셔틀 중단을 2개 명령으로 보존 |
+| 서버 확정안 재검증 | ✅ 통과 | 비실재 날짜·가짜 반 ID·변경된 현재 반·현재 반 누락·셔틀 상태 불일치 차단 |
+| UNKNOWN·질문 우회 | ✅ 통과 | UNKNOWN은 LOW/HELD, 클라이언트 질문 배열과 별개로 종류별 필수값 서버 재검증 |
+| 모바일 확인·수정 | ✅ 통과 | 요청 수정·추가·삭제, 필수값 전송 차단, 셔틀 4상태 계약, 승인 전 무반영 안내 |
 | TypeScript / ESLint / Prisma | ✅ 통과 | `tsc --noEmit`, 대상 lint, `prisma validate` 모두 종료코드 0 |
 
-📊 종합: 17개 회귀 테스트 중 17개 통과 / 0개 실패. 실제 임시 PostgreSQL shadow DB는 제공되지 않아 SQL 구조·순서 검사로 대체.
+📊 종합: 관련 회귀 테스트 46개 중 46개 통과 / 0개 실패. 전체 `npm run lint`는 프로젝트 전체 탐색 중 Node 4GB 힙 한계로 OOM 종료했으나, 변경 파일 6개 대상 ESLint는 통과. 실제 임시 PostgreSQL shadow DB는 제공되지 않아 DB 동시성은 SQL 구조 검사로 대체.
 
 ## 작업 로그 (최근 10건)
+- 2026-08-27: 자연어→학부모 확인·수정→DRAFT 접수 회귀 46건 통과. 복수 의도·날짜·반·셔틀 변조 차단, 1회용 링크, 외부 무호출, 청구·알림 HELD, 모바일 편집을 검증. tsc/대상 lint/Prisma 통과(전체 lint는 4GB OOM).
 - 2026-08-27: 학부모 요청 링크 보안·상태머신 회귀 테스트 17건 통과. HELD 보존, snapshot 재생성, WEBSITE 실패 재개, 재검토 UI와 멱등 unique index까지 최종 검증.
 - 2026-08-27: 정규 차량 변동 카드의 긴 문자 전문을 버튼형 미리보기 모달로 분리하고, 셔틀 관리 탭을 정규수업 우선·방학특강 후순위로 재배치했다.
 - 2026-08-27: 정규 차량 배차 월 선택·월별 저장 노선 삭제를 보완하고, 잘못 들어간 8월 228건을 복구한 뒤 실제 9월 228건을 재이관했다. 8→9월 변동 11명은 문자 미리보기 승인 대기이며 발송 0건.

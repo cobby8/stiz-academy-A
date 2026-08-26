@@ -1,6 +1,7 @@
 import { google } from "googleapis";
 // @ts-expect-error -- Node 타입 제거 기반 단위 테스트는 런타임 확장자를 요구한다.
 import { parseGoogleServiceAccount } from "./googleServiceAccount.ts";
+import { toKstYmd } from "./datetime/kst";
 
 const DEFAULT_SPREADSHEET_ID = "12xfQWT6OYa0hH2Ajei7E48CF2aUh6vZ8WWeFeocZrzY";
 const REGISTRATION_SHEET = "등록";
@@ -31,7 +32,7 @@ function birthKey(value: unknown) {
 }
 
 export function findSheetEnrollmentRows(rows: unknown[][], input: Pick<SheetIdentity, "studentName" | "birthDate" | "parentPhone" | "targetMonth">) {
-  const expectedBirth = input.birthDate.toISOString().slice(0, 10);
+  const expectedBirth = toKstYmd(input.birthDate);
   const expectedPhone = digits(input.parentPhone);
   const expectedMonth = monthLabel(input.targetMonth);
   const matches: number[] = [];

@@ -9,21 +9,23 @@ datasource db {
 }
 
 model User {
-  id                      String                  @id @default(uuid())
-  email                   String                  @unique
+  id                      String                        @id @default(uuid())
+  email                   String                        @unique
   username                String?
   name                    String
   phone                   String?
-  phoneVerifiedAt         DateTime?               @db.Timestamptz(6)
-  authUserId              String?                 @unique
-  role                    Role                    @default(PARENT)
-  createdAt               DateTime                @default(now())
-  updatedAt               DateTime                @updatedAt
+  phoneVerifiedAt         DateTime?                     @db.Timestamptz(6)
+  authUserId              String?                       @unique
+  role                    Role                          @default(PARENT)
+  createdAt               DateTime                      @default(now())
+  updatedAt               DateTime                      @updatedAt
   classes                 Class[]
   students                Student[]
   coach                   Coach?
-  drivenShuttleRoutePlans ShuttleRoutePlan[]      @relation("ShuttleRouteDriver")
-  enrollmentApplications  EnrollmentApplication[] @relation("EnrollmentApplicationParent")
+  drivenShuttleRoutePlans ShuttleRoutePlan[]            @relation("ShuttleRouteDriver")
+  enrollmentApplications  EnrollmentApplication[]       @relation("EnrollmentApplicationParent")
+  parentOperationsLinks   ParentOperationsRequestLink[] @relation("ParentOperationsLinkCreator")
+  operationsAuditLogs     OperationsAuditLog[]          @relation("OperationsAuditActor")
 }
 
 model ParentAccountClaim {
@@ -70,7 +72,7 @@ model ParentAccountClaimOtpSend {
 }
 
 model Student {
-  id                       String                      @id @default(uuid())
+  id                       String                        @id @default(uuid())
   name                     String
   birthDate                DateTime
   gender                   String?
@@ -86,7 +88,7 @@ model Student {
   uniformStatus            String? // 유니폼 상태 (예: "수령완료", "미수령", "추가주문" 등)
   basketballExp            String? // 농구 경험
   hopeNote                 String? // 바라는 점
-  agreementsJSON           String                      @default("{}") // 개인정보/이용약관/주의사항 동의 원본
+  agreementsJSON           String                        @default("{}") // 개인정보/이용약관/주의사항 동의 원본
   sourceImportRowId        String? // 마지막 시트 이관 원본 행
   // 학생 병합: 흡수된 쪽 행은 지우지 않고 여기에 대표 학생 id를 찍는다.
   // DB에는 있는데 이 파일에 빠져 있어, ORM으로 조회하는 화면이 통째로 죽었다
@@ -95,8 +97,8 @@ model Student {
   // 없어 @@index를 두지 않는다. 여기에 일반 인덱스를 적으면 반대 방향으로 어긋난다.
   mergedIntoStudentId      String?
   mergedAt                 DateTime?
-  createdAt                DateTime                    @default(now())
-  updatedAt                DateTime                    @updatedAt
+  createdAt                DateTime                      @default(now())
+  updatedAt                DateTime                      @updatedAt
   attendances              Attendance[]
   enrollments              Enrollment[]
   guardians                Guardian[]
@@ -112,12 +114,65 @@ model Student {
   enrollmentChangeRequests EnrollmentChangeRequest[]
   paymentParentRequests    PaymentParentRequest[]
   shuttleDayExceptions     ShuttleDayException[]
-  parent                   User                        @relation(fields: [parentId], references: [id])
+  parentOperationsLinks    ParentOperationsRequestLink[]
+  parent                   User                          @relation(fields: [parentId], references: [id])
 
   @@index([parentId])
   @@index([name, parentId])
   @@index([branch])
   @@index([sourceImportRowId])
+}
+
+model ParentOperationsRequestLink {
+  id              String               @id @default(dbgenerated("(gen_random_uuid())::text"))
+  studentId       String
+  tokenHash       String               @unique
+  expiresAt       DateTime             @db.Timestamptz(6)
+  revokedAt       DateTime?            @db.Timestamptz(6)
+  lastUsedAt      DateTime?            @db.Timestamptz(6)
+  createdByUserId String
+  createdAt       DateTime             @default(now()) @db.Timestamptz(6)
+  updatedAt       DateTime             @default(now()) @updatedAt @db.Timestamptz(6)
+  student         Student              @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  createdBy       User                 @relation("ParentOperationsLinkCreator", fields: [createdByUserId], references: [id])
+  requests        OperationsRequest[]
+  auditLogs       OperationsAuditLog[]
+
+  @@index([studentId, expiresAt])
+}
+
+model OperationsRequest {
+  id                  String                       @id @default(dbgenerated("(gen_random_uuid())::text"))
+  sourceText          String
+  targetMonth         String
+  status              String                       @default("DRAFT")
+  requestedByUserId   String
+  approvedByUserId    String?
+  approvedAt          DateTime?                    @db.Timestamptz(6)
+  parentRequestLinkId String?
+  submittedAt         DateTime?                    @db.Timestamptz(6)
+  createdAt           DateTime                     @default(now()) @db.Timestamptz(6)
+  updatedAt           DateTime                     @default(now()) @updatedAt @db.Timestamptz(6)
+  parentRequestLink   ParentOperationsRequestLink? @relation(fields: [parentRequestLinkId], references: [id], onDelete: SetNull)
+  auditLogs           OperationsAuditLog[]
+
+  @@index([status, createdAt(sort: Desc)])
+}
+
+model OperationsAuditLog {
+  id          String                       @id @default(dbgenerated("(gen_random_uuid())::text"))
+  requestId   String?
+  linkId      String?
+  action      String
+  actorType   String
+  actorUserId String?
+  detailsJson Json?
+  createdAt   DateTime                     @default(now()) @db.Timestamptz(6)
+  request     OperationsRequest?           @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  link        ParentOperationsRequestLink? @relation(fields: [linkId], references: [id], onDelete: SetNull)
+  actor       User?                        @relation("OperationsAuditActor", fields: [actorUserId], references: [id])
+
+  @@index([requestId, createdAt(sort: Desc)])
 }
 
 model Program {
@@ -298,33 +353,33 @@ model StudentSessionNote {
 }
 
 model Payment {
-  id                 String               @id @default(uuid())
+  id                 String                 @id @default(uuid())
   studentId          String
   classId            String?
   amount             Int
   status             String
   dueDate            DateTime
   paidDate           DateTime?
-  type               String               @default("MONTHLY") // MONTHLY(월 수강료), SHUTTLE(셔틀), UNIFORM(유니폼), OTHER(기타)
+  type               String                 @default("MONTHLY") // MONTHLY(월 수강료), SHUTTLE(셔틀), UNIFORM(유니폼), OTHER(기타)
   method             String? // 결제수단: RALLYZ(랠리즈), CARD(카드), CASH(현금영수증), UNPAID(미결제)
   description        String? // 청구 항목 설명 (예: "4월 수강료")
   month              Int? // 청구 대상 월 (1~12)
   year               Int? // 청구 대상 연도
-  autoGenerated      Boolean              @default(false) // 자동 생성 여부 (Cron/일괄 생성 구분)
+  autoGenerated      Boolean                @default(false) // 자동 생성 여부 (Cron/일괄 생성 구분)
   notifiedAt         DateTime? // 미납 알림 발송 시각
   invoiceNo          String?
-  issuedAt           DateTime?            @db.Timestamptz(6)
-  payableUntil       DateTime?            @db.Timestamptz(6)
+  issuedAt           DateTime?              @db.Timestamptz(6)
+  payableUntil       DateTime?              @db.Timestamptz(6)
   paidProvider       String?
   providerOrderId    String?
   providerPaymentKey String?
   receiptUrl         String?
-  paymentRequestedAt DateTime?            @db.Timestamptz(6)
-  lastReminderAt     DateTime?            @db.Timestamptz(6)
-  reminderCount      Int                  @default(0)
-  createdAt          DateTime             @default(now())
-  updatedAt          DateTime             @updatedAt
-  student            Student              @relation(fields: [studentId], references: [id])
+  paymentRequestedAt DateTime?              @db.Timestamptz(6)
+  lastReminderAt     DateTime?              @db.Timestamptz(6)
+  reminderCount      Int                    @default(0)
+  createdAt          DateTime               @default(now())
+  updatedAt          DateTime               @updatedAt
+  student            Student                @relation(fields: [studentId], references: [id])
   invoice            PaymentInvoice?
   transactions       PaymentTransaction[]
   auditLogs          PaymentAuditLog[]

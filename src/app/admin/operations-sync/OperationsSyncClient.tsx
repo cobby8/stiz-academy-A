@@ -13,6 +13,7 @@ import {
   previewRallyzAttendanceSync,
   type RallyzAttendanceSyncRunRow,
 } from "@/app/actions/rallyz-attendance-sync";
+import ParentRequestLinkPanel, { type ParentRequestLinkStudent } from "./ParentRequestLinkPanel";
 
 type SyncAttempt = { target: "SHEET" | "RALLYZ" | "WEBSITE"; status: string };
 type Command = {
@@ -27,7 +28,7 @@ type Command = {
   afterJson: { enrollments?: Array<{ id: string; status: string; className: string }> } | null;
   targets: SyncAttempt[];
 };
-type RequestRow = { id: string; sourceText: string; targetMonth: string; status: string; createdAt: string; commands: Command[] };
+type RequestRow = { id: string; sourceText: string; targetMonth: string; status: string; source?: "PARENT_LINK" | "ADMIN"; submittedAt?: string | null; createdAt: string; commands: Command[] };
 
 const KIND_LABEL: Record<string, string> = {
   PAUSE: "휴원", WITHDRAW: "퇴원", RESUME: "복귀", CLASS_CHANGE: "반 변경", CLASS_ADD: "추가 수강",
@@ -36,7 +37,7 @@ const KIND_LABEL: Record<string, string> = {
 };
 const TARGET_LABEL = { SHEET: "시트", RALLYZ: "랠리즈", WEBSITE: "홈페이지" } as const;
 
-export default function OperationsSyncClient({ initialRequests, initialAttendanceRuns }: { initialRequests: RequestRow[]; initialAttendanceRuns: RallyzAttendanceSyncRunRow[] }) {
+export default function OperationsSyncClient({ initialRequests, initialAttendanceRuns, linkStudents }: { initialRequests: RequestRow[]; initialAttendanceRuns: RallyzAttendanceSyncRunRow[]; linkStudents: ParentRequestLinkStudent[] }) {
   const [sourceText, setSourceText] = useState("");
   const [targetMonth, setTargetMonth] = useState(new Date().toISOString().slice(0, 7));
   const [message, setMessage] = useState("");
@@ -103,6 +104,8 @@ export default function OperationsSyncClient({ initialRequests, initialAttendanc
         <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">학부모 요청을 붙여넣고 시트·랠리즈·홈페이지의 반영 계획을 함께 관리합니다.</p>
       </header>
 
+      <ParentRequestLinkPanel students={linkStudents} />
+
       <section className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-700 dark:bg-gray-900">
         <div className="grid gap-4 md:grid-cols-[180px_1fr]">
           <label className="text-sm font-bold text-gray-700 dark:text-gray-200">적용 월
@@ -135,12 +138,16 @@ export default function OperationsSyncClient({ initialRequests, initialAttendanc
         {initialRequests.length === 0 ? <div className="rounded-2xl border border-dashed border-gray-300 p-10 text-center text-gray-500">아직 저장된 동기화 요청이 없습니다.</div> : initialRequests.map((request) => (
           <article key={request.id} className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-700 dark:bg-gray-900">
             <div className="flex flex-wrap items-start justify-between gap-2">
-              <div><p className="font-black text-gray-950 dark:text-white">{request.targetMonth} 요청</p><p className="mt-1 whitespace-pre-wrap text-sm text-gray-600 dark:text-gray-300">{request.sourceText}</p></div>
+              <div><div className="flex flex-wrap items-center gap-2"><p className="font-black text-gray-950 dark:text-white">{request.targetMonth} 요청</p>{request.source === "PARENT_LINK" ? <span className="rounded-full bg-blue-100 px-2 py-1 text-[11px] font-black text-blue-700 dark:bg-blue-950 dark:text-blue-200">학부모 링크 접수</span> : null}</div><p className="mt-1 whitespace-pre-wrap text-sm text-gray-600 dark:text-gray-300">{request.sourceText}</p>{request.submittedAt ? <p className="mt-1 text-xs font-bold text-gray-400">접수 {new Date(request.submittedAt).toLocaleString("ko-KR")}</p> : null}</div>
               <div className="flex flex-wrap items-center gap-2">
                 <span className="rounded-full bg-gray-100 px-3 py-1 text-xs font-black text-gray-700 dark:bg-gray-800 dark:text-gray-200">{request.status}</span>
-                {(request.status === "DRAFT" || request.status === "HELD") && <button type="button" disabled={isPending} onClick={() => runRequestAction(() => approveOperationsRequest(request.id), "변경 전·후 미리보기를 확정했습니다.")} className="min-h-10 rounded-xl border border-gray-300 px-3 text-xs font-black dark:border-gray-600">미리보기 승인</button>}
+                {(["DRAFT", "HELD", "PARTIAL"].includes(request.status)) && <button type="button" disabled={isPending} onClick={() => runRequestAction(() => approveOperationsRequest(request.id), request.status === "DRAFT" ? "데이터 변경 미리보기를 승인했습니다. 청구서와 알림은 계속 보류됩니다." : "현재 수강 상태로 미리보기를 다시 만들었습니다. 내용을 확인한 뒤 반영해 주세요.")} className="min-h-10 rounded-xl border border-gray-300 px-3 text-xs font-black dark:border-gray-600">{request.status === "DRAFT" ? "데이터 변경만 승인" : "현재 상태로 재검토"}</button>}
                 {(["APPROVED", "PENDING", "PARTIAL"].includes(request.status)) && <button type="button" disabled={isPending} onClick={() => { if (window.confirm("시트와 랠리즈 확인 결과대로 홈페이지 수강 상태를 최종 변경할까요?")) runRequestAction(() => applyOperationsWebsite(request.id), "홈페이지 최종 반영과 3중 상태 검증을 완료했습니다."); }} className="min-h-10 rounded-xl bg-[var(--brand-accent)] px-3 text-xs font-black text-[var(--brand-accent-contrast)]">홈페이지 최종 반영</button>}
               </div>
+            </div>
+            <div className="mt-3 grid gap-2 sm:grid-cols-2">
+              <p className="rounded-xl bg-amber-50 px-3 py-2 text-xs font-black text-amber-800 dark:bg-amber-950/30 dark:text-amber-200">청구서 · 별도 승인 전 생성 안 함</p>
+              <p className="rounded-xl bg-amber-50 px-3 py-2 text-xs font-black text-amber-800 dark:bg-amber-950/30 dark:text-amber-200">학부모 알림 · 기본 미발송</p>
             </div>
             <div className="mt-4 overflow-x-auto">
               <table className="w-full min-w-[760px] text-left text-sm">

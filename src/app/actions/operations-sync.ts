@@ -12,6 +12,8 @@ type OperationsRequestRow = {
   sourceText: string;
   targetMonth: string;
   status: string;
+  parentRequestLinkId: string | null;
+  submittedAt: Date | string | null;
   createdAt: Date | string;
   commands: Array<{
     id: string;
@@ -96,7 +98,7 @@ export async function getOperationsRequests() {
   await requireAdmin();
   await ensureOperationsSyncInfrastructure();
   const rows = await prisma.$queryRawUnsafe<OperationsRequestRow[]>(
-    `SELECT r.id, r."sourceText", r."targetMonth", r.status, r."createdAt",
+    `SELECT r.id, r."sourceText", r."targetMonth", r.status, r."createdAt", r."parentRequestLinkId", r."submittedAt",
             COALESCE(json_agg(json_build_object(
               'id', c.id, 'studentName', c."studentName", 'kind', c.kind,
               'effectiveMonth', c."effectiveMonth", 'confidence', c.confidence,
@@ -111,7 +113,12 @@ export async function getOperationsRequests() {
       ORDER BY r."createdAt" DESC
       LIMIT 50`,
   );
-  return rows.map((row) => ({ ...row, createdAt: row.createdAt instanceof Date ? row.createdAt.toISOString() : row.createdAt }));
+  return rows.map((row) => ({
+    ...row,
+    source: row.parentRequestLinkId ? "PARENT_LINK" as const : "ADMIN" as const,
+    createdAt: row.createdAt instanceof Date ? row.createdAt.toISOString() : row.createdAt,
+    submittedAt: row.submittedAt instanceof Date ? row.submittedAt.toISOString() : row.submittedAt,
+  }));
 }
 
 type PreviewEnrollment = { id: string; status: string; className: string };
@@ -120,7 +127,7 @@ export async function approveOperationsRequest(requestId: string) {
   const admin = await requireAdmin();
   await ensureOperationsSyncInfrastructure();
   const commands = await prisma.$queryRawUnsafe<Array<{ id: string; studentId: string | null; kind: string; status: string }>>(
-    `SELECT id, "studentId", kind, status FROM "OperationsCommand" WHERE "requestId" = $1 ORDER BY "createdAt"`,
+    `SELECT id, "studentId", kind, status FROM "OperationsCommand" WHERE "requestId" = $1 AND status <> 'SYNCED' ORDER BY "createdAt"`,
     requestId,
   );
   if (commands.length === 0) throw new Error("승인할 변경 명령이 없습니다.");
@@ -128,7 +135,7 @@ export async function approveOperationsRequest(requestId: string) {
   let ready = 0;
   await prisma.$transaction(async (tx) => {
     for (const command of commands) {
-      if (command.status === "HELD" || !command.studentId) continue;
+      if (!command.studentId) continue;
       if (!['PAUSE', 'WITHDRAW'].includes(command.kind)) {
         await tx.$executeRawUnsafe(
           `UPDATE "OperationsCommand" SET status='HELD', "holdReason"='대상 반·노선·금액을 확정하는 전용 어댑터가 필요합니다.', "updatedAt"=now() WHERE id=$1`,
@@ -154,11 +161,22 @@ export async function approveOperationsRequest(requestId: string) {
         JSON.stringify({ enrollments }),
         JSON.stringify({ enrollments: enrollments.map((row) => ({ ...row, status: nextStatus })) }),
       );
+      // 상태 충돌로 실패했던 홈페이지 시도만 새 미리보기 기준으로 다시 열어 준다.
+      await tx.$executeRawUnsafe(
+        `UPDATE "OperationsSyncAttempt" SET status='PENDING', error=NULL, "verifiedAt"=NULL, "updatedAt"=now()
+          WHERE "commandId"=$1 AND target='WEBSITE' AND status='FAILED'`, command.id,
+      );
       ready += 1;
     }
     await tx.$executeRawUnsafe(
       `UPDATE "OperationsRequest" SET status=$2, "approvedByUserId"=$3, "approvedAt"=now(), "updatedAt"=now() WHERE id=$1`,
       requestId, ready > 0 ? "APPROVED" : "HELD", admin.appUserId,
+    );
+    await tx.$executeRawUnsafe(
+      `INSERT INTO "OperationsAuditLog" (id,"requestId",action,"actorType","actorUserId","detailsJson")
+       VALUES ($1,$2,$3,'ADMIN',$4,$5::jsonb)`,
+      crypto.randomUUID(), requestId, ready > 0 ? "REQUEST_APPROVED" : "REQUEST_HELD", admin.appUserId,
+      JSON.stringify({ readyCommands: ready, totalCommands: commands.length }),
     );
   });
   revalidatePath("/admin/operations-sync");
@@ -175,8 +193,12 @@ export async function applyOperationsWebsite(requestId: string) {
   const currentMonth = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Seoul", year: "numeric", month: "2-digit" }).format(new Date()).slice(0, 7);
   if (requests[0].targetMonth > currentMonth) throw new Error("미래 적용 월은 시작된 뒤 홈페이지 상태를 변경해 주세요.");
 
-  const commands = await prisma.$queryRawUnsafe<Array<{ id: string; afterJson: { enrollments?: Array<{ id: string; status: string }> } | null }>>(
-    `SELECT c.id, c."afterJson" FROM "OperationsCommand" c
+  const commands = await prisma.$queryRawUnsafe<Array<{
+    id: string;
+    beforeJson: { enrollments?: Array<{ id: string; status: string }> } | null;
+    afterJson: { enrollments?: Array<{ id: string; status: string }> } | null;
+  }>>(
+    `SELECT c.id, c."beforeJson", c."afterJson" FROM "OperationsCommand" c
       JOIN "OperationsSyncAttempt" a ON a."commandId"=c.id AND a.target='WEBSITE'
       WHERE c."requestId"=$1 AND c.status IN ('PENDING','PARTIAL') AND a.status='PENDING'
         AND NOT EXISTS (
@@ -186,22 +208,62 @@ export async function applyOperationsWebsite(requestId: string) {
   );
   if (commands.length === 0) throw new Error("먼저 시트와 랠리즈의 실제 반영을 모두 확인해 주세요.");
   let applied = 0;
-  await prisma.$transaction(async (tx) => {
-    for (const command of commands) {
-      const rows = command.afterJson?.enrollments || [];
-      if (rows.length === 0) continue;
-      for (const row of rows) {
-        await tx.$executeRawUnsafe(`UPDATE "Enrollment" SET status=$2, "updatedAt"=now() WHERE id=$1`, row.id, row.status);
-      }
-      await tx.$executeRawUnsafe(
-        `UPDATE "OperationsSyncAttempt" SET status='SUCCEEDED', attempts=attempts+1, "verifiedAt"=now(), "updatedAt"=now() WHERE "commandId"=$1 AND target='WEBSITE'`, command.id,
-      );
-      applied += 1;
+  const conflicts: string[] = [];
+  for (const command of commands) {
+    const beforeRows = command.beforeJson?.enrollments || [];
+    const afterRows = command.afterJson?.enrollments || [];
+    const beforeById = new Map(beforeRows.map((row) => [row.id, row.status]));
+    const invalidPreview = beforeRows.length === 0
+      || afterRows.length !== beforeRows.length
+      || afterRows.some((row) => !beforeById.has(row.id));
+    if (invalidPreview) {
+      conflicts.push(command.id);
+      await markWebsiteConflict(command.id, "승인 당시 수강 상태 미리보기가 불완전하여 반영을 중단했습니다.");
+      continue;
     }
-  });
+
+    try {
+      await prisma.$transaction(async (tx) => {
+        for (const row of afterRows) {
+          const expectedStatus = beforeById.get(row.id)!;
+          const affected = await tx.$executeRawUnsafe(
+            `UPDATE "Enrollment" SET status=$2, "updatedAt"=now() WHERE id=$1 AND status=$3`,
+            row.id, row.status, expectedStatus,
+          );
+          if (affected !== 1) throw new Error(`ENROLLMENT_CONFLICT:${row.id}`);
+        }
+        const attemptAffected = await tx.$executeRawUnsafe(
+          `UPDATE "OperationsSyncAttempt" SET status='SUCCEEDED', attempts=attempts+1, "verifiedAt"=now(), error=NULL, "updatedAt"=now()
+            WHERE "commandId"=$1 AND target='WEBSITE' AND status='PENDING'`, command.id,
+        );
+        if (attemptAffected !== 1) throw new Error("WEBSITE_ATTEMPT_CONFLICT");
+      });
+      applied += 1;
+    } catch (error) {
+      const isConflict = error instanceof Error && (error.message.startsWith("ENROLLMENT_CONFLICT:") || error.message === "WEBSITE_ATTEMPT_CONFLICT");
+      if (!isConflict) throw error;
+      conflicts.push(command.id);
+      await markWebsiteConflict(command.id, "승인 후 수강 상태가 변경되었습니다. 현재 상태를 다시 확인하고 재승인해 주세요.");
+    }
+  }
   for (const command of commands) await refreshOperationsStatuses(command.id);
   revalidatePath("/admin/operations-sync");
+  if (conflicts.length > 0) {
+    throw new Error(`${conflicts.length}건은 승인 후 수강 상태가 달라져 반영하지 않았습니다. 요청을 다시 검토해 주세요.`);
+  }
   return { ok: true as const, applied };
+}
+
+async function markWebsiteConflict(commandId: string, reason: string) {
+  await prisma.$transaction(async (tx) => {
+    await tx.$executeRawUnsafe(
+      `UPDATE "OperationsCommand" SET status='HELD', "holdReason"=$2, "updatedAt"=now() WHERE id=$1`, commandId, reason,
+    );
+    await tx.$executeRawUnsafe(
+      `UPDATE "OperationsSyncAttempt" SET status='FAILED', attempts=attempts+1, error=$2, "verifiedAt"=NULL, "updatedAt"=now()
+        WHERE "commandId"=$1 AND target='WEBSITE' AND status='PENDING'`, commandId, reason,
+    );
+  });
 }
 
 export async function recordOperationsExternalCheck(commandId: string, target: "RALLYZ", succeeded: boolean) {
@@ -271,13 +333,16 @@ export async function applyOperationsSheet(commandId: string) {
 }
 
 async function refreshOperationsStatuses(commandId: string) {
-  const rows = await prisma.$queryRawUnsafe<Array<{ requestId: string; statuses: string[] }>>(
-    `SELECT c."requestId", array_agg(a.status ORDER BY a.target) AS statuses FROM "OperationsCommand" c
-      JOIN "OperationsSyncAttempt" a ON a."commandId"=c.id WHERE c.id=$1 GROUP BY c."requestId"`, commandId,
+  const rows = await prisma.$queryRawUnsafe<Array<{ requestId: string; commandStatus: string; statuses: string[] }>>(
+    `SELECT c."requestId", c.status AS "commandStatus", array_agg(a.status ORDER BY a.target) AS statuses FROM "OperationsCommand" c
+      JOIN "OperationsSyncAttempt" a ON a."commandId"=c.id WHERE c.id=$1 GROUP BY c."requestId",c.status`, commandId,
   );
   const row = rows[0];
   if (!row) return;
-  const commandStatus = row.statuses.some((value) => value === "FAILED") ? "PARTIAL" : row.statuses.every((value) => value === "SUCCEEDED") ? "SYNCED" : "PENDING";
+  // 사람이 다시 검토해야 하는 HELD는 단순 상태 집계가 덮어쓰면 안 된다.
+  const commandStatus = row.commandStatus === "HELD"
+    ? "HELD"
+    : row.statuses.some((value) => value === "FAILED") ? "PARTIAL" : row.statuses.every((value) => value === "SUCCEEDED") ? "SYNCED" : "PENDING";
   await prisma.$executeRawUnsafe(`UPDATE "OperationsCommand" SET status=$2, "updatedAt"=now() WHERE id=$1`, commandId, commandStatus);
   const requestStatuses = await prisma.$queryRawUnsafe<Array<{ status: string }>>(`SELECT status FROM "OperationsCommand" WHERE "requestId"=$1`, row.requestId);
   const hasHeld = requestStatuses.some((item) => item.status === "HELD");

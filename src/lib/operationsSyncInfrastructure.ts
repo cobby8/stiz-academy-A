@@ -38,7 +38,6 @@ export async function ensureOperationsSyncInfrastructure() {
       "createdAt" TIMESTAMPTZ NOT NULL DEFAULT now(),
       "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT now()
     )`,
-    `CREATE UNIQUE INDEX IF NOT EXISTS "RallyzAttendanceSyncItem_runId_idempotencyKey_key" ON "RallyzAttendanceSyncItem" ("runId", "idempotencyKey")`,
     `CREATE TABLE IF NOT EXISTS "OperationsSyncAttempt" (
       id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
       "commandId" TEXT NOT NULL REFERENCES "OperationsCommand"(id) ON DELETE CASCADE,
@@ -87,17 +86,48 @@ export async function ensureOperationsSyncInfrastructure() {
     `CREATE INDEX IF NOT EXISTS "OperationsRequest_status_createdAt_idx" ON "OperationsRequest" (status, "createdAt" DESC)`,
     `CREATE INDEX IF NOT EXISTS "OperationsCommand_requestId_idx" ON "OperationsCommand" ("requestId")`,
     `CREATE INDEX IF NOT EXISTS "OperationsCommand_studentId_idx" ON "OperationsCommand" ("studentId")`,
+    `CREATE UNIQUE INDEX IF NOT EXISTS "OperationsCommand_idempotencyKey_key" ON "OperationsCommand" ("idempotencyKey")`,
     `CREATE INDEX IF NOT EXISTS "OperationsSyncAttempt_commandId_idx" ON "OperationsSyncAttempt" ("commandId")`,
     `CREATE INDEX IF NOT EXISTS "RallyzAttendanceSyncRun_createdAt_idx" ON "RallyzAttendanceSyncRun" ("createdAt" DESC)`,
     `CREATE INDEX IF NOT EXISTS "RallyzAttendanceSyncItem_runId_idx" ON "RallyzAttendanceSyncItem" ("runId")`,
+    `CREATE UNIQUE INDEX IF NOT EXISTS "RallyzAttendanceSyncItem_runId_idempotencyKey_key" ON "RallyzAttendanceSyncItem" ("runId", "idempotencyKey")`,
     `ALTER TABLE "OperationsRequest" ADD COLUMN IF NOT EXISTS "approvedByUserId" TEXT REFERENCES "User"(id)`,
     `ALTER TABLE "OperationsRequest" ADD COLUMN IF NOT EXISTS "approvedAt" TIMESTAMPTZ`,
+    `ALTER TABLE "OperationsRequest" ADD COLUMN IF NOT EXISTS "parentRequestLinkId" TEXT`,
+    `ALTER TABLE "OperationsRequest" ADD COLUMN IF NOT EXISTS "submittedAt" TIMESTAMPTZ`,
+    `ALTER TABLE "OperationsCommand" ADD COLUMN IF NOT EXISTS "billingStatus" TEXT NOT NULL DEFAULT 'HELD'`,
+    `ALTER TABLE "OperationsCommand" ADD COLUMN IF NOT EXISTS "notificationStatus" TEXT NOT NULL DEFAULT 'HELD'`,
+    `CREATE TABLE IF NOT EXISTS "ParentOperationsRequestLink" (
+      id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+      "studentId" TEXT NOT NULL REFERENCES "Student"(id) ON DELETE CASCADE,
+      "tokenHash" TEXT NOT NULL UNIQUE,
+      "expiresAt" TIMESTAMPTZ NOT NULL,
+      "revokedAt" TIMESTAMPTZ,
+      "lastUsedAt" TIMESTAMPTZ,
+      "createdByUserId" TEXT NOT NULL REFERENCES "User"(id),
+      "createdAt" TIMESTAMPTZ NOT NULL DEFAULT now(),
+      "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT now()
+    )`,
+    `CREATE TABLE IF NOT EXISTS "OperationsAuditLog" (
+      id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+      "requestId" TEXT REFERENCES "OperationsRequest"(id) ON DELETE CASCADE,
+      "linkId" TEXT REFERENCES "ParentOperationsRequestLink"(id) ON DELETE SET NULL,
+      action TEXT NOT NULL,
+      "actorType" TEXT NOT NULL,
+      "actorUserId" TEXT REFERENCES "User"(id),
+      "detailsJson" JSONB,
+      "createdAt" TIMESTAMPTZ NOT NULL DEFAULT now()
+    )`,
+    `CREATE INDEX IF NOT EXISTS "ParentOperationsRequestLink_studentId_expiresAt_idx" ON "ParentOperationsRequestLink" ("studentId","expiresAt")`,
+    `CREATE INDEX IF NOT EXISTS "OperationsAuditLog_requestId_createdAt_idx" ON "OperationsAuditLog" ("requestId","createdAt" DESC)`,
     `ALTER TABLE "OperationsRequest" ENABLE ROW LEVEL SECURITY`,
     `ALTER TABLE "OperationsCommand" ENABLE ROW LEVEL SECURITY`,
     `ALTER TABLE "OperationsSyncAttempt" ENABLE ROW LEVEL SECURITY`,
     `ALTER TABLE "RallyzAttendanceSyncRun" ENABLE ROW LEVEL SECURITY`,
     `ALTER TABLE "RallyzAttendanceSyncItem" ENABLE ROW LEVEL SECURITY`,
-    `REVOKE ALL ON "OperationsRequest", "OperationsCommand", "OperationsSyncAttempt", "RallyzAttendanceSyncRun", "RallyzAttendanceSyncItem" FROM anon, authenticated`,
+    `ALTER TABLE "ParentOperationsRequestLink" ENABLE ROW LEVEL SECURITY`,
+    `ALTER TABLE "OperationsAuditLog" ENABLE ROW LEVEL SECURITY`,
+    `REVOKE ALL ON "OperationsRequest", "OperationsCommand", "OperationsSyncAttempt", "RallyzAttendanceSyncRun", "RallyzAttendanceSyncItem", "ParentOperationsRequestLink", "OperationsAuditLog" FROM anon, authenticated`,
   ];
 
   for (const statement of statements) await prisma.$executeRawUnsafe(statement);

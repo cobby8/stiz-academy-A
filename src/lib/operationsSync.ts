@@ -61,9 +61,10 @@ export function operationsRequestKey(input: {
   studentName: string | null;
   kind: OperationsKind;
   effectiveMonth: string;
+  scope?: string;
 }): string {
   return createHash("sha256")
-    .update([input.sourceText.trim(), input.studentName || "", input.kind, input.effectiveMonth].join("|"))
+    .update([input.scope || "ADMIN", input.sourceText.trim().replace(/\s+/g, " "), input.studentName || "", input.kind, input.effectiveMonth].join("|"))
     .digest("hex");
 }
 

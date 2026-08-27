@@ -25,6 +25,8 @@ model User {
   drivenShuttleRoutePlans ShuttleRoutePlan[]            @relation("ShuttleRouteDriver")
   enrollmentApplications  EnrollmentApplication[]       @relation("EnrollmentApplicationParent")
   parentOperationsLinks   ParentOperationsRequestLink[] @relation("ParentOperationsLinkCreator")
+  regularLocationLinksCreated RegularShuttleLocationLink[] @relation("RegularLocationLinkCreator")
+  regularLocationLinksParent  RegularShuttleLocationLink[] @relation("RegularLocationLinkParent")
   operationsAuditLogs     OperationsAuditLog[]          @relation("OperationsAuditActor")
   operationsRequested     OperationsRequest[]           @relation("OperationsRequestRequester")
   operationsApproved      OperationsRequest[]           @relation("OperationsRequestApprover")
@@ -119,6 +121,7 @@ model Student {
   parentOperationsLinks    ParentOperationsRequestLink[]
   operationsCommands       OperationsCommand[]
   regularShuttleStops      RegularShuttleStop[]
+  regularLocationLinks     RegularShuttleLocationLink[]
   parent                   User                          @relation(fields: [parentId], references: [id])
 
   @@index([parentId])
@@ -1977,6 +1980,41 @@ model StudentShuttleLocation {
   @@unique([studentId, kind])
   @@index([kind, confirmedAt])
   @@index([studentId, updatedAt])
+}
+
+/// 기존 정규반 학부모에게 전달하는 좌표 입력 전용 링크. 원문 토큰은 저장하지 않는다.
+model RegularShuttleLocationLink {
+  id              String   @id @default(dbgenerated("(gen_random_uuid())::text"))
+  studentId       String
+  parentId        String
+  purpose         String   @default("REGULAR_SHUTTLE_LOCATION")
+  tokenHash       String   @unique
+  expiresAt       DateTime @db.Timestamptz(6)
+  revokedAt       DateTime? @db.Timestamptz(6)
+  lastSubmittedAt DateTime? @db.Timestamptz(6)
+  submissionCount Int      @default(0)
+  lastPayloadHash String?
+  createdByUserId String
+  createdAt       DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt       DateTime @default(now()) @updatedAt @db.Timestamptz(6)
+  student         Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  parent          User     @relation("RegularLocationLinkParent", fields: [parentId], references: [id], onDelete: Cascade)
+  createdBy       User     @relation("RegularLocationLinkCreator", fields: [createdByUserId], references: [id], onDelete: NoAction)
+  auditLogs       RegularShuttleLocationLinkAudit[]
+
+  @@index([studentId, expiresAt])
+  @@index([parentId, expiresAt])
+}
+
+model RegularShuttleLocationLinkAudit {
+  id        String   @id @default(dbgenerated("(gen_random_uuid())::text"))
+  linkId    String
+  action    String
+  detailsJson Json?
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  link      RegularShuttleLocationLink @relation(fields: [linkId], references: [id], onDelete: Cascade)
+
+  @@index([linkId, createdAt(sort: Desc)])
 }
 
 // 방학특강 실제 운행 계획용 차량. 홈페이지 안내용 Route/Stop과 분리한다.

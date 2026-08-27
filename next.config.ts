@@ -156,8 +156,19 @@ const nextConfig: NextConfig = {
         ],
       },
       {
+        // 위치 입력 페이지에서만 현재 위치 버튼을 허용한다. 아래 일반 규칙과 겹치면 교집합으로 다시 차단된다.
+        source: "/shuttle/location/:path*",
+        headers: [
+          { key: "X-Frame-Options", value: "DENY" },
+          { key: "X-Content-Type-Options", value: "nosniff" },
+          { key: "Referrer-Policy", value: "no-referrer" },
+          { key: "X-Robots-Tag", value: "noindex, nofollow, noarchive" },
+          { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=(self)" },
+        ],
+      },
+      {
         // 브라우저는 중복 권한 헤더를 교집합으로 적용하므로 교사용 경로와 겹치지 않게 한다.
-        source: "/((?!staff(?:/|$)|api/staff(?:/|$)|admin(?:/|$)).*)",
+        source: "/((?!staff(?:/|$)|api/staff(?:/|$)|admin(?:/|$)|shuttle/location(?:/|$)).*)",
         headers: [
           { key: "X-Frame-Options", value: "DENY" }, // 클릭재킹 방지: iframe 삽입 차단
           { key: "X-Content-Type-Options", value: "nosniff" }, // MIME 스니핑 방지

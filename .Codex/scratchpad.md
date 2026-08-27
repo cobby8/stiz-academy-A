@@ -43,11 +43,17 @@
 
 ## 테스트 결과
 
-- operations-events 및 operations-sync 회귀: 41/41 통과.
-- TypeScript: `npx.cmd tsc --noEmit` 통과.
-- 형식 검사: `git diff --check` 통과.
-- 검증 항목: DB 원자성, 동일 상태 no-op, 날짜·월, plain object, 종류별 필수값, HMAC, replay, 64KB, 멱등 재접수, payload 충돌, HELD 정책, 하드 삭제 제거.
-- 운영 DB·시트·Rallyz·알림·배포 호출 없음.
+- 정규 셔틀 위치 링크 신규/UI 및 관리자·수강신청·지도 선택기·셔틀 회귀: 170/170 통과.
+- TypeScript `npx.cmd tsc --noEmit`, `npx.cmd prisma validate`, `git diff --check` 통과.
+- 토큰 SHA-256 해시·만료·취소·학생/보호자/용도 고정, 좌표/source/동의 검증, 동일 학생·방향 upsert, 공개 UI 모바일 레이아웃·오류 안내 계약을 확인했다.
+- 가짜 DB 행동 테스트로 `저장 → 서버 재조회` 왕복, 동일 payload 무부작용 재시도, 저장 직전 취소·만료 경합을 검증했다. 관리자 GET 상태·취소·재발급, 공개 응답 note 제외, no-store/noindex/no-referrer, 위치 권한 범위, UI 상태 배지·취소도 통과했다.
+- 운영 DB·외부 문자·배포 호출 없음.
+
+## 수정 요청
+
+| 요청자 | 파일 | 문제 | 상태 |
+|---|---|---|---|
+| tester | `tests/regular-shuttle-location-link.test.mjs` | Prisma 가짜 어댑터 기반 roundtrip·경합·멱등 행동 테스트 보완 완료 | 완료 |
 
 ## 확인보류
 
@@ -57,6 +63,9 @@
 - RESUME/CLASS_ADD/CLASS_CHANGE 자동 실행 어댑터는 다음 그룹이다.
 
 ## 작업 로그 (최근 10건)
+- 2026-08-27: 정규 셔틀 학부모 좌표 링크 보완 최종 QA 승인. 행동 roundtrip·경합·멱등과 관리자 상태/취소/재발급·공개 보안·UI 포함 170건, tsc, Prisma validate, diff-check 통과. 운영 DB·문자·배포 없음.
+- 2026-08-27: 정규 셔틀 학부모 좌표 링크 최종 QA. 관련 156건·tsc·Prisma validate·diff-check 통과. 다만 저장 후 서버 재조회 왕복은 SQL 문자열 검사뿐이라 가짜 DB 행동 테스트 보완 요청. 운영 DB·문자·배포 없음.
+- 2026-08-27: 정규반 학부모 셔틀 좌표 링크 백엔드 구현. 32바이트 토큰·SHA-256 해시, 학생/보호자/용도 고정, 만료·취소, 좌표·동의 검증, PICKUP/DROPOFF upsert 후 재조회·감사를 추가했다. 관련 테스트 16건·tsc·Prisma validate·diff-check 통과. 운영 DB·문자·배포 미실행.
 - 2026-08-27: 정규 셔틀 필수 보완 최종 QA 통과. 대상월 ACTIVE 우선, 월 고정 순서 저장, studentId canonical 변동 재대조, 승인 원장 CHECK/unique/RLS, UNCERTAIN 잠금, 월별 ETA를 확인했고 관련 122개 테스트·tsc·Prisma validate·diff-check 통과. 운영 DB·문자·배포 없음.
 - 2026-08-27: 정규 셔틀 백엔드 최종 안전 보강. 월별 수강 원장 우선순위·원장 부재 HELD, studentId 안정 식별, 월 한정 정렬 저장, ETA 월 분리, 승인 문자 전용 원장과 UNCERTAIN 잠금, 서버 canonical 재대조를 구현했다. 관련 테스트 26건·tsc·Prisma validate·diff-check 통과. 운영 DB·문자·배포 미실행.
 - 2026-08-27: 정규 셔틀 통합 QA. 관련 109개 테스트·tsc·Prisma validate·diff-check는 통과했으나, 대상월 복수 수강 상태에서 WITHDRAWN 우선 오판, 모바일 순서 저장의 serviceMonth 미검증, 문자 승인 시 서버 정본 재대조 부재·이름 기반 사건키를 발견해 수정 요청. 운영 DB·문자·배포 없음.

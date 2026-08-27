@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { RegularShuttleStop } from "@/lib/shuttle/regularSheet";
 import RegularRouteSection, { type ShuttleGeo } from "@/components/shuttle/RegularRouteSection";
 import AdminModal from "@/components/admin/AdminModal";
@@ -83,6 +83,24 @@ function closestPreviousMonth(months: string[], serviceMonth: string): string {
   return [...months].filter((month) => month < serviceMonth).sort((a, b) => b.localeCompare(a))[0] ?? "";
 }
 
+type RegularLocationLinkState = {
+  id: string;
+  studentId: string;
+  studentName: string;
+  status: "ACTIVE" | "SUBMITTED" | "EXPIRED" | "REVOKED";
+  expiresAt: string;
+  lastSubmittedAt: string | null;
+  revokedAt: string | null;
+  createdAt: string;
+};
+
+const LOCATION_LINK_STATUS: Record<RegularLocationLinkState["status"], string> = {
+  ACTIVE: "입력 대기",
+  SUBMITTED: "제출 완료",
+  EXPIRED: "만료",
+  REVOKED: "취소",
+};
+
 export default function RegularShuttleClient({ initialStops, importedAt: initialImportedAt, defaultSheetUrl, geo, initialMonth, months, initialCompareMonth, initialComparison }: {
   initialStops: RegularShuttleStop[];
   importedAt: string | null;
@@ -105,11 +123,31 @@ export default function RegularShuttleClient({ initialStops, importedAt: initial
   const [noticeStatus, setNoticeStatus] = useState<"PREPARING" | "HELD" | "APPROVED" | "SENDING" | "SENT" | "ERROR">("HELD");
   const [noticePayloadHash, setNoticePayloadHash] = useState("");
   const [noticeError, setNoticeError] = useState<string | null>(null);
+  const [locationLinkBusy, setLocationLinkBusy] = useState<string | null>(null);
+  const [locationLink, setLocationLink] = useState<{ id: string; studentId: string; studentName: string; url: string; expiresAt: string } | null>(null);
+  const [locationLinks, setLocationLinks] = useState<Record<string, RegularLocationLinkState>>({});
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [geoBusy, setGeoBusy] = useState(false);
   const [geoProgress, setGeoProgress] = useState<{ done: number; total: number } | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    void fetch("/api/admin/shuttle/regular-location-links", { cache: "no-store" })
+      .then(async (response) => {
+        const result = await response.json().catch(() => null);
+        if (!response.ok) throw new Error(result?.error || "위치 링크 상태를 불러오지 못했습니다.");
+        if (cancelled) return;
+        const latest: Record<string, RegularLocationLinkState> = {};
+        for (const link of (result.links ?? []) as RegularLocationLinkState[]) {
+          if (!latest[link.studentId] || link.createdAt > latest[link.studentId].createdAt) latest[link.studentId] = link;
+        }
+        setLocationLinks(latest);
+      })
+      .catch((error) => { if (!cancelled) setErr(error instanceof Error ? error.message : "위치 링크 상태를 불러오지 못했습니다."); });
+    return () => { cancelled = true; };
+  }, []);
 
   // 좌표가 아직 없는 '고유 정류장 이름' 목록 — 지오코딩 대상.
   const missingNames = useMemo(() => {
@@ -198,6 +236,46 @@ export default function RegularShuttleClient({ initialStops, importedAt: initial
     setPreviewCopied(false);
     setNoticePayloadHash("");
     void noticeAction("PREPARE", change);
+  }
+
+  async function createParentLocationLink(studentId: string, studentName: string, reissue = false) {
+    if (locationLinkBusy) return;
+    if (reissue && !window.confirm(`${studentName} 학생의 기존 링크를 취소하고 새 링크를 발급할까요? 기존 링크는 즉시 사용할 수 없게 됩니다.`)) return;
+    setLocationLinkBusy(studentId); setErr(null); setMsg(null);
+    try {
+      const response = await fetch("/api/admin/shuttle/regular-location-links", {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ studentId }),
+      });
+      const result = await response.json().catch(() => null);
+      if (!response.ok || !result?.path) throw new Error(result?.error || "위치 입력 링크를 만들지 못했습니다.");
+      const url = `${window.location.origin}${result.path}`;
+      const nextLink: RegularLocationLinkState = { id: result.id, studentId, studentName: result.studentName ?? studentName, status: "ACTIVE", expiresAt: result.expiresAt, lastSubmittedAt: null, revokedAt: null, createdAt: new Date().toISOString() };
+      setLocationLinks((current) => ({ ...current, [studentId]: nextLink }));
+      setLocationLink({ id: result.id, studentId, studentName: result.studentName ?? studentName, url, expiresAt: result.expiresAt });
+      try { await navigator.clipboard.writeText(url); setMsg(`${result.studentName ?? studentName} 위치 입력 링크를 복사했습니다.`); }
+      catch { setMsg(`${result.studentName ?? studentName} 위치 입력 링크를 만들었습니다. 아래 링크를 직접 복사해 주세요.`); }
+    } catch (error) {
+      setErr(error instanceof Error ? error.message : "위치 입력 링크를 만들지 못했습니다.");
+    } finally {
+      setLocationLinkBusy(null);
+    }
+  }
+
+  async function revokeParentLocationLink(link: RegularLocationLinkState) {
+    if (locationLinkBusy || !window.confirm(`${link.studentName} 학생의 위치 입력 링크를 취소할까요?`)) return;
+    setLocationLinkBusy(link.studentId); setErr(null); setMsg(null);
+    try {
+      const response = await fetch("/api/admin/shuttle/regular-location-links", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ linkId: link.id }) });
+      const result = await response.json().catch(() => null);
+      if (!response.ok) throw new Error(result?.error || "링크를 취소하지 못했습니다.");
+      setLocationLinks((current) => ({ ...current, [link.studentId]: { ...link, status: "REVOKED", revokedAt: new Date().toISOString() } }));
+      if (locationLink?.id === link.id) setLocationLink(null);
+      setMsg(`${link.studentName} 위치 입력 링크를 취소했습니다.`);
+    } catch (error) {
+      setErr(error instanceof Error ? error.message : "링크를 취소하지 못했습니다.");
+    } finally {
+      setLocationLinkBusy(null);
+    }
   }
 
   // 정규 셔틀 기사 고정 링크 복사 — 하나만 전달하면 매일 '오늘 요일' 운행이 자동으로 뜬다.
@@ -383,6 +461,12 @@ export default function RegularShuttleClient({ initialStops, importedAt: initial
         </details>
         {err && <p className="mt-2 rounded-lg bg-red-50 px-3 py-2 text-xs font-bold text-red-600">⚠ {err}</p>}
         {msg && <p className="mt-2 rounded-lg bg-green-50 px-3 py-2 text-xs font-bold text-green-700 dark:bg-green-900/30 dark:text-green-200">✓ {msg}</p>}
+        {locationLink && <div className="mt-2 rounded-xl border border-blue-200 bg-blue-50 p-3 text-xs dark:border-blue-800 dark:bg-blue-950/30">
+          <p className="font-black text-blue-900 dark:text-blue-100">{locationLink.studentName} 학부모 위치 입력 링크</p>
+          <div className="mt-2 flex items-center gap-2"><input readOnly value={locationLink.url} aria-label="학부모 위치 입력 링크" className="min-w-0 flex-1 rounded-lg border border-blue-200 bg-white px-2 py-2 text-gray-700 dark:border-blue-700 dark:bg-gray-900 dark:text-gray-100" /><button type="button" onClick={() => void navigator.clipboard.writeText(locationLink.url)} className="min-h-9 rounded-lg bg-blue-700 px-3 font-black text-white">복사</button></div>
+          <p className="mt-1 text-blue-700 dark:text-blue-200">실제 문자는 발송되지 않습니다. 내용을 확인한 뒤 직접 전달해 주세요. · 만료 {fmtImported(locationLink.expiresAt)}</p>
+          {locationLinks[locationLink.studentId] && <button type="button" onClick={() => void revokeParentLocationLink(locationLinks[locationLink.studentId])} className="mt-2 rounded-lg border border-red-200 px-3 py-1.5 font-black text-red-700 dark:border-red-800 dark:text-red-200">이 링크 취소</button>}
+        </div>}
 
         {stops.length === 0 ? (
           <div className="mt-4 rounded-xl border border-dashed border-gray-300 p-8 text-center text-sm text-gray-400">아직 가져온 운행리스트가 없습니다. 위에서 「시트에서 가져오기」를 눌러주세요.</div>
@@ -462,6 +546,15 @@ export default function RegularShuttleClient({ initialStops, importedAt: initial
                         {s.studentName && <span className="font-bold text-gray-700 dark:text-gray-200">{s.studentName}</span>}
                         {tp && <a href={tp} className="font-bold text-blue-600 dark:text-blue-300">📞 학부모</a>}
                         {t && <a href={t} className="font-bold text-green-600 dark:text-green-300">📞 학생</a>}
+                        {s.studentId && (() => {
+                          const link = locationLinks[s.studentId];
+                          const canReissue = link?.status === "ACTIVE" || link?.status === "SUBMITTED";
+                          return <span className="flex items-center gap-1.5">
+                            {link && <span className="rounded bg-violet-50 px-1.5 py-0.5 text-[10px] font-black text-violet-700 dark:bg-violet-950/30 dark:text-violet-200">{LOCATION_LINK_STATUS[link.status]}{link.lastSubmittedAt ? ` ${fmtImported(link.lastSubmittedAt)}` : ""}</span>}
+                            <button type="button" disabled={locationLinkBusy === s.studentId} onClick={() => void createParentLocationLink(s.studentId!, s.studentName ?? "학생", canReissue)} className="font-black text-violet-700 disabled:opacity-40 dark:text-violet-300">📍 {canReissue ? "링크 재발급" : "위치 링크"}</button>
+                            {canReissue && <button type="button" disabled={locationLinkBusy === s.studentId} onClick={() => void revokeParentLocationLink(link)} className="font-black text-red-600 disabled:opacity-40 dark:text-red-300">취소</button>}
+                          </span>;
+                        })()}
                         {s.note && <span className="text-gray-400">{s.note}</span>}
                       </div>
                     )}

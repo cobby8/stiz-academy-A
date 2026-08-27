@@ -649,7 +649,8 @@ export default function FinanceClient({
             const updatedPreview = await previewMonthlyInvoices(year, month);
             setInvoicePreview(updatedPreview);
             setExcludedStudentIds(new Set());
-            setFinanceNotice(result.message);
+            // 생성과 외부 발송은 분리하되, 승인된 청구는 알림 발송까지 마쳐야 완료임을 안내한다.
+            setFinanceNotice(`${result.message}. 0원·보류 건을 제외한 청구서는 링크 발송이 필수입니다.`);
         } catch (err: unknown) {
             setInvoiceError(getErrorMessage(err, "청구서 생성 실패"));
         } finally {
@@ -661,7 +662,7 @@ export default function FinanceClient({
         const confirmMessage =
             `${year}년 ${month}월 청구서를 자동으로 확인하고 정리할까요?\n` +
             "새 청구서는 생성하고, 이미 생성된 청구서는 그대로 유지합니다.\n" +
-            "학부모 알림 발송은 완료 후 별도로 진행합니다.";
+            "학부모 알림은 안전을 위해 별도 승인 후 발송하며, 0원·보류 건 외에는 반드시 발송해야 합니다.";
 
         if (!confirm(confirmMessage)) return;
 
@@ -692,7 +693,7 @@ export default function FinanceClient({
             const attentionCount = updatedPreview.items.filter(needsInvoiceAttention).length;
             setInvoicePreview(updatedPreview);
             setInvoiceFilter(attentionCount > 0 ? "ATTENTION" : "ALL");
-            setFinanceNotice(`${creationMessage}. 청구서 ${ledger.invoices}건과 연체 ${ledger.overdue}건을 정리했습니다. 링크 발송 대상이 있으면 다음 단계에서 발송하세요.`);
+            setFinanceNotice(`${creationMessage}. 청구서 ${ledger.invoices}건과 연체 ${ledger.overdue}건을 정리했습니다. 0원·보류 건을 제외한 발송 대상은 반드시 링크 발송을 완료하세요.`);
         } catch (err: unknown) {
             setInvoiceError(getErrorMessage(err, "청구서 자동 생성/정리 실패"));
         } finally {
@@ -1107,7 +1108,7 @@ export default function FinanceClient({
                                     },
                                     {
                                         key: "send-links",
-                                        label: "링크 발송",
+                                        label: "링크 발송 (필수)",
                                         icon: "send",
                                         disabled: busy || billingRunLoading || invoiceGeneratedCount === 0 || invoiceUnsentCount === 0,
                                         onSelect: handleSendInvoiceLinks,

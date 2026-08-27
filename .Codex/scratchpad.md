@@ -296,6 +296,7 @@
 | reviewer | `src/app/request/[token]/ParentRequestForm.tsx:37-39`, `src/lib/parentOperationsInterpretation.ts:173-182` | 아무 필드 수정만으로 모든 blocking 질문을 지울 수 있고 서버가 종류별 필수 필드·관계를 재검증하지 않음 | 필수 수정 |
 | reviewer | `src/lib/parentOperationsInterpretation.ts:175` | confirmed payload의 적용일을 정규식만 검사해 2월 31일 같은 비실재 날짜 허용 | 필수 수정 |
 | reviewer | `src/app/request/[token]/ParentRequestForm.tsx:74,79` | 셔틀 UI 값 `USE`와 서버 계약 `START` 불일치, `EXEMPT` 선택지도 없음 | 필수 수정 |
+| tester | `src/app/actions/admin.ts:3401` | `p.status <> 'HELD'`는 실제 학부모 요청 보류 정본인 `OperationsCommand.notificationStatus`와 무관해 명시적 보류 알림 차단을 보장하지 못함. 발송 후보를 승인된 알림 상태와 연결하거나 별도 청구 알림 보류 필드를 두고 회귀 테스트 필요 | 필수 수정 |
 
 ### 리뷰 결과 (reviewer) — 2026-08-27 학부모 자연어 요청 확인·수정
 
@@ -373,7 +374,50 @@
 
 📊 종합: 정식 단위 테스트 27건 + 추가 경계 테스트 3건 전체 통과 / 0개 실패. 수정 요청 없음.
 
+### 테스트 결과 (tester) — 2026-08-27 월 청구 알림 필수 규칙
+
+| 테스트 항목 | 결과 | 비고 |
+|-----------|------|------|
+| 0원 템플릿 생성 제외 | ✅ 통과 | 월 청구 대상 SQL에서 `amount > 0` 적용 |
+| 생성·알림 발송 분리 | ✅ 통과 | 생성 함수와 발송 함수가 분리되고 각각 UI 확인 단계 유지 |
+| 승인 후 발송 의무 안내 | ✅ 통과 | 버튼과 완료 안내에 필수 후속 단계 명시 |
+| 이미 발송한 청구 중복 방지 | ✅ 통과 | 일반 발송에서 `sentAt IS NULL` 적용 |
+| 명시적 보류 청구 제외 | ❌ 실패 | `Payment.status='HELD'` 조건은 실제 `OperationsCommand.notificationStatus='HELD'`와 연결되지 않음 |
+| 회귀 테스트·TypeScript | ✅ 통과 | `node --test` 3/3, `npx.cmd tsc --noEmit` 종료코드 0 |
+
+📊 종합: 6개 중 5개 통과 / 1개 실패. 외부 발송·DB 변경 없음.
+
+### 테스트 결과 (tester) — 2026-08-27 월 청구 알림 필수 규칙 재검증
+
+| 테스트 항목 | 결과 | 비고 |
+|-----------|------|------|
+| 0원 템플릿 생성 제외 | ✅ 통과 | `MONTHLY_INVOICE_TARGETS_SQL`에 `amount > 0` 적용 |
+| 명시적 알림 보류 판정 | ✅ 통과 | 같은 학생·적용월에서 `OperationsCommand.status='HELD'`와 `notificationStatus='HELD'`를 모두 만족할 때만 보류 |
+| 정상 PENDING 요청 통과 | ✅ 통과 | `status='PENDING'`은 `notificationStatus` 기본값이 HELD여도 EXISTS 조건을 만족하지 않아 발송 후보 유지 |
+| 발송 후보 0원 SQL 제외 | ❌ 실패 | 실행 직전 정책 함수는 0원을 제거하지만 후보 SQL에 테스트가 요구하는 `AND p.amount > 0`이 없음 |
+| 정책 회귀 테스트 | ❌ 실패 | `node --test tests/monthly-invoice-notification-policy.test.mjs`: 3개 중 2개 통과, 1개 실패 |
+| TypeScript | ✅ 통과 | `npx.cmd tsc --noEmit` 종료코드 0 |
+
+📊 종합: 6개 중 4개 통과 / 2개 실패. 수정 요청: `sendInvoiceLinksForMonth` 후보 SQL에 `AND p.amount > 0`을 추가한 뒤 재검증 필요. 소스 수정·외부 발송·DB 변경 없음.
+
+### 테스트 결과 (tester) — 2026-08-27 월 청구 알림 필수 규칙 최종 재검증
+
+| 테스트 항목 | 결과 | 비고 |
+|-----------|------|------|
+| 0원 청구 이중 제외 | ✅ 통과 | 템플릿 생성 SQL과 발송 후보 SQL 모두 `amount > 0` 적용 |
+| 명시적 알림 보류 판정 | ✅ 통과 | `OperationsCommand.status='HELD'`와 `notificationStatus='HELD'` 동시 충족 건만 제외 |
+| 정상 PENDING 요청 통과 | ✅ 통과 | `status='PENDING'` 요청은 발송 후보를 차단하지 않음 |
+| 중복 발송 방지 | ✅ 통과 | 일반 발송은 `PaymentInvoice.sentAt IS NULL` 조건 유지 |
+| 정책 회귀 테스트 | ✅ 통과 | `node --test tests/monthly-invoice-notification-policy.test.mjs` 3/3 |
+| TypeScript | ✅ 통과 | `npx.cmd tsc --noEmit` 종료코드 0 |
+
+📊 종합: 6개 중 6개 통과 / 0개 실패. 이전 수정 요청 해소. 소스 수정·외부 발송·DB 변경 없음.
+
 ## 작업 로그 (최근 10건)
+- 2026-08-27: 월 청구 알림 규칙 최종 재검증 완료. 0원 생성·발송 제외, OperationsCommand 이중 HELD 보류, PENDING 비차단, 중복 방지를 확인했고 정책 테스트 3/3 및 `tsc --noEmit` 통과.
+- 2026-08-27: 월 청구 알림 규칙 재검증. 실제 OperationsCommand의 이중 HELD 조건과 PENDING 비차단은 확인했으나 발송 후보 SQL의 `p.amount > 0` 누락으로 정책 테스트 3건 중 1건 실패. `tsc --noEmit`은 통과, 수정 요청 등록.
+- 2026-08-27: 청구 알림 필수 규칙 독립 검증. 단위 테스트 3건·`tsc --noEmit`은 통과했으나, 발송 SQL의 `p.status <> 'HELD'`가 실제 보류 정본인 `OperationsCommand.notificationStatus='HELD'`와 연결되지 않아 명시적 보류 차단을 보장하지 못함. 생성/발송 분리와 별도 confirm은 유지됨. 수정 요청 등록.
+- 2026-08-27: 월 청구 알림을 승인 후 필수 후속 단계로 명시하고, 0원 템플릿 미생성 및 `HELD` 청구 미발송을 서버에서 강제했다. 생성·발송 별도 승인 유지, 회귀 3건·`tsc --noEmit` 통과. 외부 발송·DB 변경 없음.
 - 2026-08-27: 정규 청구 계산에 `Sun-8` 대표팀 수강생 월 셔틀비 전액 면제를 추가했다. 휴원 일8 및 다른 일요일 반은 면제하지 않으며 단위 테스트 27건·`tsc --noEmit` 통과. 운영 데이터·DB·외부 시스템 변경 없음.
 - 2026-08-27: 운영 동기화 승인 행 잠금, Sheet/Website 실행 임대(CAS), 성공 재호출 차단·실패 재시도, Rallyz 성공 보호를 구현했다. 외부 완료·상태 집계를 감사 저장과 분리하고 Website 커밋 직후 중단 자가복구 및 원장 전체 FK action의 Prisma 정합화를 완료했다. 통합 회귀 49건·prisma validate·tsc·대상 lint 통과. 운영 DB 적용·커밋·푸시 없음.
 - 2026-08-27: 자연어→학부모 확인·수정→DRAFT 접수 회귀 46건 통과. 복수 의도·날짜·반·셔틀 변조 차단, 1회용 링크, 외부 무호출, 청구·알림 HELD, 모바일 편집을 검증. tsc/대상 lint/Prisma 통과(전체 lint는 4GB OOM).

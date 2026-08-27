@@ -45,6 +45,7 @@ import {
     syncInvoiceStatusesForMonth,
 } from "@/lib/payment-ledger";
 import { monthlyBillingDueDate } from "@/lib/billing-due-date";
+import { isMonthlyInvoiceNotificationEligible } from "@/lib/billing/notification-policy";
 import {
     APPLICATION_CONTACT_ACTIONS,
     ensureApplicationContactLogInfrastructure,
@@ -3120,7 +3121,9 @@ const MONTHLY_INVOICE_TARGETS_SQL = `
     WITH templates AS (
         SELECT id, name, amount, type, description, "dueDay", "programId"
         FROM "BillingTemplate"
+        -- 0원 청구서는 원장과 학부모 알림 모두 만들지 않는다.
         WHERE "isActive" = true
+          AND amount > 0
     ),
     active_enrollments AS (
         SELECT DISTINCT
@@ -3388,12 +3391,27 @@ export async function sendInvoiceLinksForMonth(year: number, month: number, forc
     const sentFilter = forceResend ? "" : `AND i."sentAt" IS NULL`;
 
     try {
-        const invoices = await prisma.$queryRawUnsafe<{ id: string }[]>(
+        const invoiceCandidates = await prisma.$queryRawUnsafe<{
+            id: string;
+            amount: number;
+            notificationHeld: boolean;
+        }[]>(
             `
-            SELECT i.id
+            SELECT
+              i.id,
+              p.amount::int AS amount,
+              EXISTS (
+                SELECT 1
+                FROM "OperationsCommand" command
+                WHERE command."studentId" = p."studentId"
+                  AND command."effectiveMonth" = CONCAT($1::text, '-', LPAD($2::text, 2, '0'))
+                  AND command.status = 'HELD'
+                  AND command."notificationStatus" = 'HELD'
+              ) AS "notificationHeld"
             FROM "PaymentInvoice" i
             JOIN "Payment" p ON p.id = i."paymentId"
             WHERE i.status NOT IN ('PAID', 'CANCELED')
+              AND p.amount > 0
               AND i."parentId" IS NOT NULL
               AND (
                 (p.year = $1 AND p.month = $2)
@@ -3407,6 +3425,8 @@ export async function sendInvoiceLinksForMonth(year: number, month: number, forc
             dueStart,
             dueEnd,
         );
+        // 실제 운영 요청 원장의 HELD 상태와 금액을 함께 확인해 발송 대상을 확정한다.
+        const invoices = invoiceCandidates.filter(isMonthlyInvoiceNotificationEligible);
 
         if (invoices.length === 0) {
             return { sent: 0, message: "발송할 청구서 링크가 없습니다." };
@@ -6981,4 +7001,3 @@ export async function resendInvitation(invitationId: string) {
         throw new Error((e as Error).message || "초대 재발송 실패");
     }
 }
-

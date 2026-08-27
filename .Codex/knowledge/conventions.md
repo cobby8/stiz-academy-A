@@ -162,6 +162,12 @@
 - **내용**: 같은 "태울 학생 명단"을 세 화면이 각자 조회하면서 제외 조건이 전부 달랐다(실측: 노선 화면은 셔틀·신청서·수강항목 3단계만, 통합 명단은 `WHERE` 절 자체가 없음, 자동 배차는 명단을 그대로 받아 오염 전파). 같은 실수가 세 번 반복됐으므로 기준값과 SQL 조각을 `src/lib/seasonal/shuttleEligibility.ts` 한 곳에만 둔다. 제공 항목: `CLOSED_SHUTTLE_STATUSES`(=`["CANCELLED","REJECTED"]`, 셔틀신청·신청서·수강항목 공통), `CANCELLED_OFFERING_STATUS`, `isRidingShuttleStatus(status)`, `seasonalShuttleEligibilitySql({application,item,offering})`. **화면 파일에 `["CANCELLED","REJECTED"]`를 다시 적지 않는다.** 반드시 함께 지킬 것 3가지 — (1) 개설 취소된 반(`o.status <> 'CANCELLED'`)까지 걸러야 한다. 취소 반 학생이 마침 신청서도 취소라서 우연히 걸러지던 것을 필터가 있는 것으로 착각하기 쉽다. (2) 탑승 판정은 `status !== 'CANCELLED'`가 아니라 목록 기반이어야 한다 — `REJECTED`가 탑승으로 새어 자동 배차에 실린다. (3) `it`·`o`가 LEFT JOIN이면 `IS NULL OR` 가드를 반드시 함께 건다. 한편 셔틀 상태(`r.status`)는 **SQL에서 거르지 않는다** — 미탑승 행을 지우면 "역시 태워주세요" 연락이 왔을 때 되돌릴 UI가 사라진다. 화면 토글(기본 숨김)로 처리하고, 기사님용 CSV에는 탑승자만 담는다. 회귀 테스트: `tests/seasonal-shuttle-roster-filter.test.mjs`, `tests/shuttle-unassigned-cancelled-filter.test.mjs`.
 - **참조횟수**: 0
 
+### [2026-08-27] 일8 대표팀 정규 셔틀비 전액 면제
+- **분류**: convention
+- **발견자**: developer
+- **내용**: 정규반 월 청구에서 청구 대상 상태의 `Sun-8` 슬롯을 하나라도 수강하면, 다른 평일 수업에서 셔틀을 이용하더라도 그 학생의 월 정규 셔틀비 전체를 0원으로 계산한다. 휴원·퇴원·이월인 `Sun-8` 행은 면제 근거로 사용하지 않는다. 판정은 시트 표시 문자열이 아니라 `extractSlotKeys`가 만든 정규 슬롯 키로 수행한다.
+- **참조횟수**: 0
+
 ## 검증 원칙
 - 소규모 변경은 `tsc --noEmit` 통과를 기본 검증으로 삼는다.
 - 기능 변경은 필요한 경우 화면 확인과 관련 테스트를 추가한다.

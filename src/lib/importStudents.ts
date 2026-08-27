@@ -705,6 +705,12 @@ export function parseAndTransformCsv(csvText: string): ImportPreviewResult {
       );
     }
 
+    // 수업선택 → slotKey. 청구 계산에도 일8 대표팀 셔틀비 면제 판정이 필요하다.
+    const slotKeysByRow = new Map<number, string[]>();
+    for (const r of monthRows) {
+      slotKeysByRow.set(r.rowNumber, extractSlotKeys(dayHeaders, r.classSelections));
+    }
+
     // 청구 금액 계산 (수강료 합계 + 셔틀비 - 이월, 0 미만 없음)
     const billing = summarizeStudentBilling(
       monthRows.map<BillingRow>((r) => ({
@@ -713,6 +719,7 @@ export function parseAndTransformCsv(csvText: string): ImportPreviewResult {
         tuitionAmount: r.tuitionAmount,
         shuttleFee: r.shuttleFee,
         carryOverAmount: r.carryOverAmount,
+        slotKeys: slotKeysByRow.get(r.rowNumber) ?? [],
       }))
     );
 
@@ -722,11 +729,7 @@ export function parseAndTransformCsv(csvText: string): ImportPreviewResult {
       );
     }
 
-    // 수업선택 → slotKey. 주3회 학생은 행마다 요일이 다르므로 전 행을 합집합한다.
-    const slotKeysByRow = new Map<number, string[]>();
-    for (const r of monthRows) {
-      slotKeysByRow.set(r.rowNumber, extractSlotKeys(dayHeaders, r.classSelections));
-    }
+    // 주3회 학생은 행마다 요일이 다르므로 전 행의 슬롯을 합집합한다.
     const slotKeys = [...new Set(monthRows.flatMap((r) => slotKeysByRow.get(r.rowNumber) ?? []))];
 
     // 대표 반: 수강료가 가장 큰 행(= 주력 수업), 동률이면 원본 행 번호가 빠른 쪽.

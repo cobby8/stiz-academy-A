@@ -86,7 +86,8 @@ test("체험 신청 일정은 DB 수업 정보와 연결해 실제 수업 시간
 test("체험 신청은 한 줄 목록에서 핵심 정보와 빠른 처리만 보여준다", () => {
   assert.match(trialClient, /function renderTrialList\(\)/);
   assert.match(trialClient, /<table className="w-full min-w-\[760px\] table-fixed[\s\S]*text-center[\s\S]*lg:min-w-0/);
-  assert.match(trialClient, /상태[\s\S]*신청일[\s\S]*체험일[\s\S]*수업[\s\S]*담당교사[\s\S]*수강생이름[\s\S]*학교[\s\S]*학년[\s\S]*상태변경[\s\S]*액션/);
+  assert.match(trialClient, /상태[\s\S]*신청일[\s\S]*체험일[\s\S]*수업[\s\S]*담당교사[\s\S]*수강생이름[\s\S]*학교[\s\S]*학년[\s\S]*액션/);
+  assert.doesNotMatch(trialClient, />상태변경</);
   assert.match(trialClient, /function formatMonthDayDate/);
   assert.match(trialClient, /function getTrialListDateValue/);
   assert.match(trialClient, /const createdDateMobileLabel = formatMonthDayDate\(lead\.createdAt\)/);
@@ -105,16 +106,15 @@ test("체험 신청은 한 줄 목록에서 핵심 정보와 빠른 처리만 �
   assert.match(trialClient, /quickActionMenuPosition/);
   assert.match(trialClient, /flash_on/);
   assert.match(trialClient, /async function handleConfirmTrialFee/);
-  assert.match(trialClient, /updateTrialLead\(lead\.id, \{ trialFeeConfirmed: true \}/);
+  assert.match(trialClient, /confirmTrialFeePayment\(lead\.id\)/);
   assert.doesNotMatch(trialClient, /lead\.trialFeeConfirmed \? "입금" : "미입금"/);
-  assert.match(trialClient, /<span>입금 확인<\/span>/);
+  assert.match(trialClient, /trialFeeBusyId === lead\.id \? "확인 중…" : "입금 확인"/);
   assert.match(trialClient, /<span>입금 완료<\/span>/);
   assert.match(trialClient, /onConfirmTrialFee/);
-  assert.match(trialClient, /function renderStatusChangeCell/);
+  assert.doesNotMatch(trialClient, /function renderStatusChangeCell/);
   assert.doesNotMatch(trialClient, /renderEnrollGuideButton\(lead, "inline"\)/);
-  assert.match(trialClient, /\{renderEnrollGuideButton\(lead\)\}/);
-  assert.match(trialClient, /lead\.coachNoticeSentAt \? "쌤알림 재발송" : "쌤알림 발송"/);
-  assert.match(trialClient, /void handleSendCoachNotice\(lead\)/);
+  assert.match(trialClient, /lead\.status === "ATTENDED" && renderEnrollGuideButton\(lead\)/);
+  assert.match(trialClient, /onCoachNotice=\{\(\) => void handleSendCoachNotice\(showDetailModal\)\}/);
   assert.match(trialClient, /type TrialDateFilter/);
   assert.match(trialClient, /const TRIAL_DATE_FILTERS/);
   assert.match(trialClient, /matchesTrialDateFilter\(lead, dateFilter\)/);
@@ -123,7 +123,13 @@ test("체험 신청은 한 줄 목록에서 핵심 정보와 빠른 처리만 �
   assert.doesNotMatch(trialClient, /<th className="px-3 py-2(?:\.5)?">보호자<\/th>/);
   assert.doesNotMatch(trialClient, /<th className="px-3 py-2(?:\.5)?">쌤알림<\/th>/);
   assert.match(trialClient, /setShowScheduleModal\(lead\)/);
-  assert.match(trialClient, /handleRecordContact\(lead, "CONTACTED"\)/);
+  assert.match(trialClient, /setContactModal\(\{ lead, defaultAction: "CONTACTED" \}\)/);
+  assert.match(trialClient, /lead\.childGrade \|\| lead\.childAge/);
+  assert.match(trialClient, /NAVER_SEARCH: "네이버 키워드 검색"/);
+  assert.match(trialClient, /lead\.status === "SCHEDULED" \? "일정 변경" : "일정 확정"/);
+  assert.match(trialClient, /\[lead\.childName, lead\.childGrade \|\| lead\.childAge, lead\.childSchool\]/);
+  assert.match(trialModals, /체험비 상태: \{form\.trialFeeConfirmed \? "입금 확인 완료" : "미확인"\}/);
+  assert.doesNotMatch(trialModals, /onChange=\{\(e\) => setForm\(\{ \.\.\.form, trialFeeConfirmed: e\.target\.checked \}\)\}/);
   assert.doesNotMatch(trialClient, /viewMode/);
   assert.doesNotMatch(trialClient, /setViewMode/);
   assert.doesNotMatch(trialClient, /grid_view/);
@@ -214,12 +220,12 @@ test("체험수업과 수강신청은 카드형을 폐기하고 목록형만 제
   assert.doesNotMatch(trialClient, /type ViewMode/);
   assert.doesNotMatch(trialClient, /setViewMode/);
   assert.doesNotMatch(trialClient, /grid_view/);
-  assert.match(trialClient, /handleStatusChange\(lead, event\.target\.value\)/);
+  assert.doesNotMatch(trialClient, /handleStatusChange\(lead, event\.target\.value\)/);
 });
 
 test("목록형은 스프레드시트처럼 실제 테이블 구조로 보여준다", () => {
   assert.match(trialClient, /function renderTrialList\(\)[\s\S]*<table className="w-full min-w-\[760px\][\s\S]*lg:min-w-0/);
-  assert.match(trialClient, /<thead[\s\S]*상태[\s\S]*신청일[\s\S]*체험일[\s\S]*수업[\s\S]*담당교사[\s\S]*수강생이름[\s\S]*학교[\s\S]*학년[\s\S]*상태변경[\s\S]*액션/);
+  assert.match(trialClient, /<thead[\s\S]*상태[\s\S]*신청일[\s\S]*체험일[\s\S]*수업[\s\S]*담당교사[\s\S]*수강생이름[\s\S]*학교[\s\S]*학년[\s\S]*액션/);
   assert.match(trialClient, /<tbody[\s\S]*visibleLeads\.map/);
   assert.doesNotMatch(trialClient, /hidden grid-cols-\[1fr_0\.9fr_2\.2fr_0\.8fr_1\.2fr\]/);
   assert.match(applyClient, /function renderApplicationList\(\)[\s\S]*<table className="w-full min-w-\[960px\]/);

@@ -56,6 +56,8 @@ import { PUBLIC_SITE_URL } from "@/lib/publicMetadata";
 import { formatTrialScheduleLabel, formatTrialSmsDateTime, hasExplicitTrialTime, isLegacyTrialDatePlaceholder } from "@/lib/trial-sms-time";
 import { seoulDateInputValue } from "@/lib/trial-schedule-time";
 import { resolveCanonicalTrialSchedule } from "@/lib/trial-schedule-server";
+import { confirmTrialFeeWithAudit, type TrialFeeConfirmationResult } from "@/lib/trial-fee-confirmation";
+import { recordApplicationContactAtomically } from "@/lib/application-contact-transaction";
 import { sessionDateForKorea } from "@/lib/seasonal/session-bridge";
 import { linkMatchingCoachProfileToUser } from "@/lib/staff-coach-link";
 import { buildEnrollmentOperationsEvent } from "@/lib/operations-events/admin-hooks";
@@ -4045,6 +4047,30 @@ const TRIAL_LEAD_COLUMNS = [
     "trialDate", "trialFeeConfirmed", "hopeNote", "agreedTerms", "agreedPrivacy",
 ] as const;
 
+/**
+ * 체험비 입금 확인 전용 action.
+ * 공용 수정 action과 분리해 중복 클릭에서도 최초 변경 한 번만 이력을 남긴다.
+ */
+export async function confirmTrialFeePayment(id: string): Promise<TrialFeeConfirmationResult> {
+    const admin = await requireAdmin();
+    await ensureTrialLeadTable();
+    await ensureApplicationContactLogInfrastructure();
+
+    const result = await confirmTrialFeeWithAudit(prisma, id, {
+        userId: admin.appUserId,
+        userName: admin.appUserName,
+    });
+    if (!result.found) return result;
+
+    if (result.changed) {
+        revalidatePath("/admin/trial");
+        revalidatePath("/admin/apply");
+        revalidateTrialAdminCaches();
+    }
+
+    return result;
+}
+
 export async function updateTrialLead(
     id: string,
     data: Partial<Record<(typeof TRIAL_LEAD_COLUMNS)[number], any>>,
@@ -5545,73 +5571,16 @@ export async function recordApplicationContact(input: {
         throw new Error("다음 연락 예정일 형식이 올바르지 않습니다.");
     }
 
-    const exists = targetType === "TRIAL"
-        ? await prisma.$queryRawUnsafe<any[]>(
-            `SELECT id FROM "TrialLead" WHERE id = $1 LIMIT 1`,
-            targetId,
-        )
-        : await prisma.$queryRawUnsafe<any[]>(
-            `SELECT id FROM "EnrollmentApplication" WHERE id = $1 LIMIT 1`,
-            targetId,
-        );
-
-    if (exists.length === 0) {
-        throw new Error("신청 건을 찾을 수 없습니다.");
-    }
-
-    if (action === "CONTACTED") {
-        if (targetType === "TRIAL") {
-            await prisma.$executeRawUnsafe(
-                `UPDATE "ApplicationContactLog"
-                 SET "followUpCompletedAt" = COALESCE("followUpCompletedAt", NOW()),
-                     "updatedAt" = NOW()
-                 WHERE "targetType" = 'TRIAL'
-                   AND "trialLeadId" = $1
-                   AND "nextFollowUpAt" IS NOT NULL
-                   AND "followUpCompletedAt" IS NULL`,
-                targetId,
-            );
-        } else {
-            await prisma.$executeRawUnsafe(
-                `UPDATE "ApplicationContactLog"
-                 SET "followUpCompletedAt" = COALESCE("followUpCompletedAt", NOW()),
-                     "updatedAt" = NOW()
-                 WHERE "targetType" = 'ENROLL'
-                   AND "enrollmentApplicationId" = $1
-                   AND "nextFollowUpAt" IS NOT NULL
-                   AND "followUpCompletedAt" IS NULL`,
-                targetId,
-            );
-        }
-    }
-
-    await prisma.$executeRawUnsafe(
-        `INSERT INTO "ApplicationContactLog" (
-            id, "targetType", "trialLeadId", "enrollmentApplicationId", action, note,
-            "nextFollowUpAt", "createdByUserId", "createdByName", "createdAt", "updatedAt"
-        )
-        VALUES (
-            gen_random_uuid()::text,
-            $1,
-            $2,
-            $3,
-            $4,
-            $5,
-            $6::timestamptz,
-            $7,
-            $8,
-            NOW(),
-            NOW()
-        )`,
+    const result = await recordApplicationContactAtomically(prisma, {
         targetType,
-        targetType === "TRIAL" ? targetId : null,
-        targetType === "ENROLL" ? targetId : null,
+        targetId,
         action,
         note,
         nextFollowUpAt,
-        admin.appUserId,
-        admin.appUserName,
-    );
+        actorUserId: admin.appUserId,
+        actorUserName: admin.appUserName,
+    });
+    if (!result.found) throw new Error("신청 건을 찾을 수 없습니다.");
 
     revalidatePath("/admin/apply");
     revalidatePath("/admin/trial");

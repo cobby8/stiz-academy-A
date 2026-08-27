@@ -372,7 +372,7 @@ function TrialEditModal({
 }) {
     const [form, setForm] = useState({
         childName: lead.childName ?? "",
-        childAge: lead.childAge ?? "",
+        childAge: lead.childAge && lead.childAge !== lead.childGrade ? lead.childAge : "",
         childGrade: lead.childGrade ?? "",
         childSchool: lead.childSchool ?? "",
         childGender: lead.childGender ?? "",
@@ -432,8 +432,8 @@ function TrialEditModal({
                         <FormField label="아이 이름 *">
                             <input value={form.childName} onChange={(e) => setForm({ ...form, childName: e.target.value })} className={MODAL_INPUT_CLASS} />
                         </FormField>
-                        <FormField label="나이/학년">
-                            <input value={form.childAge} onChange={(e) => setForm({ ...form, childAge: e.target.value })} className={MODAL_INPUT_CLASS} placeholder="초등 3학년" />
+                        <FormField label="나이 (필요한 경우만)">
+                            <input value={form.childAge} onChange={(e) => setForm({ ...form, childAge: e.target.value })} className={MODAL_INPUT_CLASS} placeholder="예: 11세" />
                         </FormField>
                         <FormField label="학년">
                             <input value={form.childGrade} onChange={(e) => setForm({ ...form, childGrade: e.target.value })} className={MODAL_INPUT_CLASS} />
@@ -461,9 +461,16 @@ function TrialEditModal({
                             <select value={form.source} onChange={(e) => setForm({ ...form, source: e.target.value })} className={MODAL_INPUT_CLASS}>
                                 <option value="WEBSITE">홈페이지</option>
                                 <option value="NAVER">네이버</option>
+                                <option value="NAVER_SEARCH">네이버 키워드 검색</option>
+                                <option value="PORTAL_OTHER">네이버 외 포털검색</option>
+                                <option value="NAVER_BLOG">스티즈 네이버블로그</option>
+                                <option value="INSTAGRAM">인스타그램</option>
+                                <option value="YOUTUBE">유튜브</option>
                                 <option value="REFERRAL">지인소개</option>
                                 <option value="FLYER">전단지</option>
-                                <option value="PASSBY">지나가다</option>
+                                <option value="PASSBY">지나가다 발견</option>
+                                <option value="SOOMGO">숨고</option>
+                                <option value="DANGGEUN">당근마켓</option>
                                 <option value="OTHER">기타</option>
                             </select>
                         </FormField>
@@ -477,14 +484,10 @@ function TrialEditModal({
                             <input value={form.preferredPeriod} onChange={(e) => setForm({ ...form, preferredPeriod: e.target.value })} className={MODAL_INPUT_CLASS} placeholder="4" />
                         </FormField>
                     </div>
-                    <label className="flex items-center gap-2 rounded-lg border border-gray-200 px-3 py-2 text-sm font-semibold text-gray-700 dark:border-gray-700 dark:text-gray-200">
-                        <input
-                            type="checkbox"
-                            checked={form.trialFeeConfirmed}
-                            onChange={(e) => setForm({ ...form, trialFeeConfirmed: e.target.checked })}
-                        />
-                        체험비 확인
-                    </label>
+                    <div className="rounded-lg border border-gray-200 px-3 py-2 text-sm font-semibold text-gray-700 dark:border-gray-700 dark:text-gray-200">
+                        체험비 상태: {form.trialFeeConfirmed ? "입금 확인 완료" : "미확인"}
+                        <p className="mt-1 text-xs font-medium text-gray-400">입금 확인은 상세 화면의 전용 버튼에서 처리합니다.</p>
+                    </div>
                     <FormField label="바라는 점">
                         <textarea value={form.hopeNote} onChange={(e) => setForm({ ...form, hopeNote: e.target.value })} rows={2} className={`${MODAL_INPUT_CLASS} resize-none`} />
                     </FormField>
@@ -780,7 +783,15 @@ function AddLeadModal({
                         >
                             <option value="WEBSITE">홈페이지</option>
                             <option value="NAVER">네이버</option>
+                            <option value="NAVER_SEARCH">네이버 키워드 검색</option>
+                            <option value="PORTAL_OTHER">네이버 외 포털검색</option>
+                            <option value="NAVER_BLOG">스티즈 네이버블로그</option>
+                            <option value="INSTAGRAM">인스타그램</option>
+                            <option value="YOUTUBE">유튜브</option>
+                            <option value="PASSBY">지나가다 발견</option>
                             <option value="REFERRAL">지인소개</option>
+                            <option value="SOOMGO">숨고</option>
+                            <option value="DANGGEUN">당근마켓</option>
                             <option value="OTHER">기타</option>
                         </select>
                     </div>

@@ -208,11 +208,13 @@ function timeInputValue(dateStr: string | null) {
     return seoulTimeInputValue(dateStr);
 }
 
-function isLikelyDefaultScheduleTime(dateStr: string | null) {
-    if (!dateStr) return false;
-    const date = new Date(dateStr);
-    if (Number.isNaN(date.getTime())) return false;
-    return date.getHours() === 9 && date.getMinutes() === 0;
+function isDateOnlySchedulePlaceholder(dateStr: string | null) {
+    return Boolean(dateStr && /^\d{4}-\d{2}-\d{2}$/.test(dateStr.trim()));
+}
+
+/** 자동 입력에서는 오래된 Class.startTime fallback을 확정값으로 사용하지 않는다. */
+function resolveConfirmedTrialScheduleStartTime(classInfo: ClassInfo | null | undefined, selectedDate: string) {
+    return resolveTrialScheduleStartTime(classInfo ? { ...classInfo, startTime: "" } : null, selectedDate);
 }
 
 const MODAL_INPUT_CLASS = "w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-brand-orange-500 dark:border-gray-700 dark:bg-gray-900 dark:text-white dark:focus:ring-brand-neon-lime";
@@ -516,15 +518,9 @@ function TrialScheduleModal({
     const initialScheduledDate = dateInputValue(lead.scheduledDate || lead.trialDate);
     const [scheduledDate, setScheduledDate] = useState(initialScheduledDate);
     const [scheduledTime, setScheduledTime] = useState(
-        lead.scheduledDate && (
-            Boolean(lead.scheduledClassId) ||
-            !isLikelyDefaultScheduleTime(lead.scheduledDate)
-        )
+        lead.scheduledDate && !isDateOnlySchedulePlaceholder(lead.scheduledDate)
             ? timeInputValue(lead.scheduledDate)
-            : resolveTrialScheduleStartTime(initialClass, initialScheduledDate) ||
-                (isLikelyDefaultScheduleTime(lead.scheduledDate) && getPreferredSlotKeyCandidates(lead).length > 0
-                    ? ""
-                    : timeInputValue(lead.scheduledDate)),
+            : resolveConfirmedTrialScheduleStartTime(initialClass, initialScheduledDate),
     );
     const [memo, setMemo] = useState(lead.memo ?? "");
     const [formError, setFormError] = useState("");
@@ -533,13 +529,13 @@ function TrialScheduleModal({
     function handleClassChange(classId: string) {
         setScheduledClassId(classId);
         const selectedClass = classes.find((classInfo) => classInfo.id === classId);
-        setScheduledTime(resolveTrialScheduleStartTime(selectedClass, scheduledDate));
+        setScheduledTime(resolveConfirmedTrialScheduleStartTime(selectedClass, scheduledDate));
     }
 
     function handleDateChange(date: string) {
         setScheduledDate(date);
         const selectedClass = classes.find((classInfo) => classInfo.id === scheduledClassId);
-        if (selectedClass) setScheduledTime(resolveTrialScheduleStartTime(selectedClass, date));
+        if (selectedClass) setScheduledTime(resolveConfirmedTrialScheduleStartTime(selectedClass, date));
     }
 
     function handleSubmit(event: FormEvent) {

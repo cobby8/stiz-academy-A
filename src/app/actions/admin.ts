@@ -53,7 +53,9 @@ import {
     type ApplicationContactTargetType,
 } from "@/lib/application-contact-logs";
 import { PUBLIC_SITE_URL } from "@/lib/publicMetadata";
-import { formatTrialSmsDateTime } from "@/lib/trial-sms-time";
+import { formatTrialScheduleLabel, formatTrialSmsDateTime, hasExplicitTrialTime, isLegacyTrialDatePlaceholder } from "@/lib/trial-sms-time";
+import { seoulDateInputValue } from "@/lib/trial-schedule-time";
+import { resolveCanonicalTrialSchedule } from "@/lib/trial-schedule-server";
 import { sessionDateForKorea } from "@/lib/seasonal/session-bridge";
 import { linkMatchingCoachProfileToUser } from "@/lib/staff-coach-link";
 import { buildEnrollmentOperationsEvent } from "@/lib/operations-events/admin-hooks";
@@ -61,13 +63,6 @@ import { enqueueWebsiteOperationsEventInTransaction } from "@/lib/operations-eve
 
 type AdminActor = Awaited<ReturnType<typeof requireAdmin>>;
 type ApplicationHistoryAction = Extract<ApplicationContactAction, "UPDATED" | "SCHEDULED" | "CANCELLED">;
-
-function getSeoulWeekdayKey(value: Date) {
-    return new Intl.DateTimeFormat("en-US", {
-        timeZone: "Asia/Seoul",
-        weekday: "short",
-    }).format(value);
-}
 
 async function recordApplicationHistoryLog(input: {
     targetType: ApplicationContactTargetType;
@@ -4069,13 +4064,20 @@ export async function updateTrialLead(
     if (entries.length === 0) return;
 
     const previousRows = await prisma.$queryRawUnsafe<any[]>(
-        `SELECT status, "attendedSmsSentAt", "scheduledDate", "scheduledClassId", "trialDate"
+        `SELECT status, "attendedSmsSentAt", "scheduledDate", "scheduledClassId", "trialDate",
+                "preferredSlotKey", "preferredDay", "preferredPeriod"
          FROM "TrialLead" WHERE id = $1 LIMIT 1`,
         id,
     );
     const previousLead = previousRows[0];
 
     if (data.status === "SCHEDULED") {
+        const explicitScheduledDate = data.scheduledDate;
+        const hasExplicitScheduledTime = explicitScheduledDate instanceof Date
+            ? !Number.isNaN(explicitScheduledDate.getTime())
+            : typeof explicitScheduledDate === "string"
+                && /T\d{2}:\d{2}/.test(explicitScheduledDate)
+                && !Number.isNaN(new Date(explicitScheduledDate).getTime());
         // 확정 날짜가 없으면 희망일정(trialDate)으로 자동 채움
         const resolvedScheduledDate = data.scheduledDate !== undefined
             ? data.scheduledDate
@@ -4084,34 +4086,25 @@ export async function updateTrialLead(
         const scheduledClassId = data.scheduledClassId !== undefined
             ? data.scheduledClassId
             : previousLead?.scheduledClassId ?? previousLead?.scheduledclassid;
-        const parsedScheduledDate = new Date(resolvedScheduledDate);
-
-        if (!resolvedScheduledDate || Number.isNaN(parsedScheduledDate.getTime())) {
+        const selectedDate = resolvedScheduledDate ? seoulDateInputValue(resolvedScheduledDate) : "";
+        if (!selectedDate) {
             throw new Error("체험수업 일정을 확정하려면 올바른 수업 날짜와 시간을 입력해주세요.");
         }
-
-        // 희망일정으로 자동 채운 경우 SET절에 scheduledDate 포함
-        if (data.scheduledDate === undefined) {
-            data.scheduledDate = resolvedScheduledDate;
-            const existing = entries.find(([col]) => col === "scheduledDate");
-            if (!existing) entries.push(["scheduledDate", resolvedScheduledDate] as const);
-        }
-
-        // 반이 선택된 경우에만 요일 일치 검증
+        let slotKey = previousLead?.preferredSlotKey ?? previousLead?.preferredslotkey ?? null;
         if (typeof scheduledClassId === "string" && scheduledClassId.trim()) {
-            const scheduledClasses = await prisma.$queryRawUnsafe<Array<{ id: string; dayOfWeek: string | null }>>(
-                `SELECT id, "dayOfWeek" FROM "Class" WHERE id = $1 LIMIT 1`,
-                scheduledClassId.trim(),
+            const classes = await prisma.$queryRawUnsafe<Array<{ slotKey: string | null }>>(
+                `SELECT "slotKey" FROM "Class" WHERE id=$1 LIMIT 1`, scheduledClassId.trim(),
             );
-            if (scheduledClasses.length === 0) {
-                throw new Error("선택한 수업 반을 찾을 수 없습니다. 반을 다시 선택해주세요.");
-            }
-            const classDay = scheduledClasses[0].dayOfWeek;
-            const scheduledDay = getSeoulWeekdayKey(parsedScheduledDate);
-            if (classDay && classDay !== scheduledDay) {
-                throw new Error("선택한 날짜의 요일과 수업 반의 요일이 다릅니다. 날짜나 반을 다시 선택해주세요.");
-            }
+            slotKey = classes[0]?.slotKey ?? null;
         }
+        if (!slotKey) throw new Error("체험수업 희망 시간표를 찾을 수 없습니다.");
+        const canonical = await resolveCanonicalTrialSchedule({ selectedDate, slotKey, scheduledClassId: scheduledClassId || null });
+        // 관리자가 시간을 명시했다면 관계만 검증하고 그 시각을 보존한다. 날짜뿐이거나 누락된 경우에만 시간표 시작시간을 채운다.
+        const nextScheduledDate = hasExplicitScheduledTime ? explicitScheduledDate : canonical.scheduledDate;
+        data.scheduledDate = nextScheduledDate;
+        const scheduledEntry = entries.find(([col]) => col === "scheduledDate");
+        if (scheduledEntry) (scheduledEntry as [string, unknown])[1] = nextScheduledDate;
+        else entries.push(["scheduledDate", nextScheduledDate] as const);
     }
 
     const shouldSendAttendedSms =
@@ -5995,7 +5988,7 @@ export async function sendTrialCoachNotice(trialLeadId: string): Promise<{ sentT
     const leads = await prisma.$queryRawUnsafe<any[]>(
         `SELECT id, "childName", "childGrade", "childSchool", "parentName", "parentPhone",
                 "scheduledDate", "scheduledClassId", "preferredSlotKey", "trialDate",
-                "preferredDay", "preferredPeriod", memo, "hopeNote"
+                "preferredDay", "preferredPeriod", status, memo, "hopeNote"
          FROM "TrialLead"
          WHERE id = $1
          LIMIT 1`,
@@ -6031,6 +6024,34 @@ export async function sendTrialCoachNotice(trialLeadId: string): Promise<{ sentT
         throw new Error("담당 선생님을 찾을 수 있는 수업/희망 시간 정보가 없습니다.");
     }
 
+    // 확정일을 우선하고, 희망일만 있으면 slotKey의 실제 시작시간을 서울시각으로 결합한다.
+    const rawTrialDate = lead.scheduledDate ?? lead.scheduleddate ?? lead.trialDate ?? lead.trialdate;
+    const selectedDate = rawTrialDate ? seoulDateInputValue(rawTrialDate) : "";
+    if (!selectedDate) throw new Error("체험 날짜를 확인할 수 없습니다.");
+    const canonicalSchedule = await resolveCanonicalTrialSchedule({
+        selectedDate,
+        slotKey,
+        scheduledClassId: scheduledClassId || null,
+    });
+    className = canonicalSchedule.className || className;
+
+    // 저장된 확정시각이 있으면 canonical 조회는 반·요일 관계 검증에만 사용한다.
+    // 실제 문자 일시와 수업 라벨은 학부모에게 확정한 동일 시각을 표시해야 한다.
+    const storedScheduledDate = lead.scheduledDate ?? lead.scheduleddate;
+    const legacyDatePlaceholder = isLegacyTrialDatePlaceholder({
+        scheduledDate: storedScheduledDate,
+        trialDate: lead.trialDate ?? lead.trialdate,
+        status: lead.status,
+        scheduledClassId: scheduledClassId || null,
+    });
+    const hasStoredConfirmedTime = hasExplicitTrialTime(storedScheduledDate) && !legacyDatePlaceholder;
+    const confirmedScheduleDate = hasStoredConfirmedTime
+        ? storedScheduledDate
+        : canonicalSchedule.scheduledDate;
+    scheduleLabel = hasStoredConfirmedTime
+        ? formatTrialScheduleLabel(canonicalSchedule.scheduleLabel, confirmedScheduleDate)
+        : canonicalSchedule.scheduleLabel;
+
     const coachRows = await prisma.$queryRawUnsafe<{ id: string; name: string; phone: string }[]>(
         `SELECT DISTINCT c.id, c.name, c.phone
          FROM "ScheduleSlot" ss
@@ -6054,17 +6075,9 @@ export async function sendTrialCoachNotice(trialLeadId: string): Promise<{ sentT
         throw new Error("해당 시간대에 전화번호가 등록된 담당 선생님이 없습니다.");
     }
 
-    const trialDate = lead.trialDate ?? lead.trialdate ?? lead.scheduledDate ?? lead.scheduleddate;
-    const trialDateText = trialDate
-        ? new Date(trialDate).toLocaleString("ko-KR", {
-            year: "numeric",
-            month: "long",
-            day: "numeric",
-            weekday: "short",
-            hour: "2-digit",
-            minute: "2-digit",
-        })
-        : "";
+    const trialDateText = hasStoredConfirmedTime
+        ? formatTrialSmsDateTime(confirmedScheduleDate)
+        : canonicalSchedule.formattedDate;
 
     const { renderSmsTemplate } = await import("@/lib/smsTemplate");
     const renderedMessage = await renderSmsTemplate("TRIAL_COACH_NOTICE", {

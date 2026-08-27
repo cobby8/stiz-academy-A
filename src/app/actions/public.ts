@@ -321,7 +321,7 @@ export async function submitTrialApplication(data: TrialApplicationInput) {
                     "basketballExp" = $6,
                     "parentName" = $7,
                     "parentPhone" = $8,
-                    "scheduledDate" = $9::timestamptz,
+                    "scheduledDate" = CASE WHEN status='SCHEDULED' THEN "scheduledDate" ELSE $9::timestamptz END,
                     "preferredDays" = $10,
                     "preferredSlotKey" = $11,
                     "preferredDay" = $12,
@@ -342,7 +342,7 @@ export async function submitTrialApplication(data: TrialApplicationInput) {
                 data.basketballExp || null,
                 parentName,
                 normalizedParentPhone,
-                data.trialDate || null,
+                null, // 희망일은 날짜뿐이므로 실제 확정시각 칼럼에 자정으로 저장하지 않는다.
                 data.trialDay || null,
                 preferredSlotKey,
                 data.trialDay || null,
@@ -399,7 +399,7 @@ export async function submitTrialApplication(data: TrialApplicationInput) {
             data.basketballExp || null,                           // basketballExp
             parentName,
             normalizedParentPhone,
-            data.trialDate || null,                               // scheduledDate
+            null,                                                 // scheduledDate: 관리자 확정 전에는 비워 둔다.
             data.trialDay || null,                                // preferredDays
             preferredSlotKey,                                      // preferredSlotKey
             data.trialDay || null,                                // preferredDay

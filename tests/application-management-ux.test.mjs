@@ -76,7 +76,8 @@ test("체험 신청 일정은 DB 수업 정보와 연결해 실제 수업 시간
   assert.match(trialClient, /function normalizeSlotKey/);
   assert.match(trialClient, /function getPreferredSlotKeyCandidates/);
   assert.match(trialClient, /function getPreferredClass/);
-  assert.match(trialModals, /function isLikelyDefaultScheduleTime/);
+  assert.match(trialModals, /function isDateOnlySchedulePlaceholder/);
+  assert.match(trialModals, /function resolveConfirmedTrialScheduleStartTime/);
   assert.match(trialModals, /function normalizeSlotKey/);
   assert.match(trialModals, /function getPreferredSlotKeyCandidates/);
   assert.match(trialModals, /getPreferredClass\(lead, classes\)/);

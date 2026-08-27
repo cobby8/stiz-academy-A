@@ -43,6 +43,14 @@
 
 ## 테스트 결과
 
+- 체험 일정/문자 canonical 시간 리뷰 보완 최종 QA: 신규·기존 회귀 54/54 통과, `tsc --noEmit`, Prisma validate, diff-check 통과.
+- Sat-2는 활성 ScheduleSlot `10:50`을 선택해 `2026-08-29T10:50:00+09:00` 및 부모·담당자 표시 `2026년 8월 29일 (토) 10:50`으로 통일된다.
+- 신규 신청은 날짜-only 희망일을 `scheduledDate` 자정으로 저장하지 않는다. 확정 서버가 날짜·slotKey·반 관계를 재검증하고 canonical scheduledDate로 교체한다.
+- 활성 ScheduleSlot이 있으면 stale Class 시간보다 우선하며 적용일 비활성, 요일/반/slot 불일치, 숨김, 시간 매핑 실패는 발송 전 차단한다.
+- 수동 담당자 알림은 `scheduledDate`를 우선하고 같은 canonical resolver·서울 시간 포맷을 사용한다. UI도 날짜-only placeholder와 stale Class 폴백을 확정시간으로 사용하지 않는다.
+- 관리자가 명시한 유효 확정시각 11:10은 날짜·반·slot 관계 검증 후 보존한다. 날짜-only 입력은 Sat-2 canonical 10:50으로 채운다.
+- 순수 resolver 행동 테스트로 활성기간 시작/종료 경계, override, hidden, custom/Class 폴백, 시간 누락, 반·slot·요일 불일치를 실제 행 조합으로 실행 검증했다.
+
 - 정규 셔틀 위치 링크 신규/UI 및 관리자·수강신청·지도 선택기·셔틀 회귀: 170/170 통과.
 - TypeScript `npx.cmd tsc --noEmit`, `npx.cmd prisma validate`, `git diff --check` 통과.
 - 토큰 SHA-256 해시·만료·취소·학생/보호자/용도 고정, 좌표/source/동의 검증, 동일 학생·방향 upsert, 공개 UI 모바일 레이아웃·오류 안내 계약을 확인했다.
@@ -53,6 +61,7 @@
 
 | 요청자 | 파일 | 문제 | 상태 |
 |---|---|---|---|
+| tester | 체험 일정/문자 경로 | Sat-2 canonical 시간, date-only 차단, stale Class 우선순위, 부모·담당자 동일 시간 보완 및 검증 완료 | 완료 |
 | tester | `tests/regular-shuttle-location-link.test.mjs` | Prisma 가짜 어댑터 기반 roundtrip·경합·멱등 행동 테스트 보완 완료 | 완료 |
 
 ## 확인보류
@@ -63,6 +72,10 @@
 - RESUME/CLASS_ADD/CLASS_CHANGE 자동 실행 어댑터는 다음 그룹이다.
 
 ## 작업 로그 (최근 10건)
+- 2026-08-27: 체험 시간 리뷰 보완 최종 QA 승인. 수동 11:10 보존과 실제 resolver 행 조합 행동검증 포함 54건·tsc·Prisma validate·diff-check 통과. 운영 DB·문자·배포 없음.
+- 2026-08-27: 체험 일정/문자 canonical 시간 최종 QA 승인. Sat-2 10:50, 날짜-only 차단, TZ 독립, stale Class/매핑 실패 차단 포함 53건·tsc·Prisma validate·diff-check 통과. 운영 DB·문자·배포 없음.
+- 2026-08-27: 체험 문자 canonical 시간 서버 보강. 날짜 전용 희망일의 scheduledDate 자정 저장을 중단하고 적용일 기준 override→활성 시간표→custom→Class 우선순위로 서울시각을 결합했으며 불일치·비활성 시간표는 발송 차단했다. 관련 36개 테스트·tsc·Prisma validate·diff-check 통과. 문자·운영 DB·배포 미실행.
+- 2026-08-27: 체험 문자 시간 읽기 전용 진단. 관련 25건은 통과했지만 Sat-2 10:50 종단간 검증이 없고 date-only 09:00 및 stale Class 12:00 경로를 확인. 소스·운영 DB·문자 미변경.
 - 2026-08-27: 정규 셔틀 학부모 좌표 링크 보완 최종 QA 승인. 행동 roundtrip·경합·멱등과 관리자 상태/취소/재발급·공개 보안·UI 포함 170건, tsc, Prisma validate, diff-check 통과. 운영 DB·문자·배포 없음.
 - 2026-08-27: 정규 셔틀 학부모 좌표 링크 최종 QA. 관련 156건·tsc·Prisma validate·diff-check 통과. 다만 저장 후 서버 재조회 왕복은 SQL 문자열 검사뿐이라 가짜 DB 행동 테스트 보완 요청. 운영 DB·문자·배포 없음.
 - 2026-08-27: 정규반 학부모 셔틀 좌표 링크 백엔드 구현. 32바이트 토큰·SHA-256 해시, 학생/보호자/용도 고정, 만료·취소, 좌표·동의 검증, PICKUP/DROPOFF upsert 후 재조회·감사를 추가했다. 관련 테스트 16건·tsc·Prisma validate·diff-check 통과. 운영 DB·문자·배포 미실행.

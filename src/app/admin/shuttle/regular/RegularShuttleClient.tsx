@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import type { RegularShuttleStop } from "@/lib/shuttle/regularSheet";
 import RegularRouteSection, { type ShuttleGeo } from "@/components/shuttle/RegularRouteSection";
+import AdminModal from "@/components/admin/AdminModal";
 import { maskPhone, regularShuttleChangeMessage, type RegularShuttleChange } from "@/lib/regular/regularShuttleDiff";
 
 // ── 카카오 지도 SDK(장소검색) 로더 ─────────────────────────────
@@ -71,6 +72,17 @@ function fmtImported(iso: string | null): string {
   return `${g("month")}/${g("day")} ${g("hour")}:${g("minute")}`;
 }
 
+function koreaMonth(): string {
+  const parts = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Seoul", year: "numeric", month: "2-digit" }).formatToParts(new Date());
+  const value = (type: string) => parts.find((part) => part.type === type)?.value ?? "";
+  return `${value("year")}-${value("month")}`;
+}
+
+/** 선택 월보다 가까운 과거 월만 비교 대상으로 허용한다. */
+function closestPreviousMonth(months: string[], serviceMonth: string): string {
+  return [...months].filter((month) => month < serviceMonth).sort((a, b) => b.localeCompare(a))[0] ?? "";
+}
+
 export default function RegularShuttleClient({ initialStops, importedAt: initialImportedAt, defaultSheetUrl, geo, initialMonth, months, initialCompareMonth, initialComparison }: {
   initialStops: RegularShuttleStop[];
   importedAt: string | null;
@@ -84,12 +96,15 @@ export default function RegularShuttleClient({ initialStops, importedAt: initial
   const [stops, setStops] = useState<RegularShuttleStop[]>(initialStops);
   const [importedAt, setImportedAt] = useState<string | null>(initialImportedAt);
   const [sheetUrl, setSheetUrl] = useState(defaultSheetUrl);
-  const [serviceMonth, setServiceMonth] = useState(initialMonth ?? new Date().toISOString().slice(0, 7));
+  const [serviceMonth, setServiceMonth] = useState(initialMonth ?? koreaMonth());
   const [availableMonths, setAvailableMonths] = useState(months);
   const [compareMonth, setCompareMonth] = useState(initialCompareMonth ?? "");
   const [comparison, setComparison] = useState<RegularShuttleChange[]>(initialComparison);
   const [previewChange, setPreviewChange] = useState<RegularShuttleChange | null>(null);
   const [previewCopied, setPreviewCopied] = useState(false);
+  const [noticeStatus, setNoticeStatus] = useState<"PREPARING" | "HELD" | "APPROVED" | "SENDING" | "SENT" | "ERROR">("HELD");
+  const [noticePayloadHash, setNoticePayloadHash] = useState("");
+  const [noticeError, setNoticeError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
@@ -142,17 +157,47 @@ export default function RegularShuttleClient({ initialStops, importedAt: initial
     finally { setBusy(false); }
   }
 
-  async function loadMonth(month: string, against = compareMonth) {
+  async function loadMonth(month: string, against?: string) {
     setBusy(true); setErr(null); setMsg(null);
     try {
-      const query = `/api/admin/shuttle/regular?month=${encodeURIComponent(month)}${against ? `&compareTo=${encodeURIComponent(against)}` : ""}`;
+      const nextCompareMonth = against && against < month
+        ? against
+        : closestPreviousMonth(availableMonths, month);
+      const query = `/api/admin/shuttle/regular?month=${encodeURIComponent(month)}${nextCompareMonth ? `&compareTo=${encodeURIComponent(nextCompareMonth)}` : ""}`;
       const r = await fetch(query, { cache: "no-store" });
       const j = await r.json();
       if (!r.ok) throw new Error(j?.error || "차량표를 불러오지 못했습니다.");
       setServiceMonth(month); setStops(j.stops ?? []); setImportedAt(j.importedAt ?? null);
-      setAvailableMonths(j.months ?? []); setComparison(j.comparison ?? []);
+      setAvailableMonths(j.months ?? []); setCompareMonth(nextCompareMonth); setComparison(j.comparison ?? []);
     } catch (e: unknown) { setErr(e instanceof Error ? e.message : "차량표를 불러오지 못했습니다."); }
     finally { setBusy(false); }
+  }
+
+  async function noticeAction(action: "PREPARE" | "APPROVE" | "SEND", change: RegularShuttleChange) {
+    if (!compareMonth) return;
+    setNoticeError(null);
+    setNoticeStatus(action === "PREPARE" ? "PREPARING" : action === "SEND" ? "SENDING" : noticeStatus);
+    try {
+      const response = await fetch("/api/admin/shuttle/regular-notice", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action, serviceMonth, compareMonth, change, payloadHash: action === "PREPARE" ? undefined : noticePayloadHash }),
+      });
+      const result = await response.json().catch(() => null);
+      if (!response.ok) throw new Error(result?.error || "문자 처리에 실패했습니다.");
+      setNoticePayloadHash(result.payloadHash ?? "");
+      setNoticeStatus(result.status);
+    } catch (error) {
+      setNoticeStatus("ERROR");
+      setNoticeError(error instanceof Error ? error.message : "문자 처리에 실패했습니다.");
+    }
+  }
+
+  function openNoticePreview(change: RegularShuttleChange) {
+    setPreviewChange(change);
+    setPreviewCopied(false);
+    setNoticePayloadHash("");
+    void noticeAction("PREPARE", change);
   }
 
   // 정규 셔틀 기사 고정 링크 복사 — 하나만 전달하면 매일 '오늘 요일' 운행이 자동으로 뜬다.
@@ -231,7 +276,7 @@ export default function RegularShuttleClient({ initialStops, importedAt: initial
         <div className="flex flex-wrap items-start justify-between gap-2">
           <div>
             <h3 className="text-base font-black text-gray-900 dark:text-white">정규 셔틀 운행리스트</h3>
-            <p className="mt-0.5 text-[12.5px] text-gray-500 dark:text-gray-400">구글 시트를 앱으로 가져와 요일별 타임라인으로 봅니다.{importedAt ? ` · 마지막 가져오기 ${fmtImported(importedAt)}` : " · 아직 가져오지 않음"}</p>
+            <p className="mt-0.5 text-[12.5px] text-gray-500 dark:text-gray-400">수강생 운영 구글 시트의 월별 차량 탭을 가져와 요일·수업별로 관리합니다.{importedAt ? ` · 마지막 가져오기 ${fmtImported(importedAt)}` : " · 아직 가져오지 않음"}</p>
           </div>
           <div className="flex flex-wrap items-end gap-2">
             <label className="flex flex-col gap-1 text-[11px] font-bold text-gray-500">확인 월
@@ -243,7 +288,7 @@ export default function RegularShuttleClient({ initialStops, importedAt: initial
             <label className="flex flex-col gap-1 text-[11px] font-bold text-gray-500">비교 월
               <select value={compareMonth} onChange={(e) => { setCompareMonth(e.target.value); void loadMonth(serviceMonth, e.target.value); }} className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-bold dark:border-gray-600 dark:bg-gray-900">
                 <option value="">비교 안 함</option>
-                {availableMonths.filter((month) => month !== serviceMonth).map((month) => <option key={month} value={month}>{month}</option>)}
+                {availableMonths.filter((month) => month < serviceMonth).map((month) => <option key={month} value={month}>{month}</option>)}
               </select>
             </label>
           </div>
@@ -261,7 +306,7 @@ export default function RegularShuttleClient({ initialStops, importedAt: initial
                   {regularShuttleChangeMessage(change, serviceMonth) && (
                     <button
                       type="button"
-                      onClick={() => { setPreviewChange(change); setPreviewCopied(false); }}
+                      onClick={() => openNoticePreview(change)}
                       className="mt-2 rounded-lg border border-blue-200 px-3 py-1.5 font-black text-blue-700 hover:bg-blue-50 dark:border-blue-700 dark:text-blue-200 dark:hover:bg-blue-950/40"
                     >
                       문자 미리보기
@@ -275,29 +320,34 @@ export default function RegularShuttleClient({ initialStops, importedAt: initial
         )}
 
         {previewChange && (
-          <div
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="shuttle-message-preview-title"
-            className="fixed inset-0 z-50 flex items-end justify-center bg-black/55 p-3 sm:items-center"
-            onMouseDown={(e) => { if (e.target === e.currentTarget) setPreviewChange(null); }}
-          >
-            <div className="w-full max-w-lg rounded-2xl bg-white p-4 shadow-2xl dark:bg-gray-900">
+          <AdminModal titleId="shuttle-message-preview-title" onClose={() => setPreviewChange(null)}>
+            <div className="p-4">
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <h4 id="shuttle-message-preview-title" className="text-base font-black text-gray-900 dark:text-white">{previewChange.studentName} 문자 미리보기</h4>
-                  <p className="mt-0.5 text-xs text-gray-500">{maskPhone(previewChange.parentPhone)} · 확인 및 복사만 가능합니다.</p>
+                  <p className="mt-0.5 text-xs text-gray-500">{maskPhone(previewChange.parentPhone)} · 승인 전에는 발송되지 않으며, 승인 후 별도 발송할 수 있습니다.</p>
                 </div>
-                <button type="button" onClick={() => setPreviewChange(null)} aria-label="문자 미리보기 닫기" className="rounded-lg px-2 py-1 text-xl font-bold text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800">×</button>
+                <button type="button" data-admin-modal-initial-focus onClick={() => setPreviewChange(null)} aria-label="문자 미리보기 닫기" className="rounded-lg px-2 py-1 text-xl font-bold text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800">×</button>
               </div>
               <pre className="mt-3 max-h-[55vh] overflow-y-auto whitespace-pre-wrap rounded-xl bg-gray-50 p-3 font-sans text-sm leading-6 text-gray-700 dark:bg-gray-800 dark:text-gray-200">{regularShuttleChangeMessage(previewChange, serviceMonth)}</pre>
-              <p className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-xs font-bold text-amber-800">이 화면에서는 문자가 발송되지 않습니다. 실제 발송은 별도 승인 후 진행합니다.</p>
-              <div className="mt-3 flex justify-end gap-2">
+              <p className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-xs font-bold text-amber-800 dark:bg-amber-950/30 dark:text-amber-200">
+                {noticeStatus === "PREPARING" ? "변경 내용과 수신자를 고정하는 중입니다."
+                  : noticeStatus === "HELD" ? "현재는 승인 대기입니다. 아래 승인만으로 문자가 발송되지는 않습니다."
+                  : noticeStatus === "APPROVED" ? "이 미리보기로 승인됐습니다. 실제 발송 버튼을 한 번 더 눌러야 합니다."
+                  : noticeStatus === "SENDING" ? "승인된 문자를 발송하고 있습니다."
+                  : noticeStatus === "SENT" ? "이 문자는 발송 완료됐습니다. 같은 내용은 다시 발송되지 않습니다."
+                  : "문자 상태를 확인해 주세요."}
+              </p>
+              {noticeError && <p role="alert" className="mt-2 rounded-lg bg-red-50 px-3 py-2 text-xs font-bold text-red-700 dark:bg-red-950/30 dark:text-red-200">{noticeError}</p>}
+              <div className="mt-3 flex flex-wrap justify-end gap-2">
                 <button type="button" onClick={() => setPreviewChange(null)} className="rounded-xl border border-gray-200 px-4 py-2 text-sm font-bold text-gray-600 dark:border-gray-700 dark:text-gray-200">닫기</button>
                 <button type="button" onClick={() => void copyChangeMessage()} className="rounded-xl bg-brand-navy-900 px-4 py-2 text-sm font-black text-white dark:bg-brand-neon-lime dark:text-brand-navy-900">{previewCopied ? "✓ 복사됨" : "문구 복사"}</button>
+                {noticeStatus === "ERROR" && <button type="button" onClick={() => void noticeAction("PREPARE", previewChange)} className="rounded-xl border border-gray-300 px-4 py-2 text-sm font-black text-gray-700 dark:border-gray-600 dark:text-gray-200">다시 준비</button>}
+                {noticeStatus === "HELD" && <button type="button" disabled={!noticePayloadHash} onClick={() => void noticeAction("APPROVE", previewChange)} className="rounded-xl border border-blue-300 px-4 py-2 text-sm font-black text-blue-700 disabled:opacity-40 dark:border-blue-700 dark:text-blue-200">이 내용 승인</button>}
+                {noticeStatus === "APPROVED" && <button type="button" onClick={() => void noticeAction("SEND", previewChange)} className="rounded-xl bg-[var(--brand-accent)] px-4 py-2 text-sm font-black text-[var(--brand-accent-contrast)]">승인된 문자 발송</button>}
               </div>
             </div>
-          </div>
+          </AdminModal>
         )}
 
         {/* 시트 가져오기·좌표 채우기 — 최초 1회만 쓰는 준비 작업이라 접어 둔다. */}
@@ -379,8 +429,8 @@ export default function RegularShuttleClient({ initialStops, importedAt: initial
                       ))}
                     </div>
                     <div className="mt-3 space-y-3">
-                      <RegularRouteSection dayStops={dayStops} classTime={curClass} direction="BOARD" geo={geo} onSaved={refreshStops} />
-                      <RegularRouteSection dayStops={dayStops} classTime={curClass} direction="ALIGHT" geo={geo} onSaved={refreshStops} />
+                      <RegularRouteSection dayStops={dayStops} classTime={curClass} direction="BOARD" serviceMonth={serviceMonth} geo={geo} onSaved={refreshStops} />
+                      <RegularRouteSection dayStops={dayStops} classTime={curClass} direction="ALIGHT" serviceMonth={serviceMonth} geo={geo} onSaved={refreshStops} />
                     </div>
                   </>
                 )}

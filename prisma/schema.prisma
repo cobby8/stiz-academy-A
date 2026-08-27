@@ -118,6 +118,7 @@ model Student {
   shuttleDayExceptions     ShuttleDayException[]
   parentOperationsLinks    ParentOperationsRequestLink[]
   operationsCommands       OperationsCommand[]
+  regularShuttleStops      RegularShuttleStop[]
   parent                   User                          @relation(fields: [parentId], references: [id])
 
   @@index([parentId])
@@ -2567,6 +2568,7 @@ model RegularShuttleStop {
   stopName     String
   direction    String // 'BOARD'|'ALIGHT'|'PIVOT'|'RETURN'
   studentName  String?
+  studentId    String?  // 월별 시트 이관 시 확정한 안정적인 학생 식별값
   studentPhone String?
   parentPhone  String?
   note         String?
@@ -2574,8 +2576,37 @@ model RegularShuttleStop {
   latitude     Float?
   longitude    Float?
   importedAt   DateTime @default(now())
+  student      Student? @relation(fields: [studentId], references: [id], onDelete: SetNull, onUpdate: NoAction)
 
   @@index([serviceMonth, weekday, sortOrder])
+  @@index([studentId, serviceMonth])
+}
+
+// 정규 차량 변동 문자의 승인·발송 상태. 일반 NotificationDelivery의 전송 상태와 분리한다.
+model RegularShuttleNoticeBatch {
+  id                 String    @id @default(dbgenerated("(gen_random_uuid())::text"))
+  serviceMonth       String
+  compareMonth       String
+  stableEventKey     String
+  payloadHash        String    @unique
+  studentId          String
+  studentName        String
+  recipientPhone     String
+  messageBody        String
+  beforeText         String?
+  afterText          String
+  status             String    @default("HELD") // HELD | APPROVED | SENDING | SENT | CANCELLED | UNCERTAIN
+  approvedByUserId   String?
+  approvedAt         DateTime? @db.Timestamptz(6)
+  sentAt             DateTime? @db.Timestamptz(6)
+  errorCode          String?
+  lockedAt           DateTime? @db.Timestamptz(6)
+  createdByUserId    String
+  createdAt          DateTime  @default(now()) @db.Timestamptz(6)
+  updatedAt          DateTime  @default(now()) @updatedAt @db.Timestamptz(6)
+
+  @@index([stableEventKey, createdAt(sort: Desc)])
+  @@index([status, createdAt(sort: Desc)])
 }
 
 // 예약 발송 대기열 — "보낼 문자를 미리 얼려 두는" 큐.

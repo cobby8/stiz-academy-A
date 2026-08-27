@@ -20,6 +20,10 @@
 
 ## 구현 기록
 
+- 정규 셔틀 관리자 UI: 한국시간 기본월, 가장 가까운 이전 월 비교, 모바일 순서 이동, 접근성 문자 모달을 적용했다.
+- 정규 셔틀 문자: 미리보기 payload를 `HELD → APPROVED → SENT`로 분리하고, 내용 변경 시 기존 승인을 취소하며 동일 payload 중복 발송을 막았다.
+- 관련 파일: `RegularShuttleClient.tsx`, `RegularRouteSection.tsx`, `regular-notice/route.ts`, `regular-shuttle-admin-ui.test.mjs`.
+- 검증: 정규 셔틀 회귀 7건, `tsc --noEmit`, `git diff --check` 통과. 운영 DB·외부 문자·배포 호출 없음.
 - `src/lib/operations-events/`: 공용 이벤트 정규화, 날짜·월·payload 검증, 의미 기반 지문, 멱등 원장 적재.
 - `src/app/api/operations-events/`: 64KB 제한, HMAC-SHA256, 5분 재생 방지, source+eventId 중복·충돌 처리.
 - `src/app/actions/admin.ts`: enrollStudent/updateEnrollmentStatus와 원장 적재를 동일 트랜잭션으로 연결.
@@ -53,7 +57,12 @@
 - RESUME/CLASS_ADD/CLASS_CHANGE 자동 실행 어댑터는 다음 그룹이다.
 
 ## 작업 로그 (최근 10건)
+- 2026-08-27: 정규 셔틀 필수 보완 최종 QA 통과. 대상월 ACTIVE 우선, 월 고정 순서 저장, studentId canonical 변동 재대조, 승인 원장 CHECK/unique/RLS, UNCERTAIN 잠금, 월별 ETA를 확인했고 관련 122개 테스트·tsc·Prisma validate·diff-check 통과. 운영 DB·문자·배포 없음.
+- 2026-08-27: 정규 셔틀 백엔드 최종 안전 보강. 월별 수강 원장 우선순위·원장 부재 HELD, studentId 안정 식별, 월 한정 정렬 저장, ETA 월 분리, 승인 문자 전용 원장과 UNCERTAIN 잠금, 서버 canonical 재대조를 구현했다. 관련 테스트 26건·tsc·Prisma validate·diff-check 통과. 운영 DB·문자·배포 미실행.
+- 2026-08-27: 정규 셔틀 통합 QA. 관련 109개 테스트·tsc·Prisma validate·diff-check는 통과했으나, 대상월 복수 수강 상태에서 WITHDRAWN 우선 오판, 모바일 순서 저장의 serviceMonth 미검증, 문자 승인 시 서버 정본 재대조 부재·이름 기반 사건키를 발견해 수정 요청. 운영 DB·문자·배포 없음.
+- 2026-08-27: 정규 셔틀 데이터/API 안전 보강. 월 시트 교체 트랜잭션, 확인보류·월별 비재원 제외, `RegularShuttleStop.studentId` 안정 식별, 월 비교 ID 우선, ETA 월 필터, 저장 payload/API 검증, KST 월 계산, stale 저장노선 차단을 구현했다. 백엔드 테스트 19건·Prisma validate·tsc·diff-check 통과. 문자·운영 DB·배포 미실행.
 
+- 2026-08-27: 정규 셔틀 월 비교·모바일 편집·접근성 모달·문자 승인 원장 구현, 회귀 7건·tsc·diff-check 통과.
 - 2026-08-27: 실시간 수강 변경 원장·외부 접수 API·관리자 후크 구현, 통합 회귀 41건·tsc·diff-check 통과.
 - 2026-08-27: 동일 상태 DB 완전 no-op, 의미 기반 지문, 기존 PAUSE/WITHDRAW 계약 호환, 미지원 종류 HELD 보완.
 - 2026-08-27: 수강 하드 삭제를 WITHDRAWN 이력 보존으로 전환하고 학생 상세 삭제 UI 제거.
@@ -63,7 +72,6 @@
 - 2026-08-27: 운영 동기화 임대·재시도·감사로그·상태 집계 안정화.
 - 2026-08-27: 정규 셔틀 월별 비교·변동 미리보기 구현, 발송 승인 게이트 유지.
 - 2026-08-26: 구글 시트 휴원·퇴원 반영 어댑터와 재조회 검증 구현.
-- 2026-08-26: 월 청구 3중 동기화 스킬 및 운영 원장 기반 구축.
 
 ## PM 체크
 

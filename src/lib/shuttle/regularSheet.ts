@@ -12,6 +12,7 @@ export type RegularShuttleStop = {
   stopName: string;         // 목적지(정차 위치 이름)
   direction: "BOARD" | "ALIGHT" | "PIVOT" | "RETURN"; // 승차/하차/(하차·승차 동시=학원 경유)/복귀
   studentName: string | null;
+  studentId?: string | null;  // 사이트에서 확정한 안정적인 학생 식별값(DB 조회 시 채움)
   studentPhone: string | null;
   parentPhone: string | null;
   note: string | null;

@@ -143,7 +143,7 @@ export async function getRegularShuttleRiders(
     `SELECT
         -- 매칭된 Student.id, 없으면 정차 행 id 에 접두사('stop:')를 붙여 유일한 식별키를 보장한다.
         -- (접두사 덕분에 실제 Student.id(uuid)와 절대 충돌하지 않아 학부모 ETA 오매칭이 없다.)
-        COALESCE(st."id", 'stop:' || rss."id") AS "studentId",
+        COALESCE(rss."studentId", st."id", 'stop:' || rss."id") AS "studentId",
         rss."id"                                AS "stopRowId",
         rss."studentName"                       AS "studentName",
         st."grade"                              AS "childGrade",
@@ -163,7 +163,8 @@ export async function getRegularShuttleRiders(
          SELECT s."id", s."grade", s."phone"
            FROM "Student" s
            JOIN "User" u ON u."id" = s."parentId"
-          WHERE s."mergedIntoStudentId" IS NULL
+          WHERE rss."studentId" IS NULL
+            AND s."mergedIntoStudentId" IS NULL
             AND regexp_replace(lower(s."name"), '\\s', '', 'g')
               = regexp_replace(lower(rss."studentName"), '\\s', '', 'g')
           ORDER BY

@@ -17,6 +17,8 @@ function digits(value: string | null | undefined): string {
 
 function riderKey(stop: RegularShuttleStop): string | null {
   if (!stop.studentName || !["BOARD", "ALIGHT"].includes(stop.direction)) return null;
+  // 월 사이 전화번호가 바뀌어도 같은 학생으로 비교되도록 DB에서 확정한 학생 ID를 최우선한다.
+  if (stop.studentId) return `student:${stop.studentId}`;
   const phone = digits(stop.parentPhone) || digits(stop.studentPhone);
   return phone ? `${phone}:${stop.studentName.replace(/\s/g, "")}` : `name:${stop.studentName.replace(/\s/g, "")}`;
 }

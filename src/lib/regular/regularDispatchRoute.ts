@@ -11,6 +11,8 @@ import { extractEtaByRequestId } from "@/lib/seasonal/dispatchEtaLookup";
 import type { DispatchSuggestion } from "@/lib/seasonal/shuttle-optimize";
 import { getRegularShuttleRiders } from "./shuttleRoster";
 import { computeRegularDispatch } from "./shuttle-dispatch";
+import { validateRegularDispatchVehicles } from "./regularDispatchPayload";
+import { isServiceMonth, koreaServiceMonth } from "./serviceMonth";
 
 /**
  * 정규 셔틀 동적배차 — 저장 노선(RegularDispatchRoute) 읽기/쓰기 + 조회용 병합 (Phase 2b).
@@ -111,8 +113,9 @@ export async function getSavedRegularDispatchRoute(
       added = diff.added.map(enrich);
       locationChanged = diff.locationChanged.map(enrich);
     } catch {
-      // 명단 조회 실패 시 저장본을 그대로 보여 준다(화면이 비는 것보다 안전).
-      vehicles = savedVehicles;
+      // 유효 명단을 확인하지 못한 저장본은 휴원·퇴원생이 섞였는지 알 수 없어 사용하지 않는다.
+      // 빈 배열이면 기사 화면은 월별 시트 원본으로 안전하게 폴백한다.
+      vehicles = [];
       added = [];
       locationChanged = [];
     }
@@ -146,14 +149,16 @@ export async function getSavedRegularDispatchRoute(
  * 권한: 조회 함수는 인증하지 않는다(게이트웨이 원칙). 호출부(parent.ts)가 본인 자녀 studentId 만 넘기므로
  *   여기서 다시 필터하지 않는다(IDOR 안전). 미배차/미저장 요일은 자연히 빈 값(null)으로 남는다.
  */
-export function regularEtaKey(studentId: string, dayOfWeek: string): string {
-  return `${studentId}::${dayOfWeek}`;
+export function regularEtaKey(studentId: string, dayOfWeek: string, serviceMonth?: string): string {
+  return `${studentId}::${dayOfWeek}${serviceMonth ? `::${serviceMonth}` : ""}`;
 }
 
 export async function getConfirmedRegularDispatchEtas(
   pairs: { studentId: string; dayOfWeek: string }[],
+  serviceMonth: string = koreaServiceMonth(),
 ): Promise<Map<string, ConfirmedDispatchEta>> {
   const result = new Map<string, ConfirmedDispatchEta>();
+  if (!isServiceMonth(serviceMonth)) return result;
   // 유효한 (studentId, 요일) 쌍만 추린다. 요일은 화이트리스트(normDow)로 걸러 SQL 주입·오타를 막는다.
   const clean = (pairs ?? [])
     .map((p) => ({ studentId: typeof p.studentId === "string" ? p.studentId : "", dow: normDow(p.dayOfWeek) }))
@@ -161,7 +166,7 @@ export async function getConfirmedRegularDispatchEtas(
   if (clean.length === 0) return result;
 
   // 미리 모든 쌍을 빈 값으로 채워 둔다(조회 실패/미저장이어도 안전하게 null 로 응답).
-  for (const p of clean) result.set(regularEtaKey(p.studentId, p.dow), { pickupEtaLabel: null, dropoffEtaLabel: null });
+  for (const p of clean) result.set(regularEtaKey(p.studentId, p.dow, serviceMonth), { pickupEtaLabel: null, dropoffEtaLabel: null });
 
   // 필요한 요일만 조회한다(전체 요일 × 2방향은 최대 14행이라 매우 가볍다).
   const dows = [...new Set(clean.map((p) => p.dow))];
@@ -178,8 +183,9 @@ export async function getConfirmedRegularDispatchEtas(
     const rows = await prisma.$queryRawUnsafe<Record<string, unknown>[]>(
       `SELECT "dayOfWeek", "direction", "payload"
          FROM "RegularDispatchRoute"
-        WHERE "dayOfWeek" = ANY($1::text[])`,
-      dows,
+        WHERE "dayOfWeek" = ANY($1::text[])
+          AND "serviceMonth"=$2`,
+      dows, serviceMonth,
     );
     for (const r of rows) {
       const dow = normDow(r.dayOfWeek);
@@ -194,7 +200,7 @@ export async function getConfirmedRegularDispatchEtas(
         if (!dowsByStudent.get(studentId)?.has(dow)) continue;
         const label = byStudent.get(studentId);
         if (!label) continue;
-        const cur = result.get(regularEtaKey(studentId, dow))!;
+        const cur = result.get(regularEtaKey(studentId, dow, serviceMonth))!;
         if (dir === "PICKUP" && cur.pickupEtaLabel == null) cur.pickupEtaLabel = label;
         if (dir === "DROPOFF" && cur.dropoffEtaLabel == null) cur.dropoffEtaLabel = label;
       }
@@ -214,9 +220,10 @@ export async function saveRegularDispatchRoute(input: {
   const admin = await requireAdmin();
   const dow = normDow(input.dayOfWeek), dir = normDir(input.direction);
   if (!dow || !dir) throw new Error("요일 또는 방향이 올바르지 않습니다.");
-  const vehicles = Array.isArray(input.vehicles) ? input.vehicles : [];
+  const vehicles = validateRegularDispatchVehicles(input.vehicles);
   const payloadJson = JSON.stringify({ vehicles });
-  const serviceMonth = input.serviceMonth ?? new Date().toISOString().slice(0, 7);
+  const serviceMonth = input.serviceMonth ?? koreaServiceMonth();
+  if (!isServiceMonth(serviceMonth)) throw new Error("적용 월은 YYYY-MM 형식이어야 합니다.");
   const rows = await prisma.$queryRawUnsafe<Record<string, unknown>[]>(
     `INSERT INTO "RegularDispatchRoute" ("serviceMonth","dayOfWeek","direction","payload","classStart","classEnd","savedByUserId","updatedAt")
      VALUES ($1, $2, $3, $4::jsonb, $5, $6, $7, now())
@@ -238,7 +245,8 @@ export async function deleteRegularDispatchRoute(dayOfWeek: string, direction: s
   await requireAdmin();
   const dow = normDow(dayOfWeek), dir = normDir(direction);
   if (!dow || !dir) throw new Error("요일 또는 방향이 올바르지 않습니다.");
-  const month = serviceMonth ?? new Date().toISOString().slice(0, 7);
+  const month = serviceMonth ?? koreaServiceMonth();
+  if (!isServiceMonth(month)) throw new Error("적용 월은 YYYY-MM 형식이어야 합니다.");
   const count = await prisma.$executeRawUnsafe(
     `DELETE FROM "RegularDispatchRoute" WHERE "serviceMonth"=$1 AND "dayOfWeek"=$2 AND "direction"=$3`,
     month, dow, dir,

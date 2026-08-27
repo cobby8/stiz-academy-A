@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { importRegularShuttleFromSheet } from "@/lib/shuttle/regularImport";
+import { isServiceMonth } from "@/lib/regular/serviceMonth";
 
 export const dynamic = "force-dynamic";
 
@@ -7,7 +8,9 @@ export const dynamic = "force-dynamic";
 export async function POST(request: Request) {
   try {
     const body = await request.json().catch(() => null) as { sheetUrl?: string; serviceMonth?: string } | null;
-    if (!body?.sheetUrl || !body.serviceMonth) return NextResponse.json({ error: "시트 URL과 적용 월이 필요합니다." }, { status: 400 });
+    if (typeof body?.sheetUrl !== "string" || body.sheetUrl.length > 500 || !isServiceMonth(body.serviceMonth)) {
+      return NextResponse.json({ error: "시트 URL과 적용 월 형식이 올바르지 않습니다." }, { status: 400 });
+    }
     const result = await importRegularShuttleFromSheet(body.sheetUrl, body.serviceMonth);
     return NextResponse.json({ ok: true, ...result });
   } catch (e) {

@@ -19,34 +19,51 @@ export function toCsvExportUrl(sheetUrl: string): string | null {
 }
 
 /** 시트를 가져와 파싱한 뒤 해당 월의 RegularShuttleStop만 교체한다(원장 전용). */
-type RosterIdentity = { id: string; name: string; studentPhone: string | null; parentPhones: string[]; active: boolean };
+type RosterIdentity = { id: string; name: string; studentPhone: string | null; parentPhones: string[]; monthStatus: string | null };
 function phoneDigits(value: string | null | undefined): string { return String(value ?? "").replace(/\D/g, ""); }
 function normalizedName(value: string | null | undefined): string { return String(value ?? "").replace(/\s/g, "").toLowerCase(); }
 
-async function reconcileActiveStudents(stops: RegularShuttleStop[]): Promise<{ stops: RegularShuttleStop[]; excluded: string[]; held: string[] }> {
+async function reconcileActiveStudents(stops: RegularShuttleStop[], serviceMonth: string): Promise<{ stops: RegularShuttleStop[]; excluded: string[]; held: string[] }> {
+  const [targetYear, targetMonth] = serviceMonth.split("-").map(Number);
   const rows = await prisma.$queryRawUnsafe<Record<string, unknown>[]>(
-    `SELECT s."id", s."name", s."phone" AS "studentPhone", u."phone" AS "userPhone",
+    `WITH latest_batch AS (
+       SELECT id FROM "StudentSheetImportBatch" WHERE status='COMPLETED' ORDER BY "createdAt" DESC LIMIT 1
+     ), month_status AS (
+       SELECT l."studentId",
+              CASE WHEN BOOL_OR(l.status='ACTIVE') THEN 'ACTIVE'
+                   WHEN BOOL_OR(l.status='PAUSED') THEN 'PAUSED'
+                   WHEN BOOL_OR(l.status='WITHDRAWN') THEN 'WITHDRAWN'
+                   ELSE 'WITHDRAWN' END AS status
+         FROM "StudentRegistrationLedger" l
+         JOIN latest_batch b ON b.id=l."batchId"
+        WHERE l."studentId" IS NOT NULL
+          AND NULLIF((regexp_match(COALESCE(l."registrationMonth",''), '(20\\d{2})'))[1], '')::int=$1
+          AND NULLIF((regexp_match(COALESCE(l."registrationMonth",''), '(?:20\\d{2})[^0-9]+(1[0-2]|0?[1-9])'))[1], '')::int=$2
+        GROUP BY l."studentId"
+     )
+     SELECT s."id", s."name", s."phone" AS "studentPhone", u."phone" AS "userPhone",
             COALESCE(array_agg(DISTINCT g."phone") FILTER (WHERE g."phone" IS NOT NULL), '{}') AS "guardianPhones",
-            bool_or(e."status"='ACTIVE') AS "active"
+            ms.status AS "monthStatus"
        FROM "Student" s
        LEFT JOIN "User" u ON u."id"=s."parentId"
        LEFT JOIN "Guardian" g ON g."studentId"=s."id"
-       LEFT JOIN "Enrollment" e ON e."studentId"=s."id"
+       LEFT JOIN month_status ms ON ms."studentId"=s.id
       WHERE s."mergedIntoStudentId" IS NULL
-      GROUP BY s."id",s."name",s."phone",u."phone"`,
+      GROUP BY s."id",s."name",s."phone",u."phone",ms.status`,
+    targetYear, targetMonth,
   );
   const identities: RosterIdentity[] = rows.map((row) => ({
     id: String(row.id), name: String(row.name ?? ""), studentPhone: row.studentPhone ? String(row.studentPhone) : null,
     parentPhones: [row.userPhone, ...(Array.isArray(row.guardianPhones) ? row.guardianPhones : [])].map((v) => String(v ?? "")).filter(Boolean),
-    active: row.active === true,
+    monthStatus: row.monthStatus ? String(row.monthStatus) : null,
   }));
   const byName = new Map<string, RosterIdentity[]>();
   for (const identity of identities) {
     const key = normalizedName(identity.name); byName.set(key, [...(byName.get(key) ?? []), identity]);
   }
   const excluded = new Set<string>(); const held = new Set<string>();
-  const kept = stops.filter((stop) => {
-    if (!stop.studentName || !["BOARD", "ALIGHT"].includes(stop.direction)) return true;
+  const kept = stops.flatMap((stop) => {
+    if (!stop.studentName || !["BOARD", "ALIGHT"].includes(stop.direction)) return [stop];
     const candidates = byName.get(normalizedName(stop.studentName)) ?? [];
     const parentPhone = phoneDigits(stop.parentPhone); const studentPhone = phoneDigits(stop.studentPhone);
     const matched = candidates.filter((identity) =>
@@ -54,9 +71,12 @@ async function reconcileActiveStudents(stops: RegularShuttleStop[]): Promise<{ s
       || (studentPhone && phoneDigits(identity.studentPhone) === studentPhone),
     );
     const resolved = matched.length === 1 ? matched[0] : (!parentPhone && !studentPhone && candidates.length === 1 ? candidates[0] : null);
-    if (!resolved) { held.add(stop.studentName); return true; }
-    if (!resolved.active) { excluded.add(stop.studentName); return false; }
-    return true;
+    // 확인보류 행은 기사 명단·배차에 섞지 않는다. 사용자가 신원을 확정한 뒤 다시 이관한다.
+    if (!resolved) { held.add(stop.studentName); return []; }
+    // 대상 월 원장이 없으면 현재 Enrollment를 추측값으로 사용하지 않고 확인보류한다.
+    if (resolved.monthStatus == null) { held.add(stop.studentName); return []; }
+    if (resolved.monthStatus !== "ACTIVE") { excluded.add(stop.studentName); return []; }
+    return [{ ...stop, studentId: resolved.id }];
   });
   return { stops: kept, excluded: [...excluded].sort(), held: [...held].sort() };
 }
@@ -72,8 +92,13 @@ export async function importRegularShuttleFromSheet(sheetUrl: string, serviceMon
   if (/<html/i.test(csv.slice(0, 200))) throw new Error("시트가 공개되어 있지 않습니다(로그인 페이지 응답).");
   const parsed = parseRegularShuttleSheet(csv);
   if (parsed.stops.length === 0) throw new Error("시트에서 유효한 운행 정차를 찾지 못했습니다. 형식을 확인해주세요.");
-  const reconciled = await reconcileActiveStudents(parsed.stops);
+  const reconciled = await reconcileActiveStudents(parsed.stops, month);
   const stops = reconciled.stops;
+  const studentRows = parsed.stops.filter((stop) => stop.studentName && ["BOARD", "ALIGHT"].includes(stop.direction)).length;
+  const heldLimit = Math.max(5, Math.ceil(studentRows * 0.1));
+  if (reconciled.held.length >= heldLimit) {
+    throw new Error(`확인보류 ${reconciled.held.length}명이 임계치(${heldLimit}명) 이상이라 차량표를 교체하지 않았습니다. 신원을 확인한 뒤 다시 가져오세요.`);
+  }
 
   // 같은 정류장 좌표는 이전 스냅샷에서 승계한다. 해당 월만 교체하므로 과거 비교 원장은 보존된다.
   const coords = await prisma.$queryRawUnsafe<{ stopName: string; latitude: number; longitude: number }[]>(
@@ -83,19 +108,22 @@ export async function importRegularShuttleFromSheet(sheetUrl: string, serviceMon
       ORDER BY "stopName", "importedAt" DESC`,
   );
   const coordByName = new Map(coords.map((row) => [row.stopName, row]));
-  await prisma.$executeRawUnsafe(`DELETE FROM "RegularShuttleStop" WHERE "serviceMonth"=$1`, month);
-  for (const s of stops) {
-    const coord = coordByName.get(s.stopName);
-    await prisma.$executeRawUnsafe(
-      `INSERT INTO "RegularShuttleStop"
-        ("serviceMonth","weekday","classTime","arriveTime","stopName","direction","studentName","studentPhone","parentPhone","note","sortOrder","latitude","longitude")
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,
-      month,
-      s.weekday, s.classTime, s.arriveTime, s.stopName, s.direction,
-      s.studentName, s.studentPhone, s.parentPhone, s.note, s.sortOrder,
-      coord?.latitude ?? null, coord?.longitude ?? null,
-    );
-  }
+  // 월 스냅샷 교체는 한 트랜잭션으로 묶어, 한 행이라도 실패하면 기존 차량표를 온전히 보존한다.
+  await prisma.$transaction(async (tx) => {
+    await tx.$executeRawUnsafe(`DELETE FROM "RegularShuttleStop" WHERE "serviceMonth"=$1`, month);
+    for (const s of stops) {
+      const coord = coordByName.get(s.stopName);
+      await tx.$executeRawUnsafe(
+        `INSERT INTO "RegularShuttleStop"
+          ("serviceMonth","weekday","classTime","arriveTime","stopName","direction","studentName","studentId","studentPhone","parentPhone","note","sortOrder","latitude","longitude")
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)`,
+        month,
+        s.weekday, s.classTime, s.arriveTime, s.stopName, s.direction,
+        s.studentName, s.studentId ?? null, s.studentPhone, s.parentPhone, s.note, s.sortOrder,
+        coord?.latitude ?? null, coord?.longitude ?? null,
+      );
+    }
+  });
   return { imported: stops.length, title: parsed.title, serviceMonth: month, excluded: reconciled.excluded, held: reconciled.held };
 }
 
@@ -149,19 +177,25 @@ export async function saveRegularStopCoords(
 /** 정규 셔틀 정차의 순서(sortOrder)·도착시각(arriveTime)을 저장한다(원장 전용). id 기준 개별 갱신. */
 export async function saveRegularStopOrder(
   updates: { id: string; sortOrder: number; arriveTime: string | null }[],
+  serviceMonth: string,
 ): Promise<{ updated: number }> {
   await requireAdmin();
-  let updated = 0;
-  for (const u of updates) {
-    const id = (u.id ?? "").trim();
-    if (!id || !Number.isFinite(u.sortOrder)) continue;
-    const arrive = typeof u.arriveTime === "string" && /^\d{1,2}:\d{2}$/.test(u.arriveTime.trim()) ? u.arriveTime.trim() : null;
-    const n = await prisma.$executeRawUnsafe(
-      `UPDATE "RegularShuttleStop" SET "sortOrder"=$1,"arriveTime"=$2 WHERE "id"=$3`,
-      Math.round(u.sortOrder), arrive, id,
-    );
-    updated += Number(n) || 0;
-  }
+  const month = normalizeServiceMonth(serviceMonth);
+  const updated = await prisma.$transaction(async (tx) => {
+    let count = 0;
+    for (const u of updates) {
+      const id = (u.id ?? "").trim();
+      if (!id || !Number.isFinite(u.sortOrder)) continue;
+      const arrive = typeof u.arriveTime === "string" && /^\d{1,2}:\d{2}$/.test(u.arriveTime.trim()) ? u.arriveTime.trim() : null;
+      const n = await tx.$executeRawUnsafe(
+        `UPDATE "RegularShuttleStop" SET "sortOrder"=$1,"arriveTime"=$2 WHERE "id"=$3 AND "serviceMonth"=$4`,
+        Math.round(u.sortOrder), arrive, id, month,
+      );
+      count += Number(n) || 0;
+    }
+    if (count !== updates.length) throw new Error("일부 정차가 선택한 월에 없어 저장을 취소했습니다. 차량표를 새로고침해 주세요.");
+    return count;
+  });
   return { updated };
 }
 
@@ -172,7 +206,7 @@ export async function getRegularShuttleStops(serviceMonth?: string): Promise<{ s
     const month = serviceMonth ? normalizeServiceMonth(serviceMonth) : (months[0] ?? null);
     if (!month) return { stops: [], importedAt: null, serviceMonth: null, months };
     const rows = await prisma.$queryRawUnsafe<Record<string, unknown>[]>(
-      `SELECT "id","serviceMonth","weekday","classTime","arriveTime","stopName","direction","studentName","studentPhone","parentPhone","note","sortOrder","latitude","longitude","importedAt"
+      `SELECT "id","serviceMonth","weekday","classTime","arriveTime","stopName","direction","studentName","studentId","studentPhone","parentPhone","note","sortOrder","latitude","longitude","importedAt"
          FROM "RegularShuttleStop" WHERE "serviceMonth"=$1 ORDER BY "weekday" ASC, "sortOrder" ASC`,
       month,
     );
@@ -187,6 +221,7 @@ export async function getRegularShuttleStops(serviceMonth?: string): Promise<{ s
       stopName: String(r.stopName ?? ""),
       direction: (["BOARD", "ALIGHT", "PIVOT", "RETURN"].includes(String(r.direction)) ? r.direction : "BOARD") as RegularShuttleStop["direction"],
       studentName: (r.studentName as string | null) ?? null,
+      studentId: (r.studentId as string | null) ?? null,
       studentPhone: (r.studentPhone as string | null) ?? null,
       parentPhone: (r.parentPhone as string | null) ?? null,
       note: (r.note as string | null) ?? null,

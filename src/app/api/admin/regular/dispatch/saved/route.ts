@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/auth-guard";
 import { deleteRegularDispatchRoute, getSavedRegularDispatchRoute, saveRegularDispatchRoute } from "@/lib/regular/regularDispatchRoute";
+import { validateRegularDispatchVehicles } from "@/lib/regular/regularDispatchPayload";
+import { isServiceMonth } from "@/lib/regular/serviceMonth";
 
 export const dynamic = "force-dynamic";
 
@@ -14,6 +16,9 @@ export async function GET(request: Request) {
     const dayOfWeek = url.searchParams.get("date") ?? ""; // RouteSection 은 date=요일 로 보낸다
     const direction = url.searchParams.get("direction") ?? "PICKUP";
     const serviceMonth = url.searchParams.get("serviceMonth") ?? undefined;
+    if (serviceMonth != null && !isServiceMonth(serviceMonth)) {
+      return NextResponse.json({ error: "적용 월 형식이 올바르지 않습니다." }, { status: 400 });
+    }
     const saved = await getSavedRegularDispatchRoute(dayOfWeek, direction, serviceMonth);
     return NextResponse.json({ saved }, { headers: { "Cache-Control": "no-store" } });
   } catch (e) {
@@ -30,8 +35,17 @@ export async function POST(request: Request) {
     if (!body?.date || !body.direction || !Array.isArray(body.vehicles)) {
       return NextResponse.json({ error: "요청 형식이 올바르지 않습니다." }, { status: 400 });
     }
+    if (!(["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].includes(body.date))
+      || !(["PICKUP", "DROPOFF"].includes(body.direction))
+      || (body.serviceMonth != null && !isServiceMonth(body.serviceMonth))
+      || ![body.classStart, body.classEnd].every((value) => value == null || /^(?:[01]\d|2[0-3]):[0-5]\d$/.test(value))) {
+      return NextResponse.json({ error: "요일·방향·시각·적용 월 형식이 올바르지 않습니다." }, { status: 400 });
+    }
+    let vehicles: unknown[];
+    try { vehicles = validateRegularDispatchVehicles(body.vehicles); }
+    catch (error) { return NextResponse.json({ error: (error as Error).message }, { status: 400 }); }
     const { savedAt } = await saveRegularDispatchRoute({
-      dayOfWeek: body.date, direction: body.direction, vehicles: body.vehicles,
+      dayOfWeek: body.date, direction: body.direction, vehicles,
       serviceMonth: body.serviceMonth,
       classStart: body.classStart ?? null, classEnd: body.classEnd ?? null,
     });
@@ -47,10 +61,14 @@ export async function POST(request: Request) {
 export async function DELETE(request: Request) {
   try {
     const url = new URL(request.url);
+    const serviceMonth = url.searchParams.get("serviceMonth") ?? undefined;
+    if (serviceMonth != null && !isServiceMonth(serviceMonth)) {
+      return NextResponse.json({ error: "적용 월 형식이 올바르지 않습니다." }, { status: 400 });
+    }
     const deleted = await deleteRegularDispatchRoute(
       url.searchParams.get("date") ?? "",
       url.searchParams.get("direction") ?? "",
-      url.searchParams.get("serviceMonth") ?? undefined,
+      serviceMonth,
     );
     return NextResponse.json({ ok: true, deleted });
   } catch (e) {

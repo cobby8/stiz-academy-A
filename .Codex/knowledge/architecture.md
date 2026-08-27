@@ -189,3 +189,12 @@ STIZ 농구교실 다산점의 홈페이지와 학원관리 플랫폼이다. 일
 - `RegularDispatchRoute`는 `serviceMonth + dayOfWeek + direction` 단위로 노선을 저장해 월 변경 시 과거 배차를 덮어쓰지 않는다.
 - `/admin/shuttle/regular`에서 확인 월과 비교 월을 선택하고 학생별 추가·제외·시간/정류장 변경을 확인한다.
 - 정규 자동 배차 엔진은 기존 방학특강 `RouteSection`과 배차 코어를 재사용하되 `serviceMonth`를 명시적으로 전달한다.
+# 2026-08-27: 수강 변경 실시간 3중 동기화 구조
+
+- 운영 사이트에서 일어난 `Enrollment` 변경은 기존 `OperationsRequest` → `OperationsCommand` → `OperationsSyncAttempt` 원장을 그대로 사용한다. 새 평행 장부를 만들지 않는다.
+- `enrollStudent`와 `updateEnrollmentStatus`는 수강 변경과 `src/lib/operations-events`의 원장 INSERT를 같은 DB 트랜잭션에서 처리한다. 원본 `WEBSITE` 시도는 `SUCCEEDED`, `SHEET`와 `RALLYZ`는 `PENDING`으로 시작한다. 동일 상태 재저장은 DB 시간도 바꾸지 않는다.
+- `src/app/api/operations-events`는 시트·외부 변경을 HMAC 서명, 5분 재생 방지, 64KB 제한, `source + eventId` 멱등 키로 접수한다. 실제 달력 날짜와 적용 월, 학생 ID, 종류별 필수 값을 검증하고 모호하거나 아직 어댑터가 없는 변경은 `HELD`로 둔다.
+- 현재 기존 시트 어댑터 계약으로 자동 실행 가능한 사이트 변경은 `PAUSE`와 `WITHDRAW`다. `RESUME`, `CLASS_ADD`, `CLASS_CHANGE`, 셔틀·연락처·청구는 원장에 즉시 잡히지만 전용 어댑터 전까지 확인보류한다.
+- 수강 삭제 UI는 제거하고 서버의 기존 `deleteEnrollment` 호출도 실제 DELETE 대신 `WITHDRAWN` 상태변경으로 위임한다. 수강 이력을 보존해야 외부 시스템과 재대조할 수 있다.
+- 다음 구현 단계는 시트 Apps Script가 서명 이벤트를 보내는 설치 코드, `PENDING` 시도를 즉시 소비하고 재시도하는 워커, 관리자 상태 화면이다. Rallyz는 공식 쓰기 API·웹훅이 확인되지 않아 로그인 브라우저 기반 감독형 반영을 유지하며, 연결 부재를 성공으로 처리하지 않는다.
+- 청구 발행·취소·결제·환불·학부모 알림은 실시간 데이터 동기화 큐에서 실행하지 않는다. 해당 상태는 기존 `billingStatus`·`notificationStatus=HELD`를 유지하고 정확한 미리보기와 실행 시점 승인을 별도로 받는다.

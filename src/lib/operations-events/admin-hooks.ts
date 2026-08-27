@@ -1,0 +1,64 @@
+import type { WebsiteOperationsEvent, WebsiteOperationsEventKind } from "./policy";
+
+type EnrollmentStatus = "ACTIVE" | "PAUSED" | "WITHDRAWN";
+
+const STATUS_EVENT: Record<EnrollmentStatus, { eventType: string; kind: WebsiteOperationsEventKind; label: string }> = {
+  ACTIVE: { eventType: "ENROLLMENT_RESUMED", kind: "RESUME", label: "수강 복귀" },
+  PAUSED: { eventType: "ENROLLMENT_PAUSED", kind: "PAUSE", label: "휴원" },
+  WITHDRAWN: { eventType: "ENROLLMENT_WITHDRAWN", kind: "WITHDRAW", label: "퇴원" },
+};
+
+function seoulDate(value: Date) {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "Asia/Seoul",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(value);
+  const part = (type: Intl.DateTimeFormatPartTypes) => parts.find((item) => item.type === type)?.value || "";
+  return `${part("year")}-${part("month")}-${part("day")}`;
+}
+
+export function buildEnrollmentOperationsEvent(input: {
+  enrollmentId: string;
+  changedAt: Date;
+  actorUserId: string;
+  studentId: string;
+  studentName: string;
+  classId: string;
+  className: string;
+  previousStatus: EnrollmentStatus | null;
+  nextStatus: EnrollmentStatus;
+}): WebsiteOperationsEvent | null {
+  if (input.previousStatus === input.nextStatus) return null;
+
+  const transition = input.previousStatus === null
+    ? { eventType: "ENROLLMENT_CREATED", kind: "CLASS_ADD" as const, label: "수강 등록" }
+    : STATUS_EVENT[input.nextStatus];
+
+  const fromClassId = input.previousStatus === null ? null : input.classId;
+  const toClassId = input.previousStatus === null ? input.classId : null;
+  return {
+    eventId: `Enrollment:${input.enrollmentId}:${input.changedAt.toISOString()}:${input.nextStatus}`,
+    eventType: transition.eventType,
+    actorUserId: input.actorUserId,
+    studentId: input.studentId,
+    studentName: input.studentName,
+    kind: transition.kind,
+    effectiveDate: seoulDate(input.changedAt),
+    before: input.previousStatus === null
+      ? null
+      : { enrollmentId: input.enrollmentId, classId: input.classId, className: input.className, status: input.previousStatus },
+    after: {
+      enrollmentId: input.enrollmentId,
+      classId: input.classId,
+      className: input.className,
+      status: input.nextStatus,
+      effectiveDate: seoulDate(input.changedAt),
+      fromClassId,
+      toClassId,
+      parentConfirmed: true,
+    },
+    summary: `${input.studentName} ${input.className} ${transition.label}`,
+  };
+}

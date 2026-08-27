@@ -56,6 +56,8 @@ import { PUBLIC_SITE_URL } from "@/lib/publicMetadata";
 import { formatTrialSmsDateTime } from "@/lib/trial-sms-time";
 import { sessionDateForKorea } from "@/lib/seasonal/session-bridge";
 import { linkMatchingCoachProfileToUser } from "@/lib/staff-coach-link";
+import { buildEnrollmentOperationsEvent } from "@/lib/operations-events/admin-hooks";
+import { enqueueWebsiteOperationsEventInTransaction } from "@/lib/operations-events";
 
 type AdminActor = Awaited<ReturnType<typeof requireAdmin>>;
 type ApplicationHistoryAction = Extract<ApplicationContactAction, "UPDATED" | "SCHEDULED" | "CANCELLED">;
@@ -1108,16 +1110,54 @@ export async function deleteStudent(id: string) {
 
 // ── 수강 등록 관리 ────────────────────────────────────────────────────────────
 export async function enrollStudent(studentId: string, classId: string) {
-    await requireAdmin();
+    const admin = await requireAdmin();
     try {
-        await prisma.$executeRawUnsafe(
-            `INSERT INTO "Enrollment" (id, "studentId", "classId", status, "createdAt", "updatedAt")
-             VALUES (gen_random_uuid()::text, $1, $2, 'ACTIVE', NOW(), NOW())
-             ON CONFLICT ("studentId", "classId") DO UPDATE SET status = 'ACTIVE', "updatedAt" = NOW()`,
-            studentId, classId,
-        );
+        await prisma.$transaction(async (tx) => {
+            const [context] = await tx.$queryRawUnsafe<Array<{
+                studentName: string;
+                className: string;
+            }>>(
+                `SELECT s.name AS "studentName", c.name AS "className"
+                   FROM "Student" s
+                   CROSS JOIN "Class" c
+                  WHERE s.id=$1 AND c.id=$2
+                  FOR UPDATE OF s,c`,
+                studentId, classId,
+            );
+            if (!context) throw new Error("학생 또는 수업 정보를 찾을 수 없습니다.");
+            const [existingEnrollment] = await tx.$queryRawUnsafe<Array<{
+                id: string;
+                status: "ACTIVE" | "PAUSED" | "WITHDRAWN";
+            }>>(
+                `SELECT id,status FROM "Enrollment" WHERE "studentId"=$1 AND "classId"=$2 FOR UPDATE`,
+                studentId, classId,
+            );
+            // 이미 활성인 수강은 updatedAt까지 그대로 보존하는 완전한 no-op입니다.
+            if (existingEnrollment?.status === "ACTIVE") return;
+
+            const [enrollment] = await tx.$queryRawUnsafe<Array<{ id: string; updatedAt: Date }>>(
+                `INSERT INTO "Enrollment" (id, "studentId", "classId", status, "createdAt", "updatedAt")
+                 VALUES (gen_random_uuid()::text, $1, $2, 'ACTIVE', NOW(), NOW())
+                 ON CONFLICT ("studentId", "classId") DO UPDATE SET status = 'ACTIVE', "updatedAt" = NOW()
+                 RETURNING id,"updatedAt"`,
+                studentId, classId,
+            );
+            const event = buildEnrollmentOperationsEvent({
+                enrollmentId: enrollment.id,
+                changedAt: enrollment.updatedAt,
+                actorUserId: admin.appUserId,
+                studentId,
+                studentName: context.studentName,
+                classId,
+                className: context.className,
+                previousStatus: existingEnrollment?.status ?? null,
+                nextStatus: "ACTIVE",
+            });
+            if (event) await enqueueWebsiteOperationsEventInTransaction(tx, event);
+        });
     } catch (e) {
         console.error("Failed to enroll student:", e);
+        if (e instanceof Error && e.message === "학생 또는 수업 정보를 찾을 수 없습니다.") throw e;
         throw new Error("수강 등록 실패");
     }
     revalidatePath("/admin/students");
@@ -1127,7 +1167,7 @@ export async function enrollStudent(studentId: string, classId: string) {
 }
 
 export async function updateEnrollmentStatus(enrollmentId: string, status: string) {
-    await requireAdmin();
+    const admin = await requireAdmin();
 
     const allowedStatuses = new Set(["ACTIVE", "PAUSED", "WITHDRAWN"]);
     if (!allowedStatuses.has(status)) {
@@ -1138,19 +1178,49 @@ export async function updateEnrollmentStatus(enrollmentId: string, status: strin
     let changedClassId: string | null = null;
 
     try {
-        const rows = await prisma.$queryRawUnsafe<{ studentId?: string; studentid?: string; classId?: string; classid?: string }[]>(
-            `UPDATE "Enrollment"
-             SET status = $1, "updatedAt" = NOW()
-             WHERE id = $2
-             RETURNING "studentId", "classId"`,
-            status, enrollmentId,
-        );
-        if (rows.length === 0) {
-            throw new Error("수강 등록 정보를 찾을 수 없습니다.");
-        }
+        await prisma.$transaction(async (tx) => {
+            const [before] = await tx.$queryRawUnsafe<Array<{
+                studentId: string;
+                classId: string;
+                studentName: string;
+                className: string;
+                previousStatus: "ACTIVE" | "PAUSED" | "WITHDRAWN";
+            }>>(
+                `SELECT e."studentId",e."classId",e.status AS "previousStatus",s.name AS "studentName",c.name AS "className"
+                   FROM "Enrollment" e
+                   JOIN "Student" s ON s.id=e."studentId"
+                   JOIN "Class" c ON c.id=e."classId"
+                  WHERE e.id=$1
+                  FOR UPDATE OF e`,
+                enrollmentId,
+            );
+            if (!before) throw new Error("수강 등록 정보를 찾을 수 없습니다.");
+            // 같은 상태를 다시 저장해도 변경 시각과 외부 동기화 원장을 모두 건드리지 않습니다.
+            if (before.previousStatus === status) {
+                changedStudentId = before.studentId;
+                changedClassId = before.classId;
+                return;
+            }
 
-        changedStudentId = rows[0].studentId ?? rows[0].studentid ?? null;
-        changedClassId = rows[0].classId ?? rows[0].classid ?? null;
+            const [changed] = await tx.$queryRawUnsafe<Array<{ updatedAt: Date }>>(
+                `UPDATE "Enrollment" SET status=$1,"updatedAt"=NOW() WHERE id=$2 RETURNING "updatedAt"`,
+                status, enrollmentId,
+            );
+            changedStudentId = before.studentId;
+            changedClassId = before.classId;
+            const event = buildEnrollmentOperationsEvent({
+                enrollmentId,
+                changedAt: changed.updatedAt,
+                actorUserId: admin.appUserId,
+                studentId: before.studentId,
+                studentName: before.studentName,
+                classId: before.classId,
+                className: before.className,
+                previousStatus: before.previousStatus,
+                nextStatus: status as "ACTIVE" | "PAUSED" | "WITHDRAWN",
+            });
+            if (event) await enqueueWebsiteOperationsEventInTransaction(tx, event);
+        });
     } catch (e) {
         console.error("Failed to update enrollment:", e);
         if (e instanceof Error && e.message === "수강 등록 정보를 찾을 수 없습니다.") {
@@ -1168,17 +1238,8 @@ export async function updateEnrollmentStatus(enrollmentId: string, status: strin
 }
 
 export async function deleteEnrollment(enrollmentId: string) {
-    await requireAdmin();
-    try {
-        await prisma.$executeRawUnsafe(`DELETE FROM "Enrollment" WHERE id = $1`, enrollmentId);
-    } catch (e) {
-        console.error("Failed to delete enrollment:", e);
-        throw new Error("수강 취소 실패");
-    }
-    revalidatePath("/admin/students");
-    revalidatePath("/admin/classes");
-    revalidateStudentAdminCaches();
-    revalidateClassAdminCaches();
+    // 수강 이력은 시트·랠리즈 대조의 근거이므로 삭제하지 않고 퇴원 상태로 보존합니다.
+    return updateEnrollmentStatus(enrollmentId, "WITHDRAWN");
 }
 
 // ── 출결 관리 ──────────────────────────────────────────────────────────────────

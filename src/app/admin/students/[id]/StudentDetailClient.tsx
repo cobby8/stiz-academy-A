@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState, useTransition } from "react";
 import Link from "next/link";
-import { updateEnrollmentStatus, updateStudentMemo, updateStudent, updatePaymentStatus, enrollStudent, deleteEnrollment } from "@/app/actions/admin";
+import { updateEnrollmentStatus, updateStudentMemo, updateStudent, updatePaymentStatus, enrollStudent } from "@/app/actions/admin";
 import LocationPickerModal, { type MapLocationData } from "@/components/maps/LocationPickerModal";
 
 type MediaItem = { url: string; type: "image" | "video" };
@@ -428,12 +428,11 @@ export default function StudentDetailClient({
     const [memoSaved, setMemoSaved] = useState(false);
     const [statusUpdatingId, setStatusUpdatingId] = useState<string | null>(null);
     const [statusFeedback, setStatusFeedback] = useState<{ type: "success" | "error"; message: string } | null>(null);
-    // ── 반 추가·삭제 상태 (E3) ──────────────────────────────
+    // ── 반 추가 상태 (E3) ───────────────────────────────────
     // showClassPicker: 반 선택 UI 펼침 / enrollingClassId: 등록 처리 중(disabled)
-    // deletingEnrollmentId: 삭제 처리 중 / enrollError: 추가/삭제 실패 사유
+    // enrollError: 수강 반 추가/상태 변경 실패 사유
     const [showClassPicker, setShowClassPicker] = useState(false);
     const [enrollingClassId, setEnrollingClassId] = useState<string | null>(null);
-    const [deletingEnrollmentId, setDeletingEnrollmentId] = useState<string | null>(null);
     const [enrollError, setEnrollError] = useState<string | null>(null);
     // ── 결제 상태 변경 상태 (E2) ──────────────────────────────
     // payEditingId: 상태선택 세그먼트를 펼친 결제 건 / payUpdatingId: 처리 중(disabled)
@@ -788,27 +787,6 @@ export default function StudentDetailClient({
         }
     }
 
-    // 반 삭제(하드) — deleteEnrollment는 Enrollment 행을 완전히 지운다(이력 영구 제거).
-    // 강한 확인창으로 퇴원(소프트)과 구분하고, 승인 시에만 서버 호출 후 재조회.
-    async function removeEnrollment(enrollmentId: string) {
-        if (deletingEnrollmentId) return;
-        if (!window.confirm("이 반 수강을 완전히 삭제할까요? 수강 이력이 영구 제거됩니다. (퇴원 처리를 원하면 상태를 '퇴원'으로 바꾸세요)")) return;
-
-        setDeletingEnrollmentId(enrollmentId);
-        setEnrollError(null);
-
-        try {
-            await deleteEnrollment(enrollmentId);
-            await loadData();
-            setStatusFeedback({ type: "success", message: "수강 반을 삭제했습니다." });
-            window.setTimeout(() => setStatusFeedback(null), 2500);
-        } catch (delError) {
-            setEnrollError(getErrorMessage(delError, "반 삭제에 실패했습니다."));
-        } finally {
-            setDeletingEnrollmentId(null);
-        }
-    }
-
     // 결제 상태 변경 — 취소(CANCELED)만 되돌리기 어려우므로 window.confirm 한 번, 나머지는 바로 실행
     // 서버 updatePaymentStatus 는 requireFinanceOwner() 권한이라 재무 권한 없으면 throw → 에러 문구로 표면화(조용한 실패 금지)
     async function changePaymentStatus(paymentId: string, currentStatus: string, nextStatus: string) {
@@ -855,7 +833,7 @@ export default function StudentDetailClient({
                         {DAY_LABELS[enrollment.dayOfWeek] || enrollment.dayOfWeek} {enrollment.startTime}~{enrollment.endTime} · {enrollment.programName}
                     </p>
                 </div>
-                {/* 우측: 상태 세그먼트 + 하드 삭제 버튼(위험 액션 톤) */}
+                {/* 우측: 상태 세그먼트. 퇴원도 이력을 보존하는 상태 변경으로 처리한다. */}
                 <div className="flex items-center gap-2">
                 {/* 세그먼트 버튼: 상태 변경 — 기존 changeEnrollmentStatus 로직 그대로 */}
                 <div className="inline-flex overflow-hidden rounded-lg border border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-950">
@@ -878,17 +856,6 @@ export default function StudentDetailClient({
                         );
                     })}
                 </div>
-                {/* 하드 삭제 — 이력 영구 제거. 위험 액션이라 빨간 톤 + 확인창 */}
-                <button
-                    type="button"
-                    onClick={() => void removeEnrollment(enrollment.id)}
-                    disabled={deletingEnrollmentId === enrollment.id}
-                    aria-label="수강 반 완전 삭제"
-                    title="수강 반 완전 삭제(이력 영구 제거)"
-                    className="grid h-8 w-8 shrink-0 place-items-center rounded-lg border border-red-200 bg-white text-red-500 transition hover:bg-red-50 hover:text-red-700 disabled:opacity-40 dark:border-red-900/50 dark:bg-gray-950 dark:text-red-400 dark:hover:bg-red-950/40"
-                >
-                    <SymbolIcon name="delete" size={16} />
-                </button>
                 </div>
             </div>
         );

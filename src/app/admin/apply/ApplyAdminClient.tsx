@@ -2,8 +2,9 @@
 
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
 import dynamic from "next/dynamic";
-import { recordApplicationContact } from "@/app/actions/admin";
+import { recordApplicationContact, sendManualSms } from "@/app/actions/admin";
 import AdminModal from "@/components/admin/AdminModal";
+import ManualSmsModal from "./ManualSmsModal";
 
 const ApplyAdminModals = dynamic(() => import("./ApplyAdminModals"), {
     loading: () => null,
@@ -219,6 +220,7 @@ type FeedbackState = { type: "success" | "error"; message: string } | null;
 type ApplicationWorkFilter = "ALL" | "NEEDS_ACTION" | "CLASS_ASSIGNMENT" | "SHUTTLE" | "TRIAL_LINKED" | "TIME_CHECK";
 type ContactActionType = "CONTACTED" | "NO_ANSWER" | "FOLLOW_UP" | "MEMO";
 type ContactModalState = { app: EnrollApplication; defaultAction: ContactActionType } | null;
+type ManualSmsModalState = { app: EnrollApplication } | null;
 // ── 상태별 설정 ──────────────────────────────────────────────────────────────────
 
 const STATUS_CONFIG: Record<string, { label: string; color: string; icon: string }> = {
@@ -327,6 +329,15 @@ function formatPreferredSlots(slotKeys: string | null, classesBySlotKey: Map<str
 function phoneHref(phone: string) {
     const digits = phone.replace(/\D/g, "");
     return digits ? `tel:${digits}` : undefined;
+}
+
+function getErrorMessage(error: unknown, fallback: string) {
+    return error instanceof Error ? error.message : fallback;
+}
+
+function buildEnrollManualSmsMessage(app: EnrollApplication) {
+    const parentName = app.parentName || "보호자";
+    return `${parentName}님, STIZ 농구교실입니다. ${app.childName} 학생 수강신청 관련해서 안내드립니다.`;
 }
 
 function normalizeSearchValue(value: string | null | undefined) {
@@ -460,7 +471,9 @@ export default function ApplyAdminClient({
     const [showEditModal, setShowEditModal] = useState<EnrollApplication | null>(null);
     const [showCancelModal, setShowCancelModal] = useState<EnrollApplication | null>(null);
     const [contactModal, setContactModal] = useState<ContactModalState>(null);
+    const [manualSmsModal, setManualSmsModal] = useState<ManualSmsModalState>(null);
     const [contactBusyId, setContactBusyId] = useState<string | null>(null);
+    const [manualSmsBusy, setManualSmsBusy] = useState(false);
     const [openQuickActionId, setOpenQuickActionId] = useState<string | null>(null);
 
     const hasAnyData = applications.length > 0 || classes.length > 0 || stats.total > 0;
@@ -558,6 +571,31 @@ export default function ApplyAdminClient({
             setContactBusyId(null);
         }
     }, [loadApplyData, showFeedback]);
+
+    async function handleSendManualSms(app: EnrollApplication, message: string) {
+        if (manualSmsBusy) return;
+        setManualSmsBusy(true);
+        try {
+            const result = await sendManualSms([app.parentPhone], message, {
+                requestId: `enroll-manual-${app.id}-${Date.now()}`,
+                purpose: "수강신청 학부모 문자",
+                reason: "수강신청 관리 화면에서 직접 발송",
+                audienceScope: "EXTERNAL",
+            });
+            setManualSmsModal(null);
+            if (result.success > 0 && result.failed === 0 && result.uncertain === 0) {
+                showFeedback("success", `${app.childName} 보호자에게 문자를 발송했습니다.`);
+            } else if (result.success > 0) {
+                showFeedback("error", `${app.childName} 문자 일부만 발송됐습니다. 문자 발송 장부를 확인해 주세요.`);
+            } else {
+                showFeedback("error", result.results[0]?.reason || "문자 발송에 실패했습니다. 연락처와 문자 설정을 확인해 주세요.");
+            }
+        } catch (error) {
+            showFeedback("error", getErrorMessage(error, "문자 발송 중 문제가 생겼습니다. 잠시 후 다시 시도해주세요."));
+        } finally {
+            setManualSmsBusy(false);
+        }
+    }
 
     // 필터링된 신청서 목록
     const filteredApps = useMemo(() => {
@@ -859,6 +897,18 @@ export default function ApplyAdminClient({
                                                     <span className="material-symbols-outlined text-base">call</span>
                                                     전화
                                                 </a>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                        setOpenQuickActionId(null);
+                                                        setManualSmsModal({ app });
+                                                    }}
+                                                    disabled={manualSmsBusy}
+                                                    className={`${LIST_ACTION_ITEM_CLASS} disabled:opacity-50`}
+                                                >
+                                                    <span className="material-symbols-outlined text-base">sms</span>
+                                                    문자 보내기
+                                                </button>
                                                 <button
                                                     type="button"
                                                     onClick={() => handleRecordContact(app, "CONTACTED")}
@@ -1169,6 +1219,20 @@ export default function ApplyAdminClient({
                         await handleRecordContact(contactModal.app, action, note, nextFollowUpAt);
                         setContactModal(null);
                     }}
+                />
+            )}
+
+            {manualSmsModal && (
+                <ManualSmsModal
+                    title="학부모 문자 보내기"
+                    recipientLabel={`${manualSmsModal.app.childName} · ${manualSmsModal.app.parentName || "보호자"}`}
+                    recipientPhone={manualSmsModal.app.parentPhone}
+                    defaultMessage={buildEnrollManualSmsMessage(manualSmsModal.app)}
+                    busy={manualSmsBusy}
+                    onClose={() => {
+                        if (!manualSmsBusy) setManualSmsModal(null);
+                    }}
+                    onSubmit={(message) => handleSendManualSms(manualSmsModal.app, message)}
                 />
             )}
         </div>

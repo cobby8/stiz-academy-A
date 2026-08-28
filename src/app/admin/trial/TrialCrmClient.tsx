@@ -1,8 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState, type FormEvent, type MouseEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type MouseEvent } from "react";
 import dynamic from "next/dynamic";
 import AdminModal from "@/components/admin/AdminModal";
+import ManualSmsModal from "@/app/admin/apply/ManualSmsModal";
 import {
     updateTrialLead,
     sendPostTrialEnrollGuide,
@@ -11,6 +12,7 @@ import {
     resendTrialAttendedSms,
     recordApplicationContact,
     confirmTrialFeePayment,
+    sendManualSms,
 } from "@/app/actions/admin";
 
 const TrialCrmModals = dynamic(() => import("./TrialCrmModals"), {
@@ -121,20 +123,21 @@ type ListPagination = {
     partial: boolean;
 };
 
-type FeedbackState = { type: "success" | "error"; message: string } | null;
+type FeedbackState = { type: "success" | "error" | "info"; message: string } | null;
 type TrialWorkFilter = "ALL" | "NEEDS_CONTACT" | "SCHEDULED" | "AFTER_TRIAL" | "COACH_NOTICE" | "ENROLL_RECEIVED";
 type TrialDateFilter = "ALL" | "UPCOMING" | "TODAY" | "THIS_WEEK" | "PAST" | "MISSING";
 type ContactActionType = "CONTACTED" | "NO_ANSWER" | "FOLLOW_UP" | "MEMO";
 type ContactModalState = { lead: TrialLead; defaultAction: ContactActionType } | null;
 type EnrollGuideConfirmState = { lead: TrialLead; convertAfterConfirm: boolean } | null;
+type ManualSmsModalState = { lead: TrialLead } | null;
 const LIST_ACTION_TRIGGER_CLASS = "inline-flex size-9 items-center justify-center rounded-full bg-red-500 text-white shadow-lg shadow-red-500/20 transition hover:scale-105 hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-red-300 disabled:opacity-50 dark:bg-brand-neon-lime dark:text-brand-navy-900 dark:shadow-brand-neon-lime/20 dark:hover:bg-lime-300";
-const LIST_ACTION_MENU_CLASS = "fixed z-[80] flex w-40 -translate-y-1/2 flex-col gap-2 rounded-2xl border border-gray-200 bg-white/95 p-2 text-left shadow-2xl backdrop-blur dark:border-gray-700 dark:bg-gray-950/95";
+const LIST_ACTION_MENU_CLASS = "fixed z-[80] flex max-h-[70vh] w-44 -translate-y-1/2 flex-col gap-2 overflow-y-auto rounded-2xl border border-gray-200 bg-white/95 p-2 text-left shadow-2xl backdrop-blur dark:border-gray-700 dark:bg-gray-950/95";
 const LIST_ACTION_ITEM_CLASS = "flex min-h-9 w-full items-center justify-between gap-2 rounded-full border border-gray-200 bg-white px-2 pl-3 text-left text-xs font-black text-gray-700 shadow-sm transition hover:border-brand-orange-300 hover:bg-brand-orange-50 hover:text-brand-orange-700 disabled:opacity-50 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100 dark:hover:border-brand-neon-lime dark:hover:bg-brand-neon-lime/10 dark:hover:text-brand-neon-lime";
 const LIST_ACTION_PRIMARY_CLASS = "flex min-h-9 w-full items-center justify-between gap-2 rounded-full bg-brand-neon-lime px-2 pl-3 text-left text-xs font-black text-brand-navy-900 shadow-sm transition hover:bg-lime-300 disabled:opacity-50";
 const LIST_ACTION_ICON_CLASS = "inline-flex size-7 shrink-0 items-center justify-center rounded-full bg-gray-900 text-white dark:bg-brand-neon-lime dark:text-brand-navy-900";
 const DETAIL_ACTION_CLASS = "inline-flex min-h-8 items-center gap-1.5 rounded-md border border-gray-200 px-3 text-xs font-bold text-gray-700 transition hover:border-brand-orange-300 hover:bg-brand-orange-50 hover:text-brand-orange-700 dark:border-gray-700 dark:text-gray-100 dark:hover:border-brand-neon-lime dark:hover:bg-brand-neon-lime/10";
-const QUICK_ACTION_MENU_WIDTH = 160;
-const QUICK_ACTION_MENU_HALF_HEIGHT = 132;
+const QUICK_ACTION_MENU_WIDTH = 176;
+const QUICK_ACTION_MENU_HALF_HEIGHT = 176;
 
 type QuickActionMenuPosition = {
     top: number;
@@ -228,6 +231,15 @@ const CONTACT_ACTION_LABELS: Record<string, string> = {
 function phoneHref(phone: string) {
     const digits = phone.replace(/\D/g, "");
     return digits ? `tel:${digits}` : undefined;
+}
+
+function getErrorMessage(error: unknown, fallback: string) {
+    return error instanceof Error ? error.message : fallback;
+}
+
+function buildTrialManualSmsMessage(lead: TrialLead) {
+    const parentName = lead.parentName || "보호자";
+    return `${parentName}님, STIZ 농구교실입니다. ${lead.childName} 학생 체험수업 관련해서 안내드립니다.`;
 }
 
 function normalizeSearchValue(value: string | null | undefined) {
@@ -676,9 +688,12 @@ export default function TrialCrmClient({
     const [showDetailModal, setShowDetailModal] = useState<TrialLead | null>(null);
     const [contactModal, setContactModal] = useState<ContactModalState>(null);
     const [enrollGuideConfirm, setEnrollGuideConfirm] = useState<EnrollGuideConfirmState>(null);
+    const [manualSmsModal, setManualSmsModal] = useState<ManualSmsModalState>(null);
     const [contactBusyId, setContactBusyId] = useState<string | null>(null);
+    const [manualSmsBusy, setManualSmsBusy] = useState(false);
     const [openQuickActionId, setOpenQuickActionId] = useState<string | null>(null);
     const [quickActionMenuPosition, setQuickActionMenuPosition] = useState<QuickActionMenuPosition | null>(null);
+	const feedbackTimerRef = useRef<number | null>(null);
     const hasTrialModal = Boolean(showAddModal || showEditModal || showScheduleModal || showCancelModal || showConvertModal || showLostModal || showMemoModal);
 
     const closeQuickActionMenu = useCallback(() => {
@@ -760,9 +775,16 @@ export default function TrialCrmClient({
         });
         return map;
     }, [classes]);
-    const showFeedback = useCallback((type: "success" | "error", message: string) => {
+    useEffect(() => {
+        return () => {
+            if (feedbackTimerRef.current) window.clearTimeout(feedbackTimerRef.current);
+        };
+    }, []);
+
+    const showFeedback = useCallback((type: "success" | "error" | "info", message: string) => {
+        if (feedbackTimerRef.current) window.clearTimeout(feedbackTimerRef.current);
         setFeedback({ type, message });
-        window.setTimeout(() => setFeedback(null), 3500);
+        feedbackTimerRef.current = window.setTimeout(() => setFeedback(null), type === "info" ? 8000 : 4200);
     }, []);
     const handleRecordContact = useCallback(async (
         lead: TrialLead,
@@ -909,6 +931,7 @@ export default function TrialCrmClient({
         if (trialFeeBusyId || lead.trialFeeConfirmed) return;
         if (!confirm(`"${lead.childName}" 체험수업 비용 입금을 확인 처리할까요?`)) return;
 
+        showFeedback("info", `${lead.childName} 체험비 입금 확인을 처리 중입니다...`);
         setTrialFeeBusyId(lead.id);
         try {
             const result = await confirmTrialFeePayment(lead.id);
@@ -932,6 +955,32 @@ export default function TrialCrmClient({
             showFeedback("error", "체험비 입금 확인 처리 중 문제가 생겼습니다. 잠시 후 다시 시도해주세요.");
         } finally {
             setTrialFeeBusyId(null);
+        }
+    }
+
+    async function handleSendManualSms(lead: TrialLead, message: string) {
+        if (manualSmsBusy) return;
+        setManualSmsBusy(true);
+        showFeedback("info", `${lead.childName} 보호자에게 문자 발송 중입니다...`);
+        try {
+            const result = await sendManualSms([lead.parentPhone], message, {
+                requestId: `trial-manual-${lead.id}-${Date.now()}`,
+                purpose: "체험문의 학부모 문자",
+                reason: "체험문의 관리 화면에서 직접 발송",
+                audienceScope: "EXTERNAL",
+            });
+            setManualSmsModal(null);
+            if (result.success > 0 && result.failed === 0 && result.uncertain === 0) {
+                showFeedback("success", `${lead.childName} 보호자에게 문자를 발송했습니다.`);
+            } else if (result.success > 0) {
+                showFeedback("error", `${lead.childName} 문자 일부만 발송됐습니다. 문자 발송 장부를 확인해 주세요.`);
+            } else {
+                showFeedback("error", result.results[0]?.reason || "문자 발송에 실패했습니다. 연락처와 문자 설정을 확인해 주세요.");
+            }
+        } catch (error) {
+            showFeedback("error", getErrorMessage(error, "문자 발송 중 문제가 생겼습니다. 잠시 후 다시 시도해주세요."));
+        } finally {
+            setManualSmsBusy(false);
         }
     }
 
@@ -1194,7 +1243,19 @@ export default function TrialCrmClient({
                                                     <span>전화</span>
                                                     {renderActionIcon("call")}
                                                 </a>
-                                                {lead.status === "CONTACTED" && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                        closeQuickActionMenu();
+                                                        setManualSmsModal({ lead });
+                                                    }}
+                                                    disabled={manualSmsBusy}
+                                                    className={LIST_ACTION_ITEM_CLASS}
+                                                >
+                                                    <span>문자 보내기</span>
+                                                    {renderActionIcon("sms")}
+                                                </button>
+                                                {!isClosedTrialStatus(lead.status) && (lead.status === "NEW" || lead.status === "CONTACTED" || lead.status === "SCHEDULED") && (
                                                     <button
                                                         type="button"
                                                         onClick={() => {
@@ -1203,7 +1264,7 @@ export default function TrialCrmClient({
                                                         }}
                                                         className={LIST_ACTION_ITEM_CLASS}
                                                     >
-                                                        <span>일정 확정</span>
+                                                        <span>{lead.status === "SCHEDULED" ? "일정 변경" : "일정 확정"}</span>
                                                         {renderActionIcon("event_available")}
                                                     </button>
                                                 )}
@@ -1221,6 +1282,18 @@ export default function TrialCrmClient({
                                                         {renderActionIcon("phone_callback")}
                                                     </button>
                                                 )}
+                                                <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                        closeQuickActionMenu();
+                                                        setContactModal({ lead, defaultAction: "MEMO" });
+                                                    }}
+                                                    disabled={contactBusyId === lead.id}
+                                                    className={LIST_ACTION_ITEM_CLASS}
+                                                >
+                                                    <span>메모</span>
+                                                    {renderActionIcon("edit_note")}
+                                                </button>
                                                 {lead.status === "SCHEDULED" && (lead.trialFeeConfirmed ? (
                                                     <div className={`${LIST_ACTION_ITEM_CLASS} pointer-events-none bg-emerald-50 text-emerald-700 opacity-90 dark:bg-emerald-950/30 dark:text-emerald-200`}>
                                                         <span>입금 완료</span>
@@ -1230,6 +1303,7 @@ export default function TrialCrmClient({
                                                     <button
                                                         type="button"
                                                         onClick={() => {
+                                                            closeQuickActionMenu();
                                                             void handleConfirmTrialFee(lead);
                                                         }}
                                                         disabled={Boolean(trialFeeBusyId)}
@@ -1239,6 +1313,48 @@ export default function TrialCrmClient({
                                                         {renderActionIcon(trialFeeBusyId === lead.id ? "progress_activity" : "paid")}
                                                     </button>
                                                 ))}
+                                                {lead.status === "SCHEDULED" && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => {
+                                                            closeQuickActionMenu();
+                                                            void handleStatusChange(lead, "ATTENDED");
+                                                        }}
+                                                        disabled={busy}
+                                                        className={LIST_ACTION_PRIMARY_CLASS}
+                                                    >
+                                                        <span>체험 완료</span>
+                                                        {renderActionIcon("check_circle", true)}
+                                                    </button>
+                                                )}
+                                                {!isClosedTrialStatus(lead.status) && !lead.coachNoticeSentAt && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => {
+                                                            closeQuickActionMenu();
+                                                            void handleSendCoachNotice(lead);
+                                                        }}
+                                                        disabled={busy}
+                                                        className={LIST_ACTION_ITEM_CLASS}
+                                                    >
+                                                        <span>쌤 알림</span>
+                                                        {renderActionIcon("school")}
+                                                    </button>
+                                                )}
+                                                {lead.smsDeliveryFailed > 0 && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => {
+                                                            closeQuickActionMenu();
+                                                            void handleResendApplicationSms(lead);
+                                                        }}
+                                                        disabled={busy}
+                                                        className={LIST_ACTION_ITEM_CLASS}
+                                                    >
+                                                        <span>문자 재발송</span>
+                                                        {renderActionIcon("sms_failed")}
+                                                    </button>
+                                                )}
                                                 {lead.status === "ATTENDED" && renderEnrollGuideButton(lead)}
                                             </div>
                                         )}
@@ -1264,15 +1380,17 @@ export default function TrialCrmClient({
         <div className="space-y-6">
             {feedback && (
                 <div
-                    className={`flex items-center gap-2 rounded-xl border px-4 py-3 text-sm font-semibold ${
+                    className={`fixed bottom-4 left-4 right-4 z-[120] flex items-center gap-2 rounded-xl border px-4 py-3 text-sm font-semibold shadow-2xl sm:bottom-auto sm:left-auto sm:right-6 sm:top-6 sm:w-[380px] ${
                         feedback.type === "success"
                             ? "border-green-200 bg-green-50 text-green-700 dark:border-green-800 dark:bg-green-950/40 dark:text-green-200"
+                            : feedback.type === "info"
+                            ? "border-blue-200 bg-blue-50 text-blue-800 dark:border-blue-800 dark:bg-blue-950/40 dark:text-blue-100"
                             : "border-red-200 bg-red-50 text-red-700 dark:border-red-800 dark:bg-red-950/40 dark:text-red-200"
                     }`}
                     role="status"
                 >
-                    <span className="material-symbols-outlined text-lg">
-                        {feedback.type === "success" ? "check_circle" : "error"}
+                    <span className={`material-symbols-outlined text-lg ${feedback.type === "info" ? "animate-spin" : ""}`}>
+                        {feedback.type === "success" ? "check_circle" : feedback.type === "info" ? "progress_activity" : "error"}
                     </span>
                     {feedback.message}
                 </div>
@@ -1458,6 +1576,10 @@ export default function TrialCrmClient({
                         setShowScheduleModal(showDetailModal);
                         setShowDetailModal(null);
                     }}
+                    onSendManualSms={() => {
+                        setManualSmsModal({ lead: showDetailModal });
+                        setShowDetailModal(null);
+                    }}
                     onContact={() => {
                         setContactModal({ lead: showDetailModal, defaultAction: "CONTACTED" });
                         setShowDetailModal(null);
@@ -1491,6 +1613,20 @@ export default function TrialCrmClient({
                         await handleRecordContact(contactModal.lead, action, note, nextFollowUpAt);
                         setContactModal(null);
                     }}
+                />
+            )}
+
+            {manualSmsModal && (
+                <ManualSmsModal
+                    title="학부모 문자 보내기"
+                    recipientLabel={`${manualSmsModal.lead.childName} · ${manualSmsModal.lead.parentName || "보호자"}`}
+                    recipientPhone={manualSmsModal.lead.parentPhone}
+                    defaultMessage={buildTrialManualSmsMessage(manualSmsModal.lead)}
+                    busy={manualSmsBusy}
+                    onClose={() => {
+                        if (!manualSmsBusy) setManualSmsModal(null);
+                    }}
+                    onSubmit={(message) => handleSendManualSms(manualSmsModal.lead, message)}
                 />
             )}
 
@@ -1598,6 +1734,7 @@ function TrialLeadDetailModal({
     onClose,
     onEdit,
     onSchedule,
+    onSendManualSms,
     onContact,
     onMarkAttended,
     onSendEnrollGuide,
@@ -1615,6 +1752,7 @@ function TrialLeadDetailModal({
     onClose: () => void;
     onEdit: () => void;
     onSchedule: () => void;
+    onSendManualSms: () => void;
     onContact: () => void;
     onMarkAttended: () => void;
     onSendEnrollGuide: () => void;
@@ -1713,6 +1851,10 @@ function TrialLeadDetailModal({
                     <button type="button" onClick={onContact} className={DETAIL_ACTION_CLASS}>
                         <span className="material-symbols-outlined text-base">phone_callback</span>
                         연락 기록
+                    </button>
+                    <button type="button" onClick={onSendManualSms} disabled={busy} className={`${DETAIL_ACTION_CLASS} disabled:opacity-50`}>
+                        <span className="material-symbols-outlined text-base">sms</span>
+                        문자 보내기
                     </button>
                     {!lead.trialFeeConfirmed && (
                         <button type="button" onClick={onConfirmTrialFee} disabled={trialFeeBusy} aria-busy={trialFeeBusy} className={`${DETAIL_ACTION_CLASS} disabled:opacity-50`}>

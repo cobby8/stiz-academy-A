@@ -123,6 +123,7 @@ if (skipEnv) console.log("[환경] --skip-env로 환경변수 검사를 생략�
 const prisma = resolve(root, "node_modules", "prisma", "build", "index.js");
 const tsc = resolve(root, "node_modules", "typescript", "bin", "tsc");
 const seasonalDbPreflight = resolve(root, "scripts", "seasonal-db-preflight.mjs");
+const regularShuttleDbPreflight = resolve(root, "scripts", "regular-shuttle-db-preflight.mjs");
 
 if (!existsSync(prisma) || !existsSync(tsc)) {
   console.error("[실패] node_modules가 없습니다. npm ci 후 다시 실행하세요.");
@@ -141,9 +142,13 @@ const checks = [
 ];
 
 if (!skipEnv) {
-  checks.unshift(["방학특강 DB 준비 상태", process.execPath, [seasonalDbPreflight, ...(skipDb ? ["--skip-db"] : [])]]);
+  // 화면 코드보다 DB 구조가 뒤처진 배포를 먼저 차단한다.
+  checks.unshift(
+    ["정규 셔틀 DB 준비 상태", process.execPath, [regularShuttleDbPreflight, ...(skipDb ? ["--skip-db"] : [])]],
+    ["방학특강 DB 준비 상태", process.execPath, [seasonalDbPreflight, ...(skipDb ? ["--skip-db"] : [])]],
+  );
 } else {
-  console.log("[건너뜀] --skip-env 코드 검사에서는 방학특강 DB 연결 검사를 실행하지 않습니다.");
+  console.log("[건너뜀] --skip-env 코드 검사에서는 방학특강·정규 셔틀 DB 연결 검사를 실행하지 않습니다.");
 }
 
 for (const [label, command, args] of checks) {

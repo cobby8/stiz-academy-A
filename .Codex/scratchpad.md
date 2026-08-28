@@ -72,6 +72,7 @@
 - RESUME/CLASS_ADD/CLASS_CHANGE 자동 실행 어댑터는 다음 그룹이다.
 
 ## 작업 로그 (최근 10건)
+- 2026-08-28: 정규 배차 운영 장애 복구. 누락된 `RegularShuttleStop.studentId` 구조만 적용해 관리자·배차·기사 화면을 정상화하고 Vercel 배포 전 21개 필수 DB 컬럼 읽기검사를 추가했다. 문자·기존 차량 데이터 변경 없음.
 - 2026-08-28: 체험 CRM 표시·처리 흐름 정리. 상세 학년 중복 제거, 유입경로 한글화, 빠른 실행 단순화, 안전한 상태 전이, 입금확인·감사기록 원자 처리와 진행 피드백을 구현. 운영 DB·문자·배포 없음.
 - 2026-08-27: 체험 시간 리뷰 보완 최종 QA 승인. 수동 11:10 보존과 실제 resolver 행 조합 행동검증 포함 54건·tsc·Prisma validate·diff-check 통과. 운영 DB·문자·배포 없음.
 - 2026-08-27: 체험 일정/문자 canonical 시간 최종 QA 승인. Sat-2 10:50, 날짜-only 차단, TZ 독립, stale Class/매핑 실패 차단 포함 53건·tsc·Prisma validate·diff-check 통과. 운영 DB·문자·배포 없음.
@@ -81,7 +82,6 @@
 - 2026-08-27: 정규 셔틀 학부모 좌표 링크 최종 QA. 관련 156건·tsc·Prisma validate·diff-check 통과. 다만 저장 후 서버 재조회 왕복은 SQL 문자열 검사뿐이라 가짜 DB 행동 테스트 보완 요청. 운영 DB·문자·배포 없음.
 - 2026-08-27: 정규반 학부모 셔틀 좌표 링크 백엔드 구현. 32바이트 토큰·SHA-256 해시, 학생/보호자/용도 고정, 만료·취소, 좌표·동의 검증, PICKUP/DROPOFF upsert 후 재조회·감사를 추가했다. 관련 테스트 16건·tsc·Prisma validate·diff-check 통과. 운영 DB·문자·배포 미실행.
 - 2026-08-27: 정규 셔틀 필수 보완 최종 QA 통과. 대상월 ACTIVE 우선, 월 고정 순서 저장, studentId canonical 변동 재대조, 승인 원장 CHECK/unique/RLS, UNCERTAIN 잠금, 월별 ETA를 확인했고 관련 122개 테스트·tsc·Prisma validate·diff-check 통과. 운영 DB·문자·배포 없음.
-- 2026-08-27: 정규 셔틀 백엔드 최종 안전 보강. 월별 수강 원장 우선순위·원장 부재 HELD, studentId 안정 식별, 월 한정 정렬 저장, ETA 월 분리, 승인 문자 전용 원장과 UNCERTAIN 잠금, 서버 canonical 재대조를 구현했다. 관련 테스트 26건·tsc·Prisma validate·diff-check 통과. 운영 DB·문자·배포 미실행.
 
 ## PM 체크
 

@@ -278,3 +278,10 @@
 - 원인: 현재 프로젝트 전체 파일을 한 번에 검사할 때 ESLint 프로세스가 Node 기본 힙 한도에 도달한다.
 - 해결: 이번 변경 파일은 경로를 명시한 ESLint로 검증했고 모두 통과했다. 전체 검사는 별도 메모리 상향 또는 검사 범위 분할이 필요하다.
 - 예방: 소규모 변경은 변경 파일 ESLint와 `tsc --noEmit`을 기본으로 사용하고, 전체 lint 실패를 곧바로 코드 오류로 오인하지 않는다.
+
+# 2026-08-28: 정규 배차 화면 운영 DB 컬럼 누락
+
+- 현상: `/admin/shuttle/regular-dispatch`가 관리자 오류 화면과 확인 번호만 표시했다.
+- 원인: 배포 코드는 `RegularShuttleStop.studentId`를 조회했지만 운영 DB에 `20260827223000_add_regular_shuttle_student_identity` 구조가 적용되지 않아 PostgreSQL `42703 column rss.studentId does not exist`가 발생했다.
+- 해결: 기존 데이터를 건드리지 않고 nullable `studentId` 컬럼, 월별 인덱스, Student 외래키만 대상 SQL로 적용한 뒤 관리자·배차·기사 화면을 재검증했다.
+- 예방: Vercel 빌드 전에 정규 셔틀 SSR이 사용하는 필수 DB 컬럼을 읽기 전용으로 검사하고, 누락되면 배포를 중단한다. 미적용 migration 전체를 한꺼번에 실행하지 않고 현재 운영 구조와 대조한다.

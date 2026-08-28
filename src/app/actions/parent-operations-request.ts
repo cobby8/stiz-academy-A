@@ -22,6 +22,7 @@ export type ParentOperationsLinkPreview = {
 
 export type ActiveParentOperationsLink = {
   id: string;
+  studentId: string;
   studentName: string;
   expiresAt: string;
   createdAt: string;
@@ -104,14 +105,14 @@ export async function createParentOperationsRequestLink(studentId: string, expir
   return { ok: true as const, token, studentName: students[0].name, expiresAt: expiresAt.toISOString() };
 }
 
-export async function getActiveParentOperationsRequestLinks(): Promise<ActiveParentOperationsLink[]> {
+export async function getActiveParentOperationsRequestLinks(studentId: string): Promise<ActiveParentOperationsLink[]> {
   await requireAdmin();
   await ensureOperationsSyncInfrastructure();
-  const rows = await prisma.$queryRawUnsafe<Array<{ id: string; studentName: string; expiresAt: Date; createdAt: Date }>>(
-    `SELECT l.id,s.name AS "studentName",l."expiresAt",l."createdAt"
+  const rows = await prisma.$queryRawUnsafe<Array<{ id: string; studentId: string; studentName: string; expiresAt: Date; createdAt: Date }>>(
+    `SELECT l.id,l."studentId",s.name AS "studentName",l."expiresAt",l."createdAt"
        FROM "ParentOperationsRequestLink" l JOIN "Student" s ON s.id=l."studentId"
-      WHERE l."revokedAt" IS NULL AND l."expiresAt">now()
-      ORDER BY l."createdAt" DESC LIMIT 100`,
+      WHERE l."studentId"=$1 AND l."revokedAt" IS NULL AND l."expiresAt">now()
+      ORDER BY l."createdAt" DESC LIMIT 100`, studentId,
   );
   return rows.map((row) => ({ ...row, expiresAt: row.expiresAt.toISOString(), createdAt: row.createdAt.toISOString() }));
 }

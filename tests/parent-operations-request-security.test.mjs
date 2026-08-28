@@ -17,8 +17,10 @@ const completionMigration = readFileSync(
 const operationsPreflight = readFileSync("scripts/operations-sync-db-preflight.mjs", "utf8");
 const schema = readFileSync("prisma/schema.prisma", "utf8");
 const infrastructure = readFileSync("src/lib/operationsSyncInfrastructure.ts", "utf8");
-const linkPanel = readFileSync("src/app/admin/operations-sync/ParentRequestLinkPanel.tsx", "utf8");
-const operationsUi = readFileSync("src/app/admin/operations-sync/OperationsSyncClient.tsx", "utf8");
+const studentLinkPanel = readFileSync("src/app/admin/students/[id]/ParentRequestLinkPanel.tsx", "utf8");
+const studentDetail = readFileSync("src/app/admin/students/[id]/StudentDetailClient.tsx", "utf8");
+const retiredOperationsPage = readFileSync("src/app/admin/operations-sync/page.tsx", "utf8");
+const adminShell = readFileSync("src/app/admin/AdminShellClient.tsx", "utf8");
 
 test("공개 토큰은 원문 대신 SHA-256 해시만 DB에 저장한다", () => {
   assert.match(action, /createHash\("sha256"\)/);
@@ -82,14 +84,36 @@ test("링크는 트랜잭션 안에서 원자적으로 1회만 선점한다", ()
   assert.match(transaction, /if \(claimed !== 1\) throw new Error\("REQUEST_LINK_ALREADY_USED"\)/);
 });
 
-test("관리자는 활성 링크를 조회하고 화면에서 취소할 수 있다", () => {
+test("관리자용 활성 링크 조회와 취소 서버 기능은 화면 폐기 후에도 보존한다", () => {
   const listStart = action.indexOf("function getActiveParentOperationsRequestLinks");
   assert.notEqual(listStart, -1);
-  assert.match(action.slice(listStart, listStart + 500), /requireAdmin\(\)/);
-  assert.match(action.slice(listStart, listStart + 1000), /"revokedAt" IS NULL AND l\."expiresAt">now\(\)/);
-  assert.match(linkPanel, /getActiveParentOperationsRequestLinks/);
-  assert.match(linkPanel, /revokeParentOperationsRequestLink\(linkId\)/);
-  assert.match(linkPanel, />취소<\/button>/);
+  const listBody = action.slice(listStart, listStart + 1200);
+  assert.match(listBody, /getActiveParentOperationsRequestLinks\(studentId: string\)/);
+  assert.match(listBody, /requireAdmin\(\)/);
+  assert.match(listBody, /WHERE l\."studentId"=\$1 AND l\."revokedAt" IS NULL AND l\."expiresAt">now\(\)/);
+  assert.match(listBody, /ORDER BY l\."createdAt" DESC LIMIT 100`, studentId/);
+  assert.match(listBody, /l\."studentId"/);
+  assert.match(action, /type ActiveParentOperationsLink = \{[\s\S]*studentId: string/);
+});
+
+test("단일 학생 요청 링크 패널은 안정 식별값으로 조회·생성·취소하고 학생 상세에 배치된다", () => {
+  assert.match(studentLinkPanel, /createParentOperationsRequestLink/);
+  assert.match(studentLinkPanel, /getActiveParentOperationsRequestLinks/);
+  assert.match(studentLinkPanel, /revokeParentOperationsRequestLink/);
+  assert.match(studentLinkPanel, /getActiveParentOperationsRequestLinks\(studentId\)/);
+  assert.match(studentLinkPanel, /setActiveLinks\(links\)/);
+  assert.doesNotMatch(studentLinkPanel, /links\.filter\(\(link\) => link\.studentId/);
+  assert.match(studentLinkPanel, /createParentOperationsRequestLink\(studentId\)/);
+  assert.match(studentLinkPanel, /revokeParentOperationsRequestLink\(linkId\)/);
+  assert.match(studentDetail, /import ParentRequestLinkPanel from "\.\/ParentRequestLinkPanel"/);
+  assert.match(studentDetail, /<ParentRequestLinkPanel studentId=\{student\.id\} studentName=\{student\.name\} \/>/);
+});
+
+test("학부모 요청 링크 이전 후에도 운영 동기화 관리자 화면은 폐기 상태다", () => {
+  assert.match(retiredOperationsPage, /redirect\("\/admin"\)/);
+  assert.doesNotMatch(retiredOperationsPage, /ParentRequestLinkPanel|OperationsSyncClient/);
+  assert.doesNotMatch(adminShell, /href="\/admin\/operations-sync"/);
+  assert.doesNotMatch(adminShell, /3중 동기화/);
 });
 
 test("런타임 기반시설 확인은 DB 구조를 변경하지 않고 읽기만 한다", () => {
@@ -144,10 +168,14 @@ test("재검토는 현재 Enrollment로 snapshot을 다시 만들고 WEBSITE 실
   assert.doesNotMatch(approveBody, /target IN \('SHEET','RALLYZ'\).*status='PENDING'/s);
 });
 
-test("HELD·PARTIAL 요청에는 현재 상태로 재검토 버튼을 표시한다", () => {
-  assert.match(operationsUi, /\["DRAFT", "HELD", "PARTIAL"\]\.includes\(request\.status\)/);
-  assert.match(operationsUi, /현재 상태로 재검토/);
-  assert.match(operationsUi, /approveOperationsRequest\(request\.id\)/);
+test("화면 폐기 후에도 HELD·PARTIAL 요청 재검토 서버 기능은 보존한다", () => {
+  const approveStart = adminAction.indexOf("function approveOperationsRequest");
+  assert.notEqual(approveStart, -1);
+  const approveBody = adminAction.slice(approveStart, adminAction.indexOf("function applyOperationsWebsite"));
+  assert.match(approveBody, /requireAdmin\(\)/);
+  assert.match(approveBody, /ready > 0 \? "APPROVED" : "HELD"/);
+  assert.match(approveBody, /REQUEST_APPROVED/);
+  assert.match(approveBody, /REQUEST_HELD/);
 });
 
 test("OperationsCommand 멱등 키는 migration 체인이 보장하고 배포 전에 구조·보안을 검사한다", () => {

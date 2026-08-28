@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState, useTransition } from "react";
 import Link from "next/link";
 import { updateEnrollmentStatus, updateStudentMemo, updateStudent, updatePaymentStatus, enrollStudent } from "@/app/actions/admin";
 import LocationPickerModal, { type MapLocationData } from "@/components/maps/LocationPickerModal";
+import ParentRequestLinkPanel from "./ParentRequestLinkPanel";
 
 type MediaItem = { url: string; type: "image" | "video" };
 
@@ -1161,6 +1162,9 @@ export default function StudentDetailClient({
                             </p>
                         )}
                     </div>
+
+                    {/* 학생을 다시 검색하지 않고 현재 학생의 학부모 요청 링크만 관리한다. */}
+                    <ParentRequestLinkPanel studentId={student.id} studentName={student.name} />
 
                     {/* 메모 */}
                     <div className={CARD_CLASS}>

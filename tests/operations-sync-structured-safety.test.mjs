@@ -5,7 +5,8 @@ import { operationsRequestKey } from "../src/lib/operationsSync.ts";
 import { createHash } from "node:crypto";
 
 const action = readFileSync("src/app/actions/operations-sync.ts", "utf8");
-const ui = readFileSync("src/app/admin/operations-sync/OperationsSyncClient.tsx", "utf8");
+const adminShell = readFileSync("src/app/admin/AdminShellClient.tsx", "utf8");
+const retiredPage = readFileSync("src/app/admin/operations-sync/page.tsx", "utf8");
 
 test("구조화된 대상·적용일이 다르면 멱등 키도 다르다", () => {
   const base = { sourceText: "수업 변경", studentName: "김민서", kind: "CLASS_CHANGE", effectiveMonth: "2026-09", scope: "PARENT_LINK:l1" };
@@ -47,17 +48,17 @@ test("관리자 직접 자연어 입력은 생성 전에 명확히 중단한다"
   const createBody = action.slice(action.indexOf("function createOperationsRequest"), action.indexOf("function getOperationsRequests"));
   assert.match(createBody, /관리자 직접 입력은 안전한 적용일·대상 수업을 확정할 수 없어 중단되었습니다/);
   assert.doesNotMatch(createBody, /INSERT INTO "OperationsRequest"/);
-  assert.match(ui, /직접 입력 중단/);
 });
 
-test("관리자 화면은 확정 날짜·반 이름을 표시하고 미래 실행을 비활성화한다", () => {
-  assert.match(ui, /command\.effectiveDate \|\| "날짜 미확정"/);
-  assert.match(ui, /command\.fromClassName \|\| "현재 반 미확정"/);
-  assert.match(ui, /command\.toClassName/);
-  assert.match(ui, /disabled=\{isPending \|\| future\}/);
-  assert.match(ui, /부터 실행 가능/);
+test("폐기된 관리자 화면은 메뉴에서 제거하고 기존 URL은 관리자 홈으로 보낸다", () => {
+  assert.doesNotMatch(adminShell, /href="\/admin\/operations-sync"/);
+  assert.doesNotMatch(adminShell, /3중 동기화/);
+  assert.match(retiredPage, /redirect\("\/admin"\)/);
+  assert.doesNotMatch(retiredPage, /OperationsSyncClient/);
+});
+
+test("화면 폐기 후에도 백엔드는 적용일 전 실행을 차단한다", () => {
   assert.match(action, /canExecute: Boolean\(command\.effectiveDate && command\.effectiveDate <= serverToday\)/);
-  assert.match(ui, /!command\.canExecute/);
 });
 
 test("시트 공통 상태 충돌은 명령을 명확히 HELD로 전환한다", () => {

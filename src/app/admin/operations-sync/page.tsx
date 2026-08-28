@@ -1,17 +1,6 @@
-import { getOperationsRequests } from "@/app/actions/operations-sync";
-import { getRallyzAttendanceSyncRuns } from "@/app/actions/rallyz-attendance-sync";
-import OperationsSyncClient from "./OperationsSyncClient";
-import { getStudents } from "@/lib/queries";
+import { redirect } from "next/navigation";
 
-export const dynamic = "force-dynamic";
-
-export default async function OperationsSyncPage() {
-  const [requests, attendanceRuns, students] = await Promise.all([getOperationsRequests(), getRallyzAttendanceSyncRuns(), getStudents()]);
-  const linkStudents = students.map((student) => ({
-    id: student.id,
-    name: student.name,
-    grade: student.grade,
-    parentPhoneLast4: student.parent?.phone?.replace(/\D/g, "").slice(-4) || null,
-  }));
-  return <OperationsSyncClient initialRequests={requests} initialAttendanceRuns={attendanceRuns} linkStudents={linkStudents} />;
+/** 폐기된 관리 화면의 기존 북마크는 안전하게 관리자 홈으로 보낸다. */
+export default function RetiredOperationsSyncPage() {
+  redirect("/admin");
 }

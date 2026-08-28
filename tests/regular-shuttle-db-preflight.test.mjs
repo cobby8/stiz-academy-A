@@ -55,10 +55,10 @@ test("통합 release preflight가 정규 셔틀 DB 검사를 포함한다", () =
   assert.match(source, /정규 셔틀 DB 준비 상태/);
 });
 
-test("Vercel 실제 build는 전용 DB 검사 성공 후 기존 build를 실행한다", () => {
+test("Vercel 실제 build는 정규 셔틀과 운영 동기화 DB 검사 성공 후 기존 build를 실행한다", () => {
   const packageJson = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8"));
   const vercel = JSON.parse(readFileSync(new URL("../vercel.json", import.meta.url), "utf8"));
-  assert.equal(packageJson.scripts["build:vercel"], "node scripts/regular-shuttle-db-preflight.mjs && npm run build");
+  assert.equal(packageJson.scripts["build:vercel"], "node scripts/regular-shuttle-db-preflight.mjs && node scripts/operations-sync-db-preflight.mjs && npm run build");
   assert.equal(vercel.buildCommand, "npm run build:vercel");
   assert.equal(packageJson.scripts.build, "prisma generate && next build");
 });

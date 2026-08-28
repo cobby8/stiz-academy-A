@@ -10,6 +10,11 @@ const migration = readFileSync(
   "prisma/migrations/20260827190000_add_parent_operations_request_links/migration.sql",
   "utf8",
 );
+const completionMigration = readFileSync(
+  "prisma/migrations/20260828090000_complete_operations_sync_infrastructure/migration.sql",
+  "utf8",
+);
+const operationsPreflight = readFileSync("scripts/operations-sync-db-preflight.mjs", "utf8");
 const schema = readFileSync("prisma/schema.prisma", "utf8");
 const infrastructure = readFileSync("src/lib/operationsSyncInfrastructure.ts", "utf8");
 const linkPanel = readFileSync("src/app/admin/operations-sync/ParentRequestLinkPanel.tsx", "utf8");
@@ -87,10 +92,11 @@ test("관리자는 활성 링크를 조회하고 화면에서 취소할 수 있�
   assert.match(linkPanel, />취소<\/button>/);
 });
 
-test("런타임 기반시설 준비에서 FK를 반복 삭제·생성하지 않는다", () => {
-  assert.doesNotMatch(infrastructure, /DROP CONSTRAINT/);
-  assert.doesNotMatch(infrastructure, /ADD CONSTRAINT/);
-  assert.match(infrastructure, /CREATE TABLE IF NOT EXISTS "ParentOperationsRequestLink"/);
+test("런타임 기반시설 확인은 DB 구조를 변경하지 않고 읽기만 한다", () => {
+  assert.match(infrastructure, /information_schema\.columns/);
+  assert.match(infrastructure, /\$queryRawUnsafe/);
+  assert.doesNotMatch(infrastructure, /\$executeRawUnsafe/);
+  assert.doesNotMatch(infrastructure, /\b(?:CREATE|ALTER|DROP)\s+(?:TABLE|INDEX|CONSTRAINT)\b/i);
 });
 
 test("독립 마이그레이션은 운영 동기화 원장을 의존 순서대로 준비한다", () => {
@@ -144,10 +150,19 @@ test("HELD·PARTIAL 요청에는 현재 상태로 재검토 버튼을 표시한�
   assert.match(operationsUi, /approveOperationsRequest\(request\.id\)/);
 });
 
-test("OperationsCommand 멱등 키 unique index를 migration과 런타임 모두 보장한다", () => {
+test("OperationsCommand 멱등 키는 migration 체인이 보장하고 배포 전에 구조·보안을 검사한다", () => {
   const uniqueIndex = /CREATE UNIQUE INDEX IF NOT EXISTS "OperationsCommand_idempotencyKey_key" ON "OperationsCommand" \("idempotencyKey"\)/;
   assert.match(migration, uniqueIndex);
-  assert.match(infrastructure, uniqueIndex);
+  assert.match(completionMigration, /"idempotencyKey" TEXT NOT NULL UNIQUE/);
+  assert.match(completionMigration, /20260827190000_add_parent_operations_request_links/);
+  assert.match(completionMigration, /20260827223000_add_operations_sync_processing_lease/);
+  assert.match(completionMigration, /CREATE TABLE IF NOT EXISTS "OperationsRequest"/);
+  assert.match(completionMigration, /CREATE TABLE IF NOT EXISTS "RallyzAttendanceSyncItem"/);
+  assert.match(operationsPreflight, /REQUIRED_OPERATIONS_SYNC_COLUMNS/);
+  assert.match(operationsPreflight, /REQUIRED_OPERATIONS_SYNC_UNIQUE_KEYS/);
+  assert.match(operationsPreflight, /relrowsecurity/);
+  assert.match(operationsPreflight, /role_table_grants/);
+  assert.match(operationsPreflight, /\["anon", "authenticated"\]/);
 });
 
 test("ACTIVE·EXPIRED·INVALID 상태별 공개 화면이 있다", () => {

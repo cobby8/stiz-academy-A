@@ -161,3 +161,5 @@
 
 > 2026-07-21 갱신: 셔틀 승객 운행 상태는 ShuttleRoutePassenger.rideStatus에 PENDING/BOARDED/DROPPED_OFF/NO_SHOW로 저장하고, 기사 앱에서 즉시 체크하며 관리자 셔틀 화면에서 상태 배지로 확인한다.
 > 2026-07-23 갱신: 관리자 공지사항은 첫 화면에서 30건만 읽고 더보기로 이어받는다. 공지 API는 `limit/offset/noticesOnly`를 지원하며, 첫 로딩 속도를 위해 반 목록은 최초 payload에서만 함께 내려준다.
+
+> 2026-08-28 갱신: 운영 동기화 관리자 SSR에서 런타임 DDL을 제거하고, 정식 migration과 7개 테이블·85개 컬럼·고유키·RLS·직접 권한의 읽기 전용 배포 검사 원칙을 추가했다.

@@ -285,3 +285,10 @@
 - 원인: 배포 코드는 `RegularShuttleStop.studentId`를 조회했지만 운영 DB에 `20260827223000_add_regular_shuttle_student_identity` 구조가 적용되지 않아 PostgreSQL `42703 column rss.studentId does not exist`가 발생했다.
 - 해결: 기존 데이터를 건드리지 않고 nullable `studentId` 컬럼, 월별 인덱스, Student 외래키만 대상 SQL로 적용한 뒤 관리자·배차·기사 화면을 재검증했다.
 - 예방: Vercel 빌드 전에 정규 셔틀 SSR이 사용하는 필수 DB 컬럼을 읽기 전용으로 검사하고, 누락되면 배포를 중단한다. 미적용 migration 전체를 한꺼번에 실행하지 않고 현재 운영 구조와 대조한다.
+
+# 2026-08-28: 운영 동기화 관리자 화면 간헐 로딩 실패
+
+- 현상: `/admin/operations-sync`가 확인 번호와 함께 다시 시도를 표시했지만 새로고침 후에는 정상 로딩됐다.
+- 원인: 페이지의 병렬 서버 조회가 같은 런타임 DB 준비 함수를 동시에 호출했고, 화면 조회 중 `CREATE`, `ALTER`, RLS, 권한 변경을 수행해 동시 DDL 충돌 가능성이 있었다. Rallyz 출석 원장 2개는 정식 migration도 없었다.
+- 해결: 운영 동기화 구조를 정식 migration으로 옮기고 SSR에서는 7개 테이블·85개 컬럼을 한 번만 읽기 확인하도록 변경했다.
+- 예방: Vercel 배포 전에 필수 컬럼, 멱등 고유키, RLS 활성화, `anon`·`authenticated` 직접 권한 부재를 읽기 전용으로 검사하고 하나라도 다르면 배포를 중단한다.

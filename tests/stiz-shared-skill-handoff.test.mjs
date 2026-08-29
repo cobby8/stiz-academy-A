@@ -1,0 +1,76 @@
+import assert from "node:assert/strict";
+import { existsSync, readFileSync } from "node:fs";
+import { resolve, dirname } from "node:path";
+import test from "node:test";
+
+const root = process.cwd();
+const skillPath = resolve(root, ".agents/skills/stiz-monthly-billing/SKILL.md");
+const handoffPath = resolve(root, ".Codex/HANDOFF.md");
+const setupPath = resolve(root, "docs/codex-handoff-setup.md");
+
+test("공용 STIZ 스킬과 인수인계 문서가 저장소에 존재한다", () => {
+  for (const path of [skillPath, handoffPath, setupPath, resolve(root, "AGENTS.md")]) {
+    assert.equal(existsSync(path), true, `${path} 파일이 필요합니다.`);
+  }
+});
+
+test("공용 스킬의 frontmatter와 참조 링크가 유효하다", () => {
+  const skill = readFileSync(skillPath, "utf8");
+  assert.match(skill, /^---\r?\nname: stiz-monthly-billing\r?\ndescription: .+\r?\n---/);
+
+  const links = [...skill.matchAll(/\]\((references\/[^)]+)\)/g)].map((match) => match[1]);
+  assert.ok(links.length >= 4);
+  for (const link of links) {
+    assert.equal(existsSync(resolve(dirname(skillPath), link)), true, `${link} 참조가 필요합니다.`);
+  }
+});
+
+test("외부 작업은 세 시스템 대조와 실행 직전 승인을 요구한다", () => {
+  const skill = readFileSync(skillPath, "utf8");
+
+  for (const required of [
+    "Google Sheets",
+    "Rallyz",
+    "stiz-dasan.kr",
+    "dry-run",
+    "HELD",
+    "action-time preview",
+    "parent invitations",
+    "re-read",
+    "partial",
+  ]) {
+    assert.ok(skill.includes(required), `SKILL.md에 ${required} 안전 계약이 필요합니다.`);
+  }
+});
+
+test("인수인계는 단일 ACTIVE 실행기와 비밀정보 금지를 명시한다", () => {
+  const setup = readFileSync(setupPath, "utf8");
+  const handoff = readFileSync(handoffPath, "utf8");
+  assert.match(setup, /한 실행기에서만 `ACTIVE`/);
+  assert.match(handoff, /ACTIVE 실행기 ID: `[^`]+`/);
+  assert.doesNotMatch(handoff, /ACTIVE 실행기 ID: `(?:미정|UNKNOWN|UNASSIGNED)`/);
+  assert.match(handoff, /ACTIVE 확인시각\(KST\): \d{4}-\d{2}-\d{2} \d{2}:\d{2}/);
+  assert.match(handoff, /학원 PC 실행기 ID: 미등록, 반드시 `PAUSED`/);
+  assert.match(handoff, /기존 실행기 PAUSED 확인시각/);
+  assert.match(setup, /\.env\.local/);
+  assert.match(setup, /private key/);
+  assert.match(handoff, /전체 전화번호, 주소, 생년월일 원문 없음/);
+});
+
+test("공용 파일에는 secret, DB URL, 전체 휴대폰 번호가 없다", () => {
+  const targets = [
+    resolve(root, "AGENTS.md"),
+    skillPath,
+    ...[...readFileSync(skillPath, "utf8").matchAll(/\]\((references\/[^)]+)\)/g)]
+      .map((match) => resolve(dirname(skillPath), match[1])),
+    handoffPath,
+    setupPath,
+  ];
+  const combined = targets.map((path) => readFileSync(path, "utf8")).join("\n");
+
+  assert.doesNotMatch(combined, /-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----/i);
+  assert.doesNotMatch(combined, /\bAIza[0-9A-Za-z_-]{20,}\b/);
+  assert.doesNotMatch(combined, /\bsk-[0-9A-Za-z_-]{20,}\b/);
+  assert.doesNotMatch(combined, /\bpostgres(?:ql)?:\/\/[^\s]+/i);
+  assert.doesNotMatch(combined, /\b010-\d{4}-\d{4}\b/);
+});

@@ -1,3 +1,9 @@
+## 2026-08-29 Codex 공용 운영 인수인계 구조
+- 저장소 루트 `AGENTS.md`는 모든 Codex가 먼저 읽는 고정 작업·승인·보안 규칙이다.
+- `.agents/skills/stiz-monthly-billing/`은 개인 PC에 종속되지 않는 시트·Rallyz·사이트 3중 동기화 절차다.
+- `.Codex/HANDOFF.md`는 실행기·예약·승인 대기·재개 지점, `scratchpad.md`는 개발 작업, `knowledge/`는 장기 지식을 맡는다.
+- `docs/codex-handoff-setup.md`는 새 운영 PC 준비와 단일 `ACTIVE` 실행기 교대 절차를 설명한다.
+
 ## 2026-07-11 관리자 초기 payload 메모
 - `src/lib/adminReadPayloads.ts`는 수강생/반/체험 CRM의 캐시된 읽기 payload를 제공하며, API route와 서버 페이지가 같은 캐시 키와 태그를 공유한다.
 - `/admin/students`, `/admin/classes`, `/admin/trial`은 페이지 서버 렌더링에서 초기 데이터를 받아 클라이언트 컴포넌트에 넘기고, 초기 데이터가 있을 때 첫 `useEffect` API 재호출을 건너뛴다.

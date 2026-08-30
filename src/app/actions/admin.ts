@@ -4866,7 +4866,7 @@ class ApprovalAbort extends Error {
  * 2. User SELECT (parentPhone 기준) → 없으면 INSERT (role=PARENT)
  * 3. Student SELECT (name + parentId) → 없으면 INSERT
  * 4. Guardian INSERT (ON CONFLICT 무시)
- * 5. 각 classId에 대해 Enrollment INSERT (ON CONFLICT 무시, status=ACTIVE)
+ * 5. 각 classId에 대해 Enrollment 생성/활성화 + 운영 동기화 원장 적재
  * 6. EnrollmentApplication UPDATE (status=APPROVED, convertedStudentId, processedAt)
  * 7. TrialLead가 있으면 UPDATE (status=CONVERTED, convertedStudentId, convertedDate)
  */
@@ -4879,7 +4879,7 @@ export async function approveEnrollApplication(
         resolvedStudentId?: string; // B. 동명 형제로 학생이 모호할 때 관리자가 지정한 학생 id
     }
 ) {
-    await requireAdmin();
+    const admin = await requireAdmin();
 
     // ── A. 정원 초과 소프트 게이트 ──────────────────────────────────
     // 이유: 정원을 넘겨 배정하는 실수를 막되, 관리자 재량(대기 없이 추가)은 허용해야 한다.
@@ -5117,6 +5117,9 @@ export async function approveEnrollApplication(
             studentId = newStudents[0].id;
         }
 
+        // 아래 Guardian·Enrollment·운영 원장은 모두 안정적인 studentId가 있어야만 기록한다.
+        if (!studentId) throw new Error("승인할 학생 식별값을 만들지 못했습니다.");
+
         // 4. Guardian 생성 — 보호자 관계 등록 (ON CONFLICT 무시)
         const parentRelation = app.parentRelation ?? app.parentrelation ?? "부모";
         await tx.$executeRawUnsafe(
@@ -5131,14 +5134,48 @@ export async function approveEnrollApplication(
             studentId, parentRelation, parentName, parentPhone,
         );
 
-        // 5. 각 반에 Enrollment 등록 (ON CONFLICT 무시)
+        // 5. 각 반에 Enrollment를 등록하거나 비활성 수강을 다시 활성화하고,
+        //    실제 상태가 바뀐 경우에만 세 시스템 동기화 원장을 같은 트랜잭션에 남긴다.
         for (const classId of data.classIds) {
-            await tx.$executeRawUnsafe(
+            const [classContext] = await tx.$queryRawUnsafe<Array<{ className: string }>>(
+                `SELECT name AS "className" FROM "Class" WHERE id = $1 LIMIT 1`,
+                classId,
+            );
+            if (!classContext) throw new Error("배정할 반을 찾을 수 없습니다.");
+
+            const [existingEnrollment] = await tx.$queryRawUnsafe<Array<{
+                id: string;
+                status: "ACTIVE" | "PAUSED" | "WITHDRAWN";
+            }>>(
+                `SELECT id, status FROM "Enrollment"
+                  WHERE "studentId" = $1 AND "classId" = $2
+                  FOR UPDATE`,
+                studentId,
+                classId,
+            );
+            // 이미 활성인 수강은 DB와 원장을 모두 건드리지 않는 완전한 no-op입니다.
+            if (existingEnrollment?.status === "ACTIVE") continue;
+
+            const [enrollment] = await tx.$queryRawUnsafe<Array<{ id: string; updatedAt: Date }>>(
                 `INSERT INTO "Enrollment" (id, "studentId", "classId", status, "createdAt", "updatedAt")
                  VALUES (gen_random_uuid()::text, $1, $2, 'ACTIVE', NOW(), NOW())
-                 ON CONFLICT ("studentId", "classId") DO NOTHING`,
+                 ON CONFLICT ("studentId", "classId") DO UPDATE
+                   SET status = 'ACTIVE', "updatedAt" = NOW()
+                 RETURNING id, "updatedAt"`,
                 studentId, classId,
             );
+            const event = buildEnrollmentOperationsEvent({
+                enrollmentId: enrollment.id,
+                changedAt: enrollment.updatedAt,
+                actorUserId: admin.appUserId,
+                studentId,
+                studentName: childName,
+                classId,
+                className: classContext.className,
+                previousStatus: existingEnrollment?.status ?? null,
+                nextStatus: "ACTIVE",
+            });
+            if (event) await enqueueWebsiteOperationsEventInTransaction(tx, event);
         }
 
         // 학부모가 지도에서 확인한 탑승·하차 위치는 함께 저장한다.
@@ -5235,98 +5272,8 @@ export async function approveEnrollApplication(
     revalidateApplyAdminCaches();
     revalidateStudentAdminCaches();
 
-    // 승인은 이미 완료됐으므로 문자 실패로 되돌리지 않되, 결과는 관리자에게 정확히 돌려준다.
-    try {
-        const appData = await prisma.$queryRawUnsafe<any[]>(
-            `SELECT "parentPhone", "childName", "childGrade", "assignedClassId"
-             FROM "EnrollmentApplication" WHERE id = $1 LIMIT 1`,
-            applicationId,
-        );
-        if (appData.length > 0) {
-            const a = appData[0];
-            const parentPhone = a.parentPhone ?? a.parentphone;
-            const childName = a.childName ?? a.childname;
-            const childGrade = a.childGrade ?? a.childgrade ?? "";
-            const assignedClassId = a.assignedClassId ?? a.assignedclassid;
-
-            // 배정 반 이름 + slotKey 조회 (담당 코치 SMS용)
-            let className = "";
-            const approvedSlotKeys: string[] = [];
-            if (assignedClassId) {
-                // assignedClassId는 콤마 구분 가능 — 모든 반의 이름과 slotKey 조회
-                const classIds = assignedClassId.split(",").map((s: string) => s.trim()).filter(Boolean);
-                for (const cid of classIds) {
-                    const cls = await prisma.$queryRawUnsafe<any[]>(
-                        `SELECT name, "slotKey" FROM "Class" WHERE id = $1 LIMIT 1`, cid,
-                    );
-                    if (cls[0]) {
-                        if (!className) className = cls[0].name || "";
-                        const sk = cls[0].slotKey ?? cls[0].slotkey;
-                        if (sk) approvedSlotKeys.push(sk);
-                    }
-                }
-            }
-
-            // 학원 전화번호 조회
-            const settings = await prisma.$queryRawUnsafe<any[]>(
-                `SELECT "contactPhone" FROM "AcademySettings" WHERE id = 'singleton' LIMIT 1`
-            );
-            const academyPhone = settings[0]?.contactPhone ?? settings[0]?.contactphone ?? "";
-
-            if (parentPhone) {
-                const parentDelivery = await sendParentSmsWithResult(
-                    parentPhone,
-                    "ENROLL_APPROVED_PARENT",
-                    {
-                        childName: childName || "",
-                        className,
-                        academyPhone,
-                    },
-                    {
-                        eventType: "ENROLL_APPROVED",
-                        eventId: `enrollment-application:${applicationId}:approved`,
-                    },
-                );
-                smsResult.parentSent = parentDelivery.ok;
-                smsResult.parentFailed = !parentDelivery.ok;
-                if (!parentDelivery.ok) {
-                    smsResult.errors.push(parentDelivery.reason || "학부모 문자 발송에 실패했습니다.");
-                }
-            } else {
-                smsResult.parentFailed = true;
-                smsResult.errors.push("학부모 전화번호가 없어 문자를 발송하지 못했습니다.");
-            }
-
-            // 담당 코치에게 수강 확정 알림 SMS (slotKey 기반)
-            const staffDelivery = await notifyAdmins(
-                "ENROLL_APPLICATION",
-                "수강 신청 승인",
-                `${childName || ""} — ${className}`,
-                "/admin/apply",
-                {
-                    coachTrigger: "ENROLL_APPROVED_COACH",
-                    variables: { childName: childName || "", childGrade, className },
-                    slotKeys: approvedSlotKeys.length > 0 ? approvedSlotKeys : undefined,
-                    requireMatchedCoach: true,
-                    eventId: `enrollment-application:${applicationId}:approved`,
-                },
-            );
-            smsResult.coachSent = staffDelivery.coachSent;
-            smsResult.coachFailed = staffDelivery.coachFailed;
-            smsResult.adminFailed = staffDelivery.adminFailed;
-            smsResult.errors.push(...staffDelivery.errors);
-        }
-    } catch (e) {
-        // SMS 실패가 승인 처리를 막으면 안 됨
-        console.error("[approveEnrollApplication SMS] failed:", e);
-        smsResult = {
-            ...smsResult,
-            parentFailed: !smsResult.parentSent,
-            adminFailed: Math.max(1, smsResult.adminFailed),
-            coachFailed: Math.max(1, smsResult.coachFailed),
-            errors: [...smsResult.errors, "문자 대상 조회 또는 발송 준비 중 오류가 발생했습니다."],
-        };
-    }
+    // 외부 알림은 이 승인 액션에서 실행하지 않습니다. 정확한 수신자·문구 미리보기와
+    // 별도 승인 원장을 갖춘 전용 발송 액션에서만 처리해야 합니다.
     return { approved: true, sms: smsResult };
 }
 

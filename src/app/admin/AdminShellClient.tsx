@@ -29,6 +29,7 @@ const OPS_PATHS = [
     "/admin/attendance",
     "/admin/finance",
     "/admin/requests",
+    "/admin/kakao-requests",
     "/admin/feedback",
     "/admin/seasonal",
     "/admin/waitlist",
@@ -48,6 +49,7 @@ const OPS_PATHS = [
 const MORE_OPS_PATHS = [
     "/admin/attendance/report",
     "/admin/requests",
+    "/admin/kakao-requests",
     "/admin/feedback",
     "/admin/waitlist",
     "/admin/makeup",
@@ -224,6 +226,7 @@ export default function AdminShellClient({
                                 <div className="mt-1 space-y-1 border-l border-white/10 pl-2">
                                     <NavItem href="/admin/attendance/report" active={pathname.startsWith("/admin/attendance/report")} icon="📝" label="수업 리포트" compact />
                                     <NavItem href="/admin/requests" active={pathname.startsWith("/admin/requests")} icon="📩" label="학부모 요청" compact />
+                                    <NavItem href="/admin/kakao-requests" active={pathname.startsWith("/admin/kakao-requests")} icon="💬" label="카카오 접수함" compact />
                                     <NavItem href="/admin/makeup" active={pathname.startsWith("/admin/makeup")} icon="🔄" label="보강" compact />
                                     <NavItem href="/admin/stats" active={pathname.startsWith("/admin/stats")} icon="📊" label="상세 통계" compact />
                                     <NavItem href="/admin/sms" active={pathname.startsWith("/admin/sms")} icon="💬" label="문자/템플릿" compact />

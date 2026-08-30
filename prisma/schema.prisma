@@ -9,27 +9,72 @@ datasource db {
 }
 
 model User {
-  id                      String                        @id @default(uuid())
-  email                   String                        @unique
-  username                String?
-  name                    String
-  phone                   String?
-  phoneVerifiedAt         DateTime?                     @db.Timestamptz(6)
-  authUserId              String?                       @unique
-  role                    Role                          @default(PARENT)
-  createdAt               DateTime                      @default(now())
-  updatedAt               DateTime                      @updatedAt
-  classes                 Class[]
-  students                Student[]
-  coach                   Coach?
-  drivenShuttleRoutePlans ShuttleRoutePlan[]            @relation("ShuttleRouteDriver")
-  enrollmentApplications  EnrollmentApplication[]       @relation("EnrollmentApplicationParent")
-  parentOperationsLinks   ParentOperationsRequestLink[] @relation("ParentOperationsLinkCreator")
-  regularLocationLinksCreated RegularShuttleLocationLink[] @relation("RegularLocationLinkCreator")
-  regularLocationLinksParent  RegularShuttleLocationLink[] @relation("RegularLocationLinkParent")
-  operationsAuditLogs     OperationsAuditLog[]          @relation("OperationsAuditActor")
-  operationsRequested     OperationsRequest[]           @relation("OperationsRequestRequester")
-  operationsApproved      OperationsRequest[]           @relation("OperationsRequestApprover")
+  id                          String                        @id @default(uuid())
+  email                       String                        @unique
+  username                    String?
+  name                        String
+  phone                       String?
+  phoneVerifiedAt             DateTime?                     @db.Timestamptz(6)
+  authUserId                  String?                       @unique
+  role                        Role                          @default(PARENT)
+  createdAt                   DateTime                      @default(now())
+  updatedAt                   DateTime                      @updatedAt
+  classes                     Class[]
+  students                    Student[]
+  coach                       Coach?
+  drivenShuttleRoutePlans     ShuttleRoutePlan[]            @relation("ShuttleRouteDriver")
+  enrollmentApplications      EnrollmentApplication[]       @relation("EnrollmentApplicationParent")
+  parentOperationsLinks       ParentOperationsRequestLink[] @relation("ParentOperationsLinkCreator")
+  regularLocationLinksCreated RegularShuttleLocationLink[]  @relation("RegularLocationLinkCreator")
+  regularLocationLinksParent  RegularShuttleLocationLink[]  @relation("RegularLocationLinkParent")
+  operationsAuditLogs         OperationsAuditLog[]          @relation("OperationsAuditActor")
+  operationsRequested         OperationsRequest[]           @relation("OperationsRequestRequester")
+  operationsApproved          OperationsRequest[]           @relation("OperationsRequestApprover")
+  kakaoParentIdentities       KakaoParentIdentity[]
+}
+
+/// 카카오 챗봇 사용자를 최초 1회 인증된 학부모 계정에 연결한다.
+/// 카카오 user key 원문은 저장하지 않고 서버 비밀키로 만든 HMAC 해시만 보관한다.
+model KakaoParentIdentity {
+  id            String              @id @default(dbgenerated("(gen_random_uuid())::text"))
+  botId         String
+  userKeyHash   String
+  parentUserId  String?
+  status        String              @default("PENDING") // PENDING | ACTIVE | REVOKED
+  linkTokenHash String?             @unique
+  linkExpiresAt DateTime?           @db.Timestamptz(6)
+  linkedAt      DateTime?           @db.Timestamptz(6)
+  revokedAt     DateTime?           @db.Timestamptz(6)
+  lastSeenAt    DateTime            @default(now()) @db.Timestamptz(6)
+  createdAt     DateTime            @default(now()) @db.Timestamptz(6)
+  updatedAt     DateTime            @default(now()) @updatedAt @db.Timestamptz(6)
+  parent        User?               @relation(fields: [parentUserId], references: [id], onDelete: SetNull, onUpdate: NoAction)
+  intakes       KakaoParentIntake[]
+
+  @@unique([botId, userKeyHash])
+  @@index([parentUserId, status])
+}
+
+/// 카카오 대화 원문과 구조화된 해석을 분리해 보존하는 접수 원장.
+/// APPLIED는 기존 결석/셔틀 검증 함수를 통과한 경우에만 사용한다.
+model KakaoParentIntake {
+  id             String              @id @default(dbgenerated("(gen_random_uuid())::text"))
+  identityId     String
+  studentId      String?
+  kind           String
+  sourceText     String
+  structuredJson Json?
+  status         String              @default("DRAFT") // DRAFT | NEEDS_DETAILS | SUBMITTED | APPLIED | HELD | FAILED | CANCELED
+  idempotencyKey String              @unique
+  confirmedAt    DateTime?           @db.Timestamptz(6)
+  appliedAt      DateTime?           @db.Timestamptz(6)
+  errorCode      String?
+  createdAt      DateTime            @default(now()) @db.Timestamptz(6)
+  updatedAt      DateTime            @default(now()) @updatedAt @db.Timestamptz(6)
+  identity       KakaoParentIdentity @relation(fields: [identityId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([identityId, status, createdAt(sort: Desc)])
+  @@index([studentId, createdAt(sort: Desc)])
 }
 
 model ParentAccountClaim {
@@ -1984,22 +2029,22 @@ model StudentShuttleLocation {
 
 /// 기존 정규반 학부모에게 전달하는 좌표 입력 전용 링크. 원문 토큰은 저장하지 않는다.
 model RegularShuttleLocationLink {
-  id              String   @id @default(dbgenerated("(gen_random_uuid())::text"))
+  id              String                            @id @default(dbgenerated("(gen_random_uuid())::text"))
   studentId       String
   parentId        String
-  purpose         String   @default("REGULAR_SHUTTLE_LOCATION")
-  tokenHash       String   @unique
-  expiresAt       DateTime @db.Timestamptz(6)
-  revokedAt       DateTime? @db.Timestamptz(6)
-  lastSubmittedAt DateTime? @db.Timestamptz(6)
-  submissionCount Int      @default(0)
+  purpose         String                            @default("REGULAR_SHUTTLE_LOCATION")
+  tokenHash       String                            @unique
+  expiresAt       DateTime                          @db.Timestamptz(6)
+  revokedAt       DateTime?                         @db.Timestamptz(6)
+  lastSubmittedAt DateTime?                         @db.Timestamptz(6)
+  submissionCount Int                               @default(0)
   lastPayloadHash String?
   createdByUserId String
-  createdAt       DateTime @default(now()) @db.Timestamptz(6)
-  updatedAt       DateTime @default(now()) @updatedAt @db.Timestamptz(6)
-  student         Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
-  parent          User     @relation("RegularLocationLinkParent", fields: [parentId], references: [id], onDelete: Cascade)
-  createdBy       User     @relation("RegularLocationLinkCreator", fields: [createdByUserId], references: [id], onDelete: NoAction)
+  createdAt       DateTime                          @default(now()) @db.Timestamptz(6)
+  updatedAt       DateTime                          @default(now()) @updatedAt @db.Timestamptz(6)
+  student         Student                           @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  parent          User                              @relation("RegularLocationLinkParent", fields: [parentId], references: [id], onDelete: Cascade)
+  createdBy       User                              @relation("RegularLocationLinkCreator", fields: [createdByUserId], references: [id], onDelete: NoAction)
   auditLogs       RegularShuttleLocationLinkAudit[]
 
   @@index([studentId, expiresAt])
@@ -2007,12 +2052,12 @@ model RegularShuttleLocationLink {
 }
 
 model RegularShuttleLocationLinkAudit {
-  id        String   @id @default(dbgenerated("(gen_random_uuid())::text"))
-  linkId    String
-  action    String
+  id          String                     @id @default(dbgenerated("(gen_random_uuid())::text"))
+  linkId      String
+  action      String
   detailsJson Json?
-  createdAt DateTime @default(now()) @db.Timestamptz(6)
-  link      RegularShuttleLocationLink @relation(fields: [linkId], references: [id], onDelete: Cascade)
+  createdAt   DateTime                   @default(now()) @db.Timestamptz(6)
+  link        RegularShuttleLocationLink @relation(fields: [linkId], references: [id], onDelete: Cascade)
 
   @@index([linkId, createdAt(sort: Desc)])
 }
@@ -2606,7 +2651,7 @@ model RegularShuttleStop {
   stopName     String
   direction    String // 'BOARD'|'ALIGHT'|'PIVOT'|'RETURN'
   studentName  String?
-  studentId    String?  // 월별 시트 이관 시 확정한 안정적인 학생 식별값
+  studentId    String? // 월별 시트 이관 시 확정한 안정적인 학생 식별값
   studentPhone String?
   parentPhone  String?
   note         String?
@@ -2622,26 +2667,26 @@ model RegularShuttleStop {
 
 // 정규 차량 변동 문자의 승인·발송 상태. 일반 NotificationDelivery의 전송 상태와 분리한다.
 model RegularShuttleNoticeBatch {
-  id                 String    @id @default(dbgenerated("(gen_random_uuid())::text"))
-  serviceMonth       String
-  compareMonth       String
-  stableEventKey     String
-  payloadHash        String    @unique
-  studentId          String
-  studentName        String
-  recipientPhone     String
-  messageBody        String
-  beforeText         String?
-  afterText          String
-  status             String    @default("HELD") // HELD | APPROVED | SENDING | SENT | CANCELLED | UNCERTAIN
-  approvedByUserId   String?
-  approvedAt         DateTime? @db.Timestamptz(6)
-  sentAt             DateTime? @db.Timestamptz(6)
-  errorCode          String?
-  lockedAt           DateTime? @db.Timestamptz(6)
-  createdByUserId    String
-  createdAt          DateTime  @default(now()) @db.Timestamptz(6)
-  updatedAt          DateTime  @default(now()) @updatedAt @db.Timestamptz(6)
+  id               String    @id @default(dbgenerated("(gen_random_uuid())::text"))
+  serviceMonth     String
+  compareMonth     String
+  stableEventKey   String
+  payloadHash      String    @unique
+  studentId        String
+  studentName      String
+  recipientPhone   String
+  messageBody      String
+  beforeText       String?
+  afterText        String
+  status           String    @default("HELD") // HELD | APPROVED | SENDING | SENT | CANCELLED | UNCERTAIN
+  approvedByUserId String?
+  approvedAt       DateTime? @db.Timestamptz(6)
+  sentAt           DateTime? @db.Timestamptz(6)
+  errorCode        String?
+  lockedAt         DateTime? @db.Timestamptz(6)
+  createdByUserId  String
+  createdAt        DateTime  @default(now()) @db.Timestamptz(6)
+  updatedAt        DateTime  @default(now()) @updatedAt @db.Timestamptz(6)
 
   @@index([stableEventKey, createdAt(sort: Desc)])
   @@index([status, createdAt(sort: Desc)])

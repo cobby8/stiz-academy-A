@@ -43,6 +43,21 @@ test("외부 작업은 세 시스템 대조와 실행 직전 승인을 요구한
   }
 });
 
+test("신규 학생 최초 등록은 청구 알림과 Rallyz 학부모 초대까지 완료한다", () => {
+  const skill = readFileSync(skillPath, "utf8");
+  const changeSync = readFileSync(resolve(dirname(skillPath), "references/change-request-sync.md"), "utf8");
+  const billing = readFileSync(resolve(dirname(skillPath), "references/billing-policies.md"), "utf8");
+
+  assert.match(skill, /first applicable invoice is issued with its parent notification/);
+  assert.match(skill, /Rallyz parent invitation is sent/);
+  assert.match(skill, /This is a required outcome, not blanket execution permission/);
+  assert.match(skill, /exact student, branch, class, period, amount, masked recipient, delivery method, and item count/);
+  assert.match(skill, /Re-read all three systems, invoice state, and parent connection after execution/);
+  assert.match(changeSync, /required completion steps but remain separate `HELD` actions/);
+  assert.match(billing, /Mid-month first registration is prorated from the remaining confirmed sessions/);
+  assert.match(billing, /parent is not already connected/);
+});
+
 test("인수인계는 단일 ACTIVE 실행기와 비밀정보 금지를 명시한다", () => {
   const setup = readFileSync(setupPath, "utf8");
   const handoff = readFileSync(handoffPath, "utf8");
@@ -65,6 +80,9 @@ test("공용 파일에는 secret, DB URL, 전체 휴대폰 번호가 없다", ()
       .map((match) => resolve(dirname(skillPath), match[1])),
     handoffPath,
     setupPath,
+    resolve(root, ".Codex/scratchpad.md"),
+    resolve(root, ".Codex/knowledge/index.md"),
+    resolve(root, ".Codex/knowledge/decisions.md"),
   ];
   const combined = targets.map((path) => readFileSync(path, "utf8")).join("\n");
 

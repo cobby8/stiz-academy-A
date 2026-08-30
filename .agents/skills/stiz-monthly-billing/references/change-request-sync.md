@@ -25,9 +25,12 @@ Rallyz has no confirmed official write API, so use a logged-in supervised browse
 ## Billing and notification boundary
 
 - Enrollment approval does not automatically authorize invoice creation, cancellation, payment/refund, SMS, Kakao, push, or invitation delivery.
+- A genuinely new student's first registration must include a first invoice and its parent notification, followed by a Rallyz parent invitation after the Rallyz student record is verified. These items are required completion steps but remain separate `HELD` actions until the exact execution preview is approved.
+- For a mid-month start, calculate the first invoice from the remaining confirmed class sessions. Do not treat a new student as a full-month charge without checking the start date and annual schedule.
 - Prepare exact affected invoices and message recipients, then keep them `HELD` until the user approves the action-time preview.
 - Parent invitations are an external notification. Confirm the exact student, masked contact, academy branch, method, and count immediately before sending.
 - Recheck active status, duplicates, contact validity, and existing parent connection immediately before sending.
+- After delivery, re-read the invoice, notification ledger, Rallyz parent connection, and the student/class state in all three systems before marking registration complete.
 
 ## Failure and replay
 

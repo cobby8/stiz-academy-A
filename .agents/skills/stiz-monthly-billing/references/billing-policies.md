@@ -9,6 +9,8 @@ These are the currently confirmed operating rules.
 ## Billable and excluded states
 
 - Regular monthly billing uses approved `미결제` rows.
+- A genuinely new student's first approved registration requires an initial invoice and invoice notification after the exact amount, period, and recipient are approved at execution time.
+- Mid-month first registration is prorated from the remaining confirmed sessions in the official annual schedule; a full-month amount is used only when the student starts with the full billing period.
 - `휴원`, `퇴원`, and `이월` are excluded.
 - `추가수강` is excluded from the regular monthly invoice run unless explicitly requested separately.
 - Zero-won invoices are not issued or notified.
@@ -38,3 +40,4 @@ These are the currently confirmed operating rules.
 - Preserve A/B suffixes for same-name students.
 - Parent-name or phone differences require historical comparison and user confirmation.
 - Hold instead of guessing on duplicate identity, conflicting status, missing class, impossible shuttle weekday, unknown discount, parent conflict, unexplained amount, or an existing invoice.
+- Before a required first-registration invitation, verify that the Rallyz student record exists and the parent is not already connected. Send one invitation only after an exact masked-recipient preview is approved.

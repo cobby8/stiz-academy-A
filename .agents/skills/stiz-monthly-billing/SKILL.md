@@ -38,6 +38,12 @@ Never finish after changing only one system. For each approved change, record th
 9. Leave an audit result containing applied, skipped, held, and failed items. Never silently treat partial success as completion.
 10. Only one operating computer or session with an explicit executor ID may own scheduled external reconciliation. Another computer defaults to read-only and dry-run until the handoff record names it `ACTIVE`. If the executor ID or previous-runner pause evidence is unknown, unattended external writes remain disabled.
 
+## First-time student registration completion
+
+For a genuinely new student, registration is not complete until the approved class is synchronized to Google Sheets, Rallyz, and `stiz-dasan.kr`, the first applicable invoice is issued with its parent notification, and the Rallyz parent invitation is sent after the Rallyz student record is verified. Mid-month starts use the remaining confirmed class sessions for proration. Shuttle fees and assignment are included only when requested and valid for the class day.
+
+This is a required outcome, not blanket execution permission. Keep the invoice, invoice notification, and Rallyz parent invitation `HELD` until one action-time preview identifies the exact student, branch, class, period, amount, masked recipient, delivery method, and item count. Re-read all three systems, invoice state, and parent connection after execution.
+
 ## Transition policy
 
 Until the user explicitly promotes the website to the sole source of truth, continue using and reconciling all three systems. Automation may reduce manual work, but it must not bypass the Sheet or Rallyz during this transition period.

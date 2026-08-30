@@ -599,12 +599,17 @@ export default function ApplyAdminClient({
 
     // 필터링된 신청서 목록
     const filteredApps = useMemo(() => {
-        return applications.filter((app) => {
-            const preferredSlotLabel = formatPreferredSlots(app.preferredSlotKeys, classesBySlotKey);
-            if (filter !== "ALL" && app.status !== filter) return false;
-            if (!matchesApplicationWorkFilter(app, preferredSlotLabel, workFilter)) return false;
-            return applicationMatchesSearch(app, preferredSlotLabel, searchQuery);
-        });
+        return applications
+            .filter((app) => {
+                const preferredSlotLabel = formatPreferredSlots(app.preferredSlotKeys, classesBySlotKey);
+                if (filter !== "ALL" && app.status !== filter) return false;
+                if (!matchesApplicationWorkFilter(app, preferredSlotLabel, workFilter)) return false;
+                return applicationMatchesSearch(app, preferredSlotLabel, searchQuery);
+            })
+            .sort((a, b) => {
+                const createdAtCompare = (Date.parse(b.createdAt) || 0) - (Date.parse(a.createdAt) || 0);
+                return createdAtCompare || b.id.localeCompare(a.id);
+            });
     }, [applications, classesBySlotKey, filter, searchQuery, workFilter]);
     const visibleApps = useMemo(
         () => filteredApps.slice(0, visibleLimit),

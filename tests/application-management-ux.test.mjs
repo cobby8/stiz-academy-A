@@ -118,7 +118,7 @@ test("체험 신청은 한 줄 목록에서 핵심 정보와 빠른 처리만 �
   assert.match(trialClient, /type TrialDateFilter/);
   assert.match(trialClient, /const TRIAL_DATE_FILTERS/);
   assert.match(trialClient, /matchesTrialDateFilter\(lead, dateFilter\)/);
-  assert.match(trialClient, /aTrialDate - bTrialDate/);
+  assert.match(trialClient, /getLocalDateTime\(b\.createdAt\).*getLocalDateTime\(a\.createdAt\)/);
   assert.match(trialClient, /value=\{dateFilter\}/);
   assert.doesNotMatch(trialClient, /<th className="px-3 py-2(?:\.5)?">보호자<\/th>/);
   assert.doesNotMatch(trialClient, /<th className="px-3 py-2(?:\.5)?">쌤알림<\/th>/);
@@ -133,6 +133,13 @@ test("체험 신청은 한 줄 목록에서 핵심 정보와 빠른 처리만 �
   assert.doesNotMatch(trialClient, /viewMode/);
   assert.doesNotMatch(trialClient, /setViewMode/);
   assert.doesNotMatch(trialClient, /grid_view/);
+});
+
+test("체험수업과 수강신청은 접수일 최신순으로 표시한다", () => {
+  assert.match(trialClient, /const createdAtCompare = \(getLocalDateTime\(b\.createdAt\) \?\? 0\) - \(getLocalDateTime\(a\.createdAt\) \?\? 0\)/);
+  assert.match(applyClient, /const createdAtCompare = \(Date\.parse\(b\.createdAt\) \|\| 0\) - \(Date\.parse\(a\.createdAt\) \|\| 0\)/);
+  assert.match(trialClient, /return createdAtCompare \|\| b\.id\.localeCompare\(a\.id\)/);
+  assert.match(applyClient, /return createdAtCompare \|\| b\.id\.localeCompare\(a\.id\)/);
 });
 
 test("수강신청은 승인 전 내용 수정과 취소 이력 처리를 지원한다", () => {

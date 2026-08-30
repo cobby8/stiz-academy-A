@@ -820,23 +820,9 @@ export default function TrialCrmClient({
                 return trialLeadMatchesSearch(lead, searchQuery);
             })
             .sort((a, b) => {
-                // 확정일정(scheduledDate) 우선, 없으면 희망일정(trialDate)으로 정렬
-                const aTrialDate = getLocalDateTime(a.scheduledDate ?? a.trialDate);
-                const bTrialDate = getLocalDateTime(b.scheduledDate ?? b.trialDate);
-
-                if (aTrialDate !== null && bTrialDate === null) return -1;
-                if (aTrialDate === null && bTrialDate !== null) return 1;
-                if (aTrialDate !== null && bTrialDate !== null && aTrialDate !== bTrialDate) {
-                    return aTrialDate - bTrialDate;
-                }
-
-                const scheduleCompare = (formatPreferredScheduleShort(a, classesBySlotKey) ?? "").localeCompare(
-                    formatPreferredScheduleShort(b, classesBySlotKey) ?? "",
-                    "ko",
-                );
-                if (scheduleCompare !== 0) return scheduleCompare;
-
-                return (getLocalDateTime(a.createdAt) ?? Number.MAX_SAFE_INTEGER) - (getLocalDateTime(b.createdAt) ?? Number.MAX_SAFE_INTEGER);
+                // 운영자가 새 신청을 놓치지 않도록 접수일 최신순으로 고정합니다.
+                const createdAtCompare = (getLocalDateTime(b.createdAt) ?? 0) - (getLocalDateTime(a.createdAt) ?? 0);
+                return createdAtCompare || b.id.localeCompare(a.id);
             });
     }, [classesBySlotKey, dateFilter, filter, leads, searchQuery, workFilter]);
     const visibleLeads = useMemo(

@@ -63,6 +63,14 @@ function normalized(value: string) { return value.normalize("NFKC").replace(/\s+
 
 function defaultDate(targetMonth: string) { return `${targetMonth}-01`; }
 
+function isRealCalendarDate(value: string): boolean {
+  const match = /^20\d{2}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/.exec(value);
+  if (!match) return false;
+  const [year, month, day] = value.split("-").map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day));
+  return date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day;
+}
+
 function extractDate(text: string, targetMonth: string): { value: string; explicit: boolean; valid: boolean } {
   const iso = text.match(/\b(20\d{2})[-/.](0?[1-9]|1[0-2])[-/.](0?[1-9]|[12]\d|3[01])\b/);
   const monthDay = text.match(/\b(0?[1-9]|1[0-2])월\s*(0?[1-9]|[12]\d|3[01])일/);
@@ -71,8 +79,7 @@ function extractDate(text: string, targetMonth: string): { value: string; explic
     : monthDay
       ? `${targetMonth.slice(0, 4)}-${String(Number(monthDay[1])).padStart(2, "0")}-${String(Number(monthDay[2])).padStart(2, "0")}`
       : defaultDate(targetMonth);
-  const date = new Date(`${value}T00:00:00Z`);
-  return { value, explicit: Boolean(iso || monthDay), valid: !Number.isNaN(date.valueOf()) && date.toISOString().slice(0, 10) === value };
+  return { value, explicit: Boolean(iso || monthDay), valid: isRealCalendarDate(value) };
 }
 
 function kindFor(text: string): OperationsKind {
@@ -122,9 +129,7 @@ function splitRequests(sourceText: string): string[] {
 }
 
 function isRealDate(value: string): boolean {
-  if (!/^20\d{2}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/.test(value)) return false;
-  const date = new Date(`${value}T00:00:00Z`);
-  return !Number.isNaN(date.valueOf()) && date.toISOString().slice(0, 10) === value;
+  return isRealCalendarDate(value);
 }
 
 export function interpretParentOperationsRequest(input: {

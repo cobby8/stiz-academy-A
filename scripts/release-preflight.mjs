@@ -17,6 +17,11 @@ function hasStrongMessagePrivacySecret() {
   return Buffer.byteLength(value, "utf8") >= 32;
 }
 
+function hasValidStizPartnerSecret() {
+  const value = process.env.STIZ_PARTNER_SECRET?.trim() || "";
+  return /^[a-f0-9]{64}$/i.test(value);
+}
+
 function currentSmsProvider() {
   const provider = (process.env.SMS_PROVIDER || "").trim().toUpperCase();
   if (provider === "BIZPPURIO" || provider === "BIZ_PPURIO" || provider === "PPURIO") return "BIZPPURIO";
@@ -66,10 +71,14 @@ function checkEnvironment() {
     "GEMINI_API_KEY",
     "INVITE_OTP_SECRET",
     "TOSS_PAYMENTS_SECRET_KEY",
+    "STIZ_PARTNER_SECRET",
   ]);
 
   if (!hasStrongMessagePrivacySecret()) {
     missing.push("MESSAGE_PRIVACY_HMAC_SECRET (32바이트 이상의 무작위 서버 비밀값)");
+  }
+  if (isPresent("STIZ_PARTNER_SECRET") && !hasValidStizPartnerSecret()) {
+    missing.push("STIZ_PARTNER_SECRET (64자 hex 형식의 본사 연동 비밀키)");
   }
 
   requireSmsEnvironment(missing);
@@ -125,6 +134,7 @@ const tsc = resolve(root, "node_modules", "typescript", "bin", "tsc");
 const seasonalDbPreflight = resolve(root, "scripts", "seasonal-db-preflight.mjs");
 const regularShuttleDbPreflight = resolve(root, "scripts", "regular-shuttle-db-preflight.mjs");
 const operationsSyncDbPreflight = resolve(root, "scripts", "operations-sync-db-preflight.mjs");
+const uniformOrderDbPreflight = resolve(root, "scripts", "uniform-order-db-preflight.mjs");
 
 if (!existsSync(prisma) || !existsSync(tsc)) {
   console.error("[실패] node_modules가 없습니다. npm ci 후 다시 실행하세요.");
@@ -148,6 +158,7 @@ if (!skipEnv) {
     ["운영 동기화 DB 준비 상태", process.execPath, [operationsSyncDbPreflight, ...(skipDb ? ["--skip-db"] : [])]],
     ["정규 셔틀 DB 준비 상태", process.execPath, [regularShuttleDbPreflight, ...(skipDb ? ["--skip-db"] : [])]],
     ["방학특강 DB 준비 상태", process.execPath, [seasonalDbPreflight, ...(skipDb ? ["--skip-db"] : [])]],
+    ["유니폼 주문 DB 준비 상태", process.execPath, [uniformOrderDbPreflight, ...(skipDb ? ["--skip-db"] : [])]],
   );
 } else {
   console.log("[건너뜀] --skip-env 코드 검사에서는 방학특강·정규 셔틀·운영 동기화 DB 연결 검사를 실행하지 않습니다.");

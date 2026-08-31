@@ -10,6 +10,7 @@
 - `src/lib/uniform-partner.ts`는 STIZ 본사 주문 payload, 정규 JSON, HMAC-SHA256 서명, 서버간 POST를 담당한다.
 - `src/lib/uniform-order-service.ts`는 `UniformOrder`·`UniformOrderItem` 저장, 중복 제출 방지, 전송 상태, 재시도 대기를 관리한다.
 - 관리자 경로 `/admin/uniform`은 Google Sheets 원본이 아니라 DB 원장과 본사 접수 상태를 보여준다.
+- `scripts/uniform-order-db-preflight.mjs`는 Vercel 빌드와 릴리스 검사에서 유니폼 주문 테이블, 고유키, RLS, anon/authenticated 직접 권한 차단을 읽기 전용으로 확인한다.
 
 ## 2026-07-11 관리자 초기 payload 메모
 - `src/lib/adminReadPayloads.ts`는 수강생/반/체험 CRM의 캐시된 읽기 payload를 제공하며, API route와 서버 페이지가 같은 캐시 키와 태그를 공유한다.

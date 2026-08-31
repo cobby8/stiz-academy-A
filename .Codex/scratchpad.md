@@ -2,9 +2,9 @@
 
 ## 현재 작업
 
-- 목표: 유니폼 신청서에서 신규 주문·입금·발주·도착 상태를 파악하고 학생 운영 원장과 대조한다.
-- 현재 단계: 읽기 전용 유니폼 주문 관리자 화면과 분류 회귀 구현·검증 완료. 실제 주문·시트 상태 쓰기는 미구현/승인 대기.
-- 운영 반영: 운영 DB 변경, 시트 변경, 주문, 문자, 배포 없음.
+- 목표: 관리자 메시지센터에서 최대 500명의 문자를 한 번에 접수하고 백그라운드에서 안전하게 발송한다.
+- 현재 단계: 대량 큐·워커·상태 조회·진행 UI 구현 및 tester/reviewer 검증 완료. 배포와 실제 발송은 승인 대기.
+- 운영 반영: 운영 DB 변경, 문자 발송, 배포 없음.
 - 별도 실행 대기: 수강 상태 변경 1건의 3중 반영, 중복 청구 후보 정리, 정확한 미납 안내 승인.
 
 ## 진행 현황표
@@ -19,6 +19,7 @@
 | 성인반 복귀 1건 | PM | 확인보류 | 세 시스템 금액 기준 확정 후 새 미리보기 |
 | 신규 수강 안전 승인 | developer + tester + reviewer | 완료 | 알림 미발송·원장 원자성·멱등성·정적 검사 통과 |
 | 신규 수강신청 1건 | PM | 승인 대기 | 3중 등록 재조회 후 청구·알림·초대는 미리보기 승인 전 HELD, 승인 후 재조회 완료 |
+| 대량 SMS 큐 | developer + tester + reviewer | 완료 | 최대 500명 접수·멱등·비동기 처리·진행률·UNCERTAIN 격리 검증 |
 
 ## 구현 기록
 
@@ -45,19 +46,12 @@
 
 ## 테스트 결과
 
-- 체험 일정/문자 canonical 시간 리뷰 보완 최종 QA: 신규·기존 회귀 54/54 통과, `tsc --noEmit`, Prisma validate, diff-check 통과.
-- Sat-2는 활성 ScheduleSlot `10:50`을 선택해 `2026-08-29T10:50:00+09:00` 및 부모·담당자 표시 `2026년 8월 29일 (토) 10:50`으로 통일된다.
-- 신규 신청은 날짜-only 희망일을 `scheduledDate` 자정으로 저장하지 않는다. 확정 서버가 날짜·slotKey·반 관계를 재검증하고 canonical scheduledDate로 교체한다.
-- 활성 ScheduleSlot이 있으면 stale Class 시간보다 우선하며 적용일 비활성, 요일/반/slot 불일치, 숨김, 시간 매핑 실패는 발송 전 차단한다.
-- 수동 담당자 알림은 `scheduledDate`를 우선하고 같은 canonical resolver·서울 시간 포맷을 사용한다. UI도 날짜-only placeholder와 stale Class 폴백을 확정시간으로 사용하지 않는다.
-- 관리자가 명시한 유효 확정시각 11:10은 날짜·반·slot 관계 검증 후 보존한다. 날짜-only 입력은 Sat-2 canonical 10:50으로 채운다.
-- 순수 resolver 행동 테스트로 활성기간 시작/종료 경계, override, hidden, custom/Class 폴백, 시간 누락, 반·slot·요일 불일치를 실제 행 조합으로 실행 검증했다.
+- 대량 SMS 큐 재QA: 관련 핵심/회귀 64건 중 63건 통과, 1건은 변경 전 HEAD에도 동일한 선행 실패. 신규 큐 5건·`tsc --noEmit`·`git diff --check`는 통과했다.
+- 500명 상한, 기존 `sendManualSms` 100명 호환, 관리자 인증, requestId 멱등, 암호화 payload/마스킹 응답, `FOR UPDATE SKIP LOCKED`, stale `SENDING → UNCERTAIN`, 2.5초 UI polling 계약을 확인했다.
+- poison row 개별 UNCERTAIN 격리, stale/복호화 실패 payload 삭제, cron 실행당 5건 제한, 세 경로의 `finalizeBatchIds` 집계 보완을 확인했다. 실제 DB·Solapi를 사용하지 않아 동시 claim과 stale 전환은 SQL 정적 계약까지만 검증했다.
+- 확대 회귀의 `sms-business-delivery-reliability.test.mjs` 1건은 변경 전 HEAD에도 기대 eventId가 없고 테스트 파일도 변경되지 않아 대량 큐와 무관한 선행 실패로 분리했다.
 
-- 정규 셔틀 위치 링크 신규/UI 및 관리자·수강신청·지도 선택기·셔틀 회귀: 170/170 통과.
-- TypeScript `npx.cmd tsc --noEmit`, `npx.cmd prisma validate`, `git diff --check` 통과.
-- 토큰 SHA-256 해시·만료·취소·학생/보호자/용도 고정, 좌표/source/동의 검증, 동일 학생·방향 upsert, 공개 UI 모바일 레이아웃·오류 안내 계약을 확인했다.
-- 가짜 DB 행동 테스트로 `저장 → 서버 재조회` 왕복, 동일 payload 무부작용 재시도, 저장 직전 취소·만료 경합을 검증했다. 관리자 GET 상태·취소·재발급, 공개 응답 note 제외, no-store/noindex/no-referrer, 위치 권한 범위, UI 상태 배지·취소도 통과했다.
-- 운영 DB·외부 문자·배포 호출 없음.
+- 이전 체험 일정·셔틀 위치 링크 회귀와 TypeScript/Prisma 검증은 완료 상태를 유지한다.
 
 ## 수정 요청
 
@@ -65,6 +59,18 @@
 |---|---|---|---|
 | tester | 체험 일정/문자 경로 | Sat-2 canonical 시간, date-only 차단, stale Class 우선순위, 부모·담당자 동일 시간 보완 및 검증 완료 | 완료 |
 | tester | `tests/regular-shuttle-location-link.test.mjs` | Prisma 가짜 어댑터 기반 roundtrip·경합·멱등 행동 테스트 보완 완료 | 완료 |
+| reviewer | `src/lib/message-ledger.ts:101-125` | 암호문/키 오류 행을 UNCERTAIN 격리하고 나머지를 계속 처리하도록 보완됨 | 완료 |
+| reviewer | `src/lib/message-ledger.ts:103-105,119` | stale·복호화 실패 UNCERTAIN 전환 때 payloadJSON을 즉시 제거하도록 보완됨 | 완료 |
+| reviewer | `src/app/api/cron/manual-message-dispatch/route.ts:6-45` | 실행당 5건으로 축소해 공급자 최대 대기시간을 약 25초로 제한함 | 완료 |
+| reviewer | `src/lib/message-ledger.ts:103-127`, `src/app/api/cron/manual-message-dispatch/route.ts:14-43` | stale·복호화 실패·정상 claim의 batchId를 모두 finalize 대상으로 전달해 배치 집계 정합성 보완 | 완료 |
+| reviewer | `tests/manual-message-bulk-queue.test.mjs` | 보강 후에도 문자열 존재 검사만 있어 실제 동시 claim, 동일 requestId 경합, stale/복호화 실패, cron 중단 후 중복 없음이 검증되지 않음. DB 행동 테스트 필요 | 요청 |
+
+### 리뷰 결과 (reviewer)
+
+- 최종 판정: 통과. 멱등·동시 선점·UNCERTAIN 격리·암호 payload 삭제·배치 집계·cron 인증의 차단 결함은 없다.
+- 권장 보강: 실제 DB 동시성·멱등·중단 복구 행동 테스트를 추가한다.
+| tester | `tests/manual-message-bulk-queue.test.mjs` | 실제 DB 행동 테스트가 없어 동시 claim·requestId 경합·stale 격리를 정규식으로만 검사함. 가짜 DB 또는 테스트 DB 행동 검증 보강 필요 | 대기 |
+| tester | `tests/sms-business-delivery-reliability.test.mjs` | 수강승인 이벤트 ID 기대식 불일치. 변경 전 HEAD에도 동일하며 이번 대량 큐와 무관한 선행 실패로 분리 | 별도 대기 |
 
 ## 확인보류
 
@@ -73,6 +79,7 @@
 - RESUME/CLASS_ADD/CLASS_CHANGE 자동 실행 어댑터는 다음 그룹이다.
 
 ## 작업 로그 (최근 10건)
+- 2026-08-31: 대량 SMS 큐 최종 재QA에서 poison 격리·payload 삭제·5건 제한·격리 배치 재집계를 확인했다. 관련 63건 통과, 선행 실패 1건 분리, tsc·diff-check 통과, 실제 DB·문자·배포 없음.
 - 2026-08-31: 유니폼 신청서를 신규·입금확인·발주완료·학원도착·과거자료로 나누고 학생 원장과 대조하는 관리자 화면을 구현했다. 회귀 3건·tsc·diff 검사 통과, 시트·주문·문자·배포 없음.
 - 2026-08-31: 카카오 학부모 최초 1회 인증, HMAC 사용자 식별, 15분 연결 링크, 21종 자연어 분류, 접수 전 확인, 관리자 카카오 접수함을 구현했다. 회귀 3건·tsc·Prisma·diff 검사 통과, DB·배포·외부 발송 없음.
 - 2026-08-30: 신규 학생 최초 등록의 완료 범위를 3중 수강 등록·최초 청구/알림·Rallyz 학부모 초대·재조회로 확정하고, 월 중간 시작 일할계산과 실행 직전 승인 경계를 공용 스킬에 기록했다.

@@ -27,6 +27,10 @@
       "schedule": "* * * * *"
     },
     {
+      "path": "/api/cron/manual-message-dispatch",
+      "schedule": "* * * * *"
+    },
+    {
       "path": "/api/cron/media-revocations",
       "schedule": "*/5 * * * *"
     },

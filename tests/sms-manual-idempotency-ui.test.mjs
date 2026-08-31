@@ -4,18 +4,22 @@ import test from "node:test";
 
 const source = readFileSync("src/app/admin/sms/SmsClient.tsx", "utf8");
 
-test("수동 문자 UI는 응답 유실 재시도에 같은 requestId를 전달한다", () => {
+test("수동 문자 UI는 대량 발송 접수에 requestId를 전달한다", () => {
     assert.match(source, /requestIdRef = useRef<string \| null>/);
     assert.match(source, /crypto\.randomUUID\(\)/);
-    assert.match(source, /sendManualSms\(targetRecipients, message\.trim\(\), \{ requestId \}\)/);
-    assert.match(source, /응답 유실 가능성이 있어 ID를 유지합니다/);
+    assert.match(source, /enqueueManualSmsBatch\(targetRecipients, message\.trim\(\), \{ requestId \}\)/);
 });
 
-test("불확실 발송은 재발송에서 제외하고 실제 실패만 재시도한다", () => {
+test("불확실·처리 중 발송은 재발송에서 제외한다", () => {
     assert.match(source, /발송 여부를 확인할 수 없는/);
-    assert.match(source, /재발송하면 안 됩니다/);
-    assert.match(source, /send\(result\.retryRecipients, true\)/);
-    assert.match(source, /실패 \{result\.retryRecipients\.length\}건만 다시 발송/);
+    assert.match(source, /처리 중인 문자는 재발송할 수 없습니다/);
+    assert.doesNotMatch(source, /retryRecipients/);
+});
+
+test("대량 발송 중 입력을 잠그고 페이지 이탈을 경고한다", () => {
+    assert.match(source, /beforeunload/);
+    assert.match(source, /disabled=\{batchIsActive\}/);
+    assert.match(source, /화면을 닫지 마세요/);
 });
 
 test("자동 발송은 가짜 기본값 대신 실패 차단 상태를 표시한다", () => {

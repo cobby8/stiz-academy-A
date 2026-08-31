@@ -6063,14 +6063,49 @@ import {
     finalizeMessageDeliveryBatch,
     reserveMessageDelivery,
     reserveMessageDeliveryBatch,
+    reserveManualMessageQueue,
 } from "@/lib/message-ledger";
 import {
+    BULK_MANUAL_MESSAGE_RECIPIENT_LIMIT,
     MANUAL_MESSAGE_RECIPIENT_LIMIT,
     normalizeUniqueManualRecipients,
     validateManualMessageRequestId,
     type ManualMessageRecipientResult,
     type ManualMessageSendResult,
 } from "@/lib/manual-message-service";
+
+export async function enqueueManualSmsBatch(
+    recipients: string[],
+    message: string,
+    options: { requestId: string; purpose?: string; reason?: string; audienceScope?: "INTERNAL" | "EXTERNAL" },
+) {
+    const admin = await requireAdmin();
+    if (!message.trim()) throw new Error("메시지를 입력해주세요.");
+    const requestId = validateManualMessageRequestId(options?.requestId);
+    if (!requestId) throw new Error("대량 발송 요청 ID가 필요합니다.");
+    const normalized = normalizeUniqueManualRecipients(recipients);
+    if (!normalized.recipients.length) throw new Error("올바른 휴대폰 번호를 입력해주세요.");
+    if (normalized.recipients.length > BULK_MANUAL_MESSAGE_RECIPIENT_LIMIT) {
+        throw new Error(`한 번에 ${BULK_MANUAL_MESSAGE_RECIPIENT_LIMIT}명 이하만 접수할 수 있습니다.`);
+    }
+    const body = `[STIZ] ${message.trim()}`;
+    const queued = await reserveManualMessageQueue({
+        requestId,
+        actorUserId: admin.appUserId,
+        actorName: admin.appUserName,
+        purpose: options.purpose?.trim() || "관리자 대량 문자 발송",
+        reason: options.reason?.trim() || "관리자 문자센터에서 승인 후 대량 접수",
+        audienceScope: options.audienceScope || "EXTERNAL",
+        body,
+        recipients: normalized.recipients,
+    });
+    return {
+        ...queued,
+        total: normalized.recipients.length,
+        duplicateCount: normalized.duplicateCount,
+        invalidCount: normalized.invalidCount,
+    };
+}
 
 /**
  * getCoachPhones — SMS 발송 수신자 선택 UI용 코치 전화번호 목록 조회

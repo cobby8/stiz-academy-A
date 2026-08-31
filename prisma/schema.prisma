@@ -500,6 +500,47 @@ model Payment {
   @@index([providerPaymentKey])
 }
 
+model UniformOrder {
+  id                String             @id @default(dbgenerated("(gen_random_uuid())::text"))
+  partnerRequestId  String             @unique
+  parentName        String
+  parentPhone       String
+  parentPhoneDigits String
+  customerMemo      String?
+  itemSignature     String
+  orderStatus       String             @default("RECEIVED") // RECEIVED | CANCELED
+  stizSyncStatus    String             @default("PENDING") // PENDING | SENDING | SENT | DUPLICATE | RETRY_WAIT | NEEDS_REVIEW | SETUP_REQUIRED
+  stizOrderNumber   String?
+  stizDuplicate     Boolean            @default(false)
+  stizMessage       String?
+  sendAttempts      Int                @default(0)
+  nextRetryAt       DateTime?          @db.Timestamptz(6)
+  lastError         String?
+  lastSentAt        DateTime?          @db.Timestamptz(6)
+  createdAt         DateTime           @default(now()) @db.Timestamptz(6)
+  updatedAt         DateTime           @default(now()) @updatedAt @db.Timestamptz(6)
+  items             UniformOrderItem[]
+
+  @@index([createdAt])
+  @@index([stizSyncStatus, nextRetryAt])
+  @@index([parentPhoneDigits, createdAt])
+}
+
+model UniformOrderItem {
+  id             String       @id @default(dbgenerated("(gen_random_uuid())::text"))
+  uniformOrderId String
+  studentName    String
+  backNumber     String?
+  topSize        String?
+  bottomSize     String?
+  quantity       Int          @default(1)
+  createdAt      DateTime     @default(now()) @db.Timestamptz(6)
+  order          UniformOrder @relation(fields: [uniformOrderId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([uniformOrderId])
+  @@index([studentName])
+}
+
 /// 학부모의 청구서 관련 요청: "입금했어요"(확인 요청)와 "영수증 주세요".
 /// 지금까지는 문자로 받아 원장이 통장을 확인하고 손으로 납부 처리했다.
 /// 참고: "같은 청구서·같은 종류의 대기 요청은 한 건"은 DB 부분 유니크 인덱스로 막는다.

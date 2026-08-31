@@ -4,6 +4,13 @@
 - `.Codex/HANDOFF.md`는 실행기·예약·승인 대기·재개 지점, `scratchpad.md`는 개발 작업, `knowledge/`는 장기 지식을 맡는다.
 - `docs/codex-handoff-setup.md`는 새 운영 PC 준비와 단일 `ACTIVE` 실행기 교대 절차를 설명한다.
 
+## 2026-08-31 유니폼 본사 주문 연동 구조
+- 공개 신청 경로는 `/apply/uniform`이며, 형제·자매 학생 여러 명을 한 신청서로 접수한다.
+- `src/app/actions/uniform.ts`가 공개 접수와 관리자 재전송 서버 액션을 담당한다.
+- `src/lib/uniform-partner.ts`는 STIZ 본사 주문 payload, 정규 JSON, HMAC-SHA256 서명, 서버간 POST를 담당한다.
+- `src/lib/uniform-order-service.ts`는 `UniformOrder`·`UniformOrderItem` 저장, 중복 제출 방지, 전송 상태, 재시도 대기를 관리한다.
+- 관리자 경로 `/admin/uniform`은 Google Sheets 원본이 아니라 DB 원장과 본사 접수 상태를 보여준다.
+
 ## 2026-07-11 관리자 초기 payload 메모
 - `src/lib/adminReadPayloads.ts`는 수강생/반/체험 CRM의 캐시된 읽기 payload를 제공하며, API route와 서버 페이지가 같은 캐시 키와 태그를 공유한다.
 - `/admin/students`, `/admin/classes`, `/admin/trial`은 페이지 서버 렌더링에서 초기 데이터를 받아 클라이언트 컴포넌트에 넘기고, 초기 데이터가 있을 때 첫 `useEffect` API 재호출을 건너뛴다.

@@ -4,7 +4,6 @@ import { useState } from "react";
 import Link from "next/link";
 import Card from "@/components/ui/Card";
 import Badge from "@/components/ui/Badge";
-import Button from "@/components/ui/Button";
 import AnimateOnScroll from "@/components/ui/AnimateOnScroll";
 import SectionLayout from "@/components/ui/SectionLayout";
 import FontFreeIcon from "@/components/ui/FontFreeIcon";
@@ -17,63 +16,8 @@ interface ApplyPageClientProps {
     trialContentHtml: string | null;
     enrollTitle: string;
     enrollContentHtml: string | null;
-    // 유니폼 신청만 외부 폼(모달)을 계속 사용한다. 체험/수강신청은 자체 폼 고정.
-    uniformFormUrl: string | null;
     // DB에서 가져온 FAQ 데이터 (없으면 기본 FAQ 표시)
     faqData?: FaqItem[];
-}
-
-// --- FormModal: 유니폼 신청 외부 폼 전용 (기존 코드 그대로 유지) ---
-function FormModal({
-    title,
-    formUrl,
-    onClose,
-}: {
-    title: string;
-    formUrl: string;
-    onClose: () => void;
-}) {
-    // Google Forms embed URL: replace /viewform with /viewform?embedded=true
-    const embedUrl = formUrl.includes("?")
-        ? formUrl.replace(/[?&]embedded=true/, "") + "&embedded=true"
-        : formUrl + "?embedded=true";
-
-    return (
-        <div
-            className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4"
-            onClick={onClose}
-        >
-            <div
-                className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-2xl flex flex-col"
-                style={{ maxHeight: "90vh" }}
-                onClick={(e) => e.stopPropagation()}
-            >
-                <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 dark:border-gray-800 shrink-0">
-                    <span className="font-bold text-gray-800 dark:text-gray-100 text-base">{title}</span>
-                    <button
-                        onClick={onClose}
-                        className="text-gray-400 hover:text-gray-600 dark:text-gray-300 text-xl leading-none"
-                    >
-                        ✕
-                    </button>
-                </div>
-                <div className="flex-1 overflow-hidden">
-                    <iframe
-                        src={embedUrl}
-                        width="100%"
-                        height="600"
-                        frameBorder="0"
-                        marginHeight={0}
-                        marginWidth={0}
-                        className="block"
-                        title={title}
-                    >
-                        로딩 중...
-                    </iframe>
-                </div>
-            </div>
-        </div>
-    );
 }
 
 // 안내 HTML은 서버 컴포넌트(page.tsx)에서 미리 sanitize한 뒤 전달한다.
@@ -167,11 +111,8 @@ export default function ApplyPageClient({
     trialContentHtml,
     enrollTitle,
     enrollContentHtml,
-    uniformFormUrl,
     faqData,
 }: ApplyPageClientProps) {
-    // 모달 상태 — 유니폼 신청 폼에서만 사용한다
-    const [modal, setModal] = useState<"uniform" | null>(null);
     // DB FAQ가 있으면 사용, 없으면 기본 FAQ fallback
     // DB에 FAQ가 있으면 DB 데이터 사용, 없으면 기본 데이터 fallback
     const displayFaqs = faqData && faqData.length > 0 ? faqData : DEFAULT_FAQ_DATA;
@@ -263,40 +204,34 @@ export default function ApplyPageClient({
                 </div>
             </SectionLayout>
 
-            {/* 유니폼 신청 섹션 — URL이 설정된 경우에만 표시 */}
-            {uniformFormUrl && (
-                <SectionLayout label="UNIFORM" title="유니폼 신청" description="우리 학원 유니폼을 신청하세요" bgColor="white">
-                    <div className="max-w-md mx-auto">
-                        <AnimateOnScroll>
-                            <Card id="uniform" variant="default" className="overflow-hidden !p-0 h-full">
-                                {/* 카드 헤더 — 그린 계열로 차별화 */}
-                                <div className="bg-emerald-600 px-6 py-5">
-                                    <div className="flex items-center gap-2 mb-2">
-                                        <span className="inline-flex items-center rounded-full font-medium px-2 py-0.5 text-xs bg-white/20 text-white">Uniform</span>
-                                    </div>
-                                    <h3 className="text-xl font-black text-white flex items-center gap-2">
-                                        <FontFreeIcon name="checkroom" size={24} />
-                                        유니폼 신청
-                                    </h3>
+            <SectionLayout label="UNIFORM" title="유니폼 신청" description="우리 학원 유니폼을 신청하세요" bgColor="white">
+                <div className="max-w-md mx-auto">
+                    <AnimateOnScroll>
+                        <Card id="uniform" variant="default" className="overflow-hidden !p-0 h-full">
+                            <div className="bg-emerald-600 px-6 py-5">
+                                <div className="flex items-center gap-2 mb-2">
+                                    <span className="inline-flex items-center rounded-full bg-white/20 px-2 py-0.5 text-xs font-medium text-white">Uniform</span>
                                 </div>
-                                {/* 카드 본문 */}
-                                <div className="px-6 py-6">
-                                    <p className="text-gray-600 dark:text-gray-300 text-base leading-relaxed mb-6">
-                                        모든 수강생은 입단과 동시에 유니폼을 구매해야 합니다. 아래 버튼을 눌러 간편하게 신청하세요.
-                                    </p>
-                                    <Button
-                                        variant="secondary"
-                                        size="md"
-                                        onClick={() => setModal("uniform")}
-                                    >
-                                        유니폼 신청하기
-                                    </Button>
-                                </div>
-                            </Card>
-                        </AnimateOnScroll>
-                    </div>
-                </SectionLayout>
-            )}
+                                <h3 className="text-xl font-black text-white flex items-center gap-2">
+                                    <FontFreeIcon name="checkroom" size={24} />
+                                    유니폼 신청
+                                </h3>
+                            </div>
+                            <div className="px-6 py-6">
+                                <p className="text-gray-600 dark:text-gray-300 text-base leading-relaxed mb-6">
+                                    형제·자매 유니폼도 한 번에 접수할 수 있습니다. 금액은 접수 후 STIZ 본사 기준으로 안내됩니다.
+                                </p>
+                                <Link
+                                    href="/apply/uniform"
+                                    className="inline-flex items-center justify-center rounded-xl bg-brand-navy-900 px-6 py-3 text-base font-medium text-white transition-all duration-200 hover:scale-[1.02] hover:bg-brand-navy-800 active:scale-[0.98] focus:ring-2 focus:ring-brand-orange-500 dark:bg-brand-neon-lime dark:text-brand-navy-900 dark:hover:bg-lime-400"
+                                >
+                                    유니폼 신청하기
+                                </Link>
+                            </div>
+                        </Card>
+                    </AnimateOnScroll>
+                </div>
+            </SectionLayout>
 
             {/* FAQ 섹션 — 아코디언 형태의 자주 묻는 질문 */}
             <SectionLayout id="faq" label="FAQ" title="자주 묻는 질문" description="궁금한 점을 빠르게 확인하세요" bgColor="white">
@@ -311,14 +246,6 @@ export default function ApplyPageClient({
                 </AnimateOnScroll>
             </SectionLayout>
 
-            {/* 유니폼 신청 외부 폼 모달 — 유니폼 링크가 설정된 경우에만 표시 */}
-            {modal === "uniform" && uniformFormUrl && (
-                <FormModal
-                    title="유니폼 신청"
-                    formUrl={uniformFormUrl}
-                    onClose={() => setModal(null)}
-                />
-            )}
         </>
     );
 }

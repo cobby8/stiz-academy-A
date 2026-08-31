@@ -1,7 +1,6 @@
 import { getAcademySettings, getPublicFaqs } from "@/lib/queries";
 import PublicPageLayout from "@/components/PublicPageLayout";
 import AnimateOnScroll from "@/components/ui/AnimateOnScroll";
-import SectionLayout from "@/components/ui/SectionLayout";
 import ProcessSteps from "@/components/landing/ProcessSteps";
 import CTABanner from "@/components/landing/CTABanner";
 import ApplyPageClient from "./ApplyPageClient";
@@ -15,6 +14,14 @@ export const metadata = buildPublicMetadata({
     path: "/apply",
 });
 
+type ApplyPageSettings = {
+    contactPhone?: string | null;
+    trialTitle?: string | null;
+    trialContent?: string | null;
+    enrollTitle?: string | null;
+    enrollContent?: string | null;
+};
+
 function toSafeApplyContent(content: string | null | undefined) {
     if (!content) return null;
     if (/<[a-z][\s\S]*>/i.test(content)) return sanitizeHtml(content);
@@ -24,7 +31,7 @@ function toSafeApplyContent(content: string | null | undefined) {
 export default async function ApplyPage() {
     // 설정과 FAQ를 동시에 조회 (성능 최적화)
     const [settings, faqData] = await Promise.all([
-        getAcademySettings() as Promise<any>,
+        getAcademySettings() as Promise<ApplyPageSettings>,
         getPublicFaqs(),
     ]);
     const phone = settings?.contactPhone || "010-0000-0000";
@@ -57,7 +64,6 @@ export default async function ApplyPage() {
                 trialContentHtml={toSafeApplyContent(settings?.trialContent)}
                 enrollTitle={settings?.enrollTitle || "수강신청 안내"}
                 enrollContentHtml={toSafeApplyContent(settings?.enrollContent)}
-                uniformFormUrl={settings?.uniformFormUrl || null}
                 faqData={faqData}
             />
 

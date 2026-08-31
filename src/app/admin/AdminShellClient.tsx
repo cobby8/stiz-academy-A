@@ -44,6 +44,7 @@ const OPS_PATHS = [
     "/admin/payment-requests",
     "/admin/enrollment-changes",
     "/admin/media-revocations",
+    "/admin/uniform",
 ];
 
 const MORE_OPS_PATHS = [
@@ -62,6 +63,7 @@ const MORE_OPS_PATHS = [
     "/admin/payment-requests",
     "/admin/enrollment-changes",
     "/admin/media-revocations",
+    "/admin/uniform",
 ];
 
 // 셔틀 관리 메뉴에 속하는 경로 판정 — 방학특강 배차/명단은 /admin/seasonal 하위지만
@@ -214,6 +216,7 @@ export default function AdminShellClient({
                             <NavItem href="/admin/enrollment-changes" active={pathname.startsWith("/admin/enrollment-changes")} icon="🔁" label="수강 변경 신청" />
                             <NavItem href="/admin/payment-requests" active={pathname.startsWith("/admin/payment-requests")} icon="🧾" label="입금 확인·영수증" />
                             <NavItem href="/admin/finance" active={pathname.startsWith("/admin/finance")} icon="💳" label="수납/청구" />
+                            <NavItem href="/admin/uniform" active={pathname.startsWith("/admin/uniform")} icon="👕" label="유니폼 주문" />
                             <NavItem href="/admin/seasonal" active={pathname.startsWith("/admin/seasonal") && !isShuttlePath(pathname)} icon="🏀" label="방학특강" />
                             <NavItem href="/admin/seasonal/dispatch" active={isShuttlePath(pathname)} icon="🚌" label="셔틀 관리" />
 

@@ -212,6 +212,7 @@ STIZ 농구교실 다산점의 홈페이지와 학원관리 플랫폼이다. 일
 - 수강 삭제 UI는 제거하고 서버의 기존 `deleteEnrollment` 호출도 실제 DELETE 대신 `WITHDRAWN` 상태변경으로 위임한다. 수강 이력을 보존해야 외부 시스템과 재대조할 수 있다.
 - 다음 구현 단계는 시트 Apps Script가 서명 이벤트를 보내는 설치 코드, `PENDING` 시도를 즉시 소비하고 재시도하는 워커, 관리자 상태 화면이다. Rallyz는 공식 쓰기 API·웹훅이 확인되지 않아 로그인 브라우저 기반 감독형 반영을 유지하며, 연결 부재를 성공으로 처리하지 않는다.
 - 청구 발행·취소·결제·환불·학부모 알림은 실시간 데이터 동기화 큐에서 실행하지 않는다. 해당 상태는 기존 `billingStatus`·`notificationStatus=HELD`를 유지하고 정확한 미리보기와 실행 시점 승인을 별도로 받는다.
+- `/api/cron/operations-sync`는 현재 자동 쓰기 워커가 아니라 읽기 전용 분류기다. `src/lib/operationsSyncWorker.ts`가 PENDING/FAILED 시도를 시트 → Rallyz → 홈페이지 순서로 분류하고, 실제 외부 쓰기 함수는 호출하지 않는다.
 
 # 2026-08-28: 운영 동기화 관리자 화면 폐기
 

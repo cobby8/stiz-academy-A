@@ -1,5 +1,12 @@
 # Decisions
 
+## 2026-09-01: Solapi 대량 문자는 한 번 접수하고 최종 결과를 재조회한다
+- 최대 500명은 `POST /messages/v4/send-many/detail` 한 요청으로 접수하고 `customFields.deliveryId`로 사이트 장부 행과 연결한다.
+- Solapi `ACCEPTED`는 최종 성공이 아니므로 장부 `SENDING`을 유지하고 `providerStatus=ACCEPTED`로 구분한다. 최종 `SENT/FAILED`는 그룹 결과 조회 뒤에만 확정한다.
+- 4xx 명시 거절만 `FAILED`, 5xx·타임아웃·응답 누락은 자동 재발송하지 않고 `UNCERTAIN` 또는 재조회 대기로 둔다.
+- 첫 결과 누락은 공급자 반영 지연일 수 있으므로 10분간 재조회하고, 이후에도 확인되지 않을 때만 `UNCERTAIN`으로 격리한다.
+- Solapi가 아닌 Bizppurio는 기존 단건 발송 계약을 유지한다.
+
 ## 2026-08-31: 운영 동기화 워커는 먼저 읽기 전용 분류기로 둔다
 - 결정: `/api/cron/operations-sync`는 `CRON_SECRET` 인증 후 PENDING/FAILED 시도를 읽기 전용으로 분류하고, 외부 시트·Rallyz·홈페이지 쓰기 함수는 호출하지 않는다.
 - 결정: 자동 cron 등록은 하지 않는다. 시트 반영 준비, Rallyz 확인 대기, 홈페이지 반영 준비를 응답으로 나눠 운영자가 다음 조치를 판단하게 한다.

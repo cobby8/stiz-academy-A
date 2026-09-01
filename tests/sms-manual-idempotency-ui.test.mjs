@@ -16,6 +16,13 @@ test("불확실·처리 중 발송은 재발송에서 제외한다", () => {
     assert.doesNotMatch(source, /retryRecipients/);
 });
 
+test("공급자 접수와 최종 발송 완료를 구분한다", () => {
+    assert.match(source, /providerStatus\?: string \| null/);
+    assert.match(source, /Solapi 접수/);
+    assert.match(source, /학부모 휴대폰의 최종 발송 성공과는 다릅니다/);
+    assert.match(source, /item\.status === "SENT" \? "최종 성공"/);
+});
+
 test("대량 발송 중 입력을 잠그고 페이지 이탈을 경고한다", () => {
     assert.match(source, /beforeunload/);
     assert.match(source, /disabled=\{batchIsActive\}/);

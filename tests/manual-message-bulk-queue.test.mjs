@@ -43,8 +43,29 @@ test("queued phone and body are encrypted and status output is masked", async ()
 test("cron requires its secret and processes only claimed queue rows", async () => {
   const route = await read("src/app/api/cron/manual-message-dispatch/route.ts");
   assert.match(route, /CRON_SECRET/);
-  assert.match(route, /MAX_DISPATCH_PER_RUN = 5/);
+  assert.match(route, /MAX_DISPATCH_PER_RUN = 500/);
   assert.match(route, /claimManualMessageQueue\(MAX_DISPATCH_PER_RUN\)/);
   assert.match(route, /new Set\(claim\.finalizeBatchIds\)/);
-  assert.match(route, /finalizeMessageDelivery/);
+  assert.match(route, /sendSmsBulkDetailed/);
+  assert.match(route, /markManualMessageAccepted/);
+  assert.match(route, /markManualMessageUncertain/);
+});
+
+test("accepted Solapi messages wait for final provider reconciliation", async () => {
+  const [ledger, reconcile, vercel] = await Promise.all([
+    read("src/lib/message-ledger.ts"),
+    read("src/app/api/cron/manual-message-reconcile/route.ts"),
+    read("vercel.json"),
+  ]);
+  assert.match(ledger, /"providerStatus"='ACCEPTED'/);
+  assert.match(ledger, /COALESCE\("providerStatus",''\) <> 'ACCEPTED'/);
+  assert.match(ledger, /getPendingManualSolapiGroups/);
+  assert.match(ledger, /providerStatus: r\.providerStatus/);
+  assert.match(reconcile, /CRON_SECRET/);
+  assert.match(reconcile, /MAX_GROUPS_PER_RUN = 5/);
+  assert.match(reconcile, /MISSING_RESULT_GRACE_MS = 10 \* 60 \* 1000/);
+  assert.match(reconcile, /SOLAPI_RESULT_MISSING_AFTER_GRACE/);
+  assert.match(reconcile, /getSolapiBatchResults/);
+  assert.match(reconcile, /finalizeManualSolapiResult/);
+  assert.match(vercel, /manual-message-reconcile/);
 });

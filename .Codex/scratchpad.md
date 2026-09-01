@@ -20,6 +20,7 @@
 | 신규 수강 안전 승인 | developer + tester + reviewer | 완료 | 알림 미발송·원장 원자성·멱등성·정적 검사 통과 |
 | 신규 수강신청 1건 | PM | 승인 대기 | 3중 등록 재조회 후 청구·알림·초대는 미리보기 승인 전 HELD, 승인 후 재조회 완료 |
 | 대량 SMS 큐 | developer + tester + reviewer | 완료 | 최대 500명 접수·멱등·비동기 처리·진행률·UNCERTAIN 격리 검증 |
+| Solapi 일괄 전송 | developer + tester + reviewer | 완료 | send-many 1회 접수·부분 실패·10분 유예·최종 결과 재조회 검증 |
 | 유니폼 본사 연동 | developer + tester | 완료 | 자체 폼·DB 원장·HMAC 전송·관리자 상태 화면·Vercel DB 프리플라이트·로컬 빌드 검증 |
 
 ## 구현 기록
@@ -47,10 +48,10 @@
 
 ## 테스트 결과
 
-- 대량 SMS 큐 재QA: 관련 핵심/회귀 64건 중 63건 통과, 1건은 변경 전 HEAD에도 동일한 선행 실패. 신규 큐 5건·`tsc --noEmit`·`git diff --check`는 통과했다.
-- 500명 상한, 기존 `sendManualSms` 100명 호환, 관리자 인증, requestId 멱등, 암호화 payload/마스킹 응답, `FOR UPDATE SKIP LOCKED`, stale `SENDING → UNCERTAIN`, 2.5초 UI polling 계약을 확인했다.
-- poison row 개별 UNCERTAIN 격리, stale/복호화 실패 payload 삭제, cron 실행당 5건 제한, 세 경로의 `finalizeBatchIds` 집계 보완을 확인했다. 실제 DB·Solapi를 사용하지 않아 동시 claim과 stale 전환은 SQL 정적 계약까지만 검증했다.
-- 확대 회귀의 `sms-business-delivery-reliability.test.mjs` 1건은 변경 전 HEAD에도 기대 eventId가 없고 테스트 파일도 변경되지 않아 대량 큐와 무관한 선행 실패로 분리했다.
+- Solapi 묶음 발송 최종 재QA: 타깃 20건과 문자·장부 확대 회귀 129건, `npx.cmd tsc --noEmit`, `git diff --check` 모두 통과했다.
+- `send-many/detail` 단일 접수·500명 상한·`customFields.deliveryId` 매칭, 4xx 실패/5xx·누락·timeout 불확실 분리, `groupInfo.groupId`·객체형 목록/customFields 호환, Bizppurio 순차 호환, `ACCEPTED`와 최종 `SENT` 분리, stale sweep의 ACCEPTED 제외, 결과 누락 10분 유예·그룹 5개 제한·페이지네이션·최종 집계·providerStatus 노출을 확인했다.
+- 테스트는 실제 Solapi·Bizppurio·운영 DB를 호출하지 않았다. 신규 공급자 테스트는 소스 계약 검사 중심이므로 실제 응답 fixture 기반 분기 행동과 DB 상태 전이·페이지네이션 통합 검증은 후속 보강 권장이다.
+- 기존 대량 SMS 큐의 500명 상한·멱등·암호화·UNCERTAIN 격리 회귀는 유지한다.
 
 - 이전 체험 일정·셔틀 위치 링크 회귀와 TypeScript/Prisma 검증은 완료 상태를 유지한다.
 
@@ -68,10 +69,14 @@
 
 ### 리뷰 결과 (reviewer)
 
-- 최종 판정: 통과. 멱등·동시 선점·UNCERTAIN 격리·암호 payload 삭제·배치 집계·cron 인증의 차단 결함은 없다.
-- 권장 보강: 실제 DB 동시성·멱등·중단 복구 행동 테스트를 추가한다.
+- 최종 판정: 통과. 이전 필수 수정 2건과 크론 시간·UI 상태 문제가 반영되었으며 추가 차단 결함은 발견하지 못했다.
+- 확인 내용: Solapi 4xx만 FAILED, 5xx·타임아웃은 UNCERTAIN; `groupInfo.groupId` 우선; 배열·객체 messageList와 문자열 customFields 지원; 결과 누락 10분 유예; 그룹 5개/회; ACCEPTED stale 재전송 차단; recipient providerStatus 노출; Bizppurio 단건 호환 유지.
+- 검증: 관련 테스트 20건, `tsc --noEmit`, `git diff --check` 통과. 실제 Solapi·운영 DB 호출 없음.
+- 남은 권장사항: 현재 공급자 테스트는 정규식 계약 중심이므로 추후 fetch mock 기반 부분 성공·5xx·결과 지연 행동 테스트를 추가한다.
 | tester | `tests/manual-message-bulk-queue.test.mjs` | 실제 DB 행동 테스트가 없어 동시 claim·requestId 경합·stale 격리를 정규식으로만 검사함. 가짜 DB 또는 테스트 DB 행동 검증 보강 필요 | 대기 |
 | tester | `tests/sms-business-delivery-reliability.test.mjs` | 수강승인 이벤트 ID 기대식 불일치. 변경 전 HEAD에도 동일하며 이번 대량 큐와 무관한 선행 실패로 분리 | 별도 대기 |
+| reviewer | `src/app/api/cron/manual-message-reconcile/route.ts:21-27` | Solapi 결과 누락은 10분 동안 ACCEPTED 상태로 재조회하고 유예 뒤에만 UNCERTAIN 격리하도록 보완됨 | 완료 |
+| reviewer | `src/lib/sms.ts:370-386` | HTTP 4xx만 FAILED, 5xx는 UNCERTAIN으로 분리해 중복 재발송 위험을 차단함 | 완료 |
 
 ## 확인보류
 
@@ -80,6 +85,7 @@
 - RESUME/CLASS_ADD/CLASS_CHANGE 자동 실행 어댑터는 다음 그룹이다.
 
 ## 작업 로그 (최근 10건)
+- 2026-09-01: 필수 보완까지 반영된 Solapi `send-many/detail` 대량 발송을 외부 호출 없이 최종 재QA했다. 타깃 20건·문자/장부 회귀 129건·tsc·diff-check 통과, 차단 결함과 실제 Solapi·DB·문자 발송 없음.
 - 2026-08-31: 운영 동기화 PENDING 항목을 시트·랠리즈·홈페이지 순서로 읽기 전용 분류하는 워커와 인증 크론 라우트를 추가했다. 관련 40건·eslint·tsc 통과, Vercel cron 미등록, 운영 DB·시트·랠리즈 쓰기 없음.
 - 2026-08-31: 유니폼 자체 신청 폼·DB 주문 원장·STIZ 본사 HMAC 전송·관리자 상태 화면과 Vercel/릴리스 DB 프리플라이트를 구현했다. release:code-check 1,319건·타깃 60건·빌드 검증, 운영 DB·외부 주문·문자·배포 없음.
 - 2026-08-31: 대량 SMS 큐 최종 재QA에서 poison 격리·payload 삭제·5건 제한·격리 배치 재집계를 확인했다. 관련 63건 통과, 선행 실패 1건 분리, tsc·diff-check 통과, 실제 DB·문자·배포 없음.
@@ -89,7 +95,6 @@
 - 2026-08-30: 신청관리의 체험수업·수강신청 목록을 접수일 최신순으로 통일하고 동일 시각 순서를 고정했다. 관련 17건·독립 QA·tsc·diff 검사 통과, 배포 없음.
 - 2026-08-30: 수강 승인과 외부 알림을 분리하고 신규·복귀 수강 변경을 운영 원장에 같은 트랜잭션으로 적재했다. 관련 14건·독립 QA·tsc·Prisma·diff 검사 통과, 운영 DB·알림·배포 없음.
 - 2026-08-29: Codex 공용 운영 인수인계 기반을 추가했다. AGENTS·저장소 스킬·PC 설정 런북·HANDOFF·구조 안전 테스트를 만들었고 운영 DB·예약·외부 발송·배포는 변경하지 않았다.
-- 2026-08-28: 실사용성이 낮은 관리자 `3중 동기화` 화면과 메뉴를 폐기하고 기존 URL은 관리자 홈으로 이동했다. 학부모 링크 관리는 학생 상세로 옮기고 공개 요청·원장·출석·청구 백엔드는 보존했다. 운영 DB·푸시·배포 없음.
 - 2026-08-28: 운영 동기화 관리자 화면의 간헐 오류를 진단해 SSR 런타임 DDL을 제거하고 7개 테이블·85개 컬럼·고유키·RLS·직접 권한을 읽기 전용으로 검사하도록 보강했다. 운영 DB·푸시·배포 없음.
 
 ## PM 체크

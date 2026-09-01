@@ -1,5 +1,7 @@
 # STIZ Knowledge Index
 
+> 2026-09-01 갱신: 관리자 대량 문자는 Solapi `send-many/detail` 한 번으로 최대 500명을 접수한다. 공급자 접수와 최종 성공을 분리하고, 4xx만 실패·5xx/타임아웃은 확인 필요로 처리하며 그룹 결과를 재조회한다.
+
 > 2026-08-31 갱신: 운영 동기화 워커 `/api/cron/operations-sync`는 `CRON_SECRET` 인증 뒤 PENDING/FAILED 시도를 읽기 전용으로 분류한다. 시트, Rallyz, 홈페이지 실제 쓰기는 아직 자동 cron에 등록하지 않고 별도 승인·실행 모드가 필요하다.
 
 > 2026-08-31 갱신: 유니폼 추가주문은 `/apply/uniform` 자체 폼에서 `UniformOrder` 원장에 먼저 저장한 뒤 서버가 `STIZ_PARTNER_SECRET`으로 HMAC 서명해 STIZ 본사 주문 API로 전송한다. 학원은 금액 계산·결제를 하지 않고 본사 접수번호와 전송 상태만 관리하며, Vercel/릴리스 프리플라이트가 테이블·RLS·직접 권한을 읽기 전용으로 확인한다.

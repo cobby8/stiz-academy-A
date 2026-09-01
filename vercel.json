@@ -31,6 +31,10 @@
       "schedule": "* * * * *"
     },
     {
+      "path": "/api/cron/manual-message-reconcile",
+      "schedule": "* * * * *"
+    },
+    {
       "path": "/api/cron/media-revocations",
       "schedule": "*/5 * * * *"
     },

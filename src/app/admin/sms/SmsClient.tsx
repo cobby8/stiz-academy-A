@@ -50,6 +50,8 @@ interface ManualBatchStatus {
     total: number;
     pending: number;
     processing: number;
+    /** 공급자가 묶음 요청을 받았지만 최종 발송 결과는 아직 확인되지 않은 건수 */
+    accepted?: number;
     success: number;
     failed: number;
     uncertain: number;
@@ -58,6 +60,7 @@ interface ManualBatchStatus {
         id: string;
         recipient: string;
         status: "PENDING" | "SENDING" | "SENT" | "FAILED" | "UNCERTAIN";
+        providerStatus?: string | null;
         reason?: string | null;
     }>;
 }
@@ -429,7 +432,7 @@ function HistoryPanel() {
 }
 
 function DeliveryBadge({ status }: { status: DeliveryHistory["status"] }) {
-    const labels = { SENT: "접수 완료", FAILED: "실패", PENDING: "대기", SENDING: "확인 중", UNCERTAIN: "확인 필요", SKIPPED: "미발송" };
+    const labels = { SENT: "발송 완료", FAILED: "실패", PENDING: "대기", SENDING: "발송 중", UNCERTAIN: "확인 필요", SKIPPED: "미발송" };
     const colors = {
         SENT: "bg-green-50 text-green-700",
         FAILED: "bg-red-50 text-red-700",
@@ -466,7 +469,8 @@ function ManualSendPanel({ initialCoaches }: { initialCoaches?: CoachPhone[] }) 
         return manualNumbers.split(/[,;\n]+/).map(value => value.trim().replace(/\D/g, "")).filter(value => value.length >= 10);
     }, [coaches, manualNumbers, mode, selectedIds]);
     const bytes = new TextEncoder().encode(`[STIZ] ${message}`).length;
-    const batchIsActive = batch?.status === "PENDING" || batch?.status === "PROCESSING" || Boolean(batch?.pending) || Boolean(batch?.processing);
+    const acceptedCount = batch?.accepted ?? batch?.recipients?.filter(item => item.providerStatus === "ACCEPTED").length ?? 0;
+    const batchIsActive = batch?.status === "PENDING" || batch?.status === "PROCESSING" || Boolean(batch?.pending) || Boolean(batch?.processing) || acceptedCount > 0;
 
     const loadBatch = useCallback(async (batchId: string) => {
         const response = await fetch(`/api/admin/sms/batches/${batchId}`, { cache: "no-store" });
@@ -523,7 +527,7 @@ function ManualSendPanel({ initialCoaches }: { initialCoaches?: CoachPhone[] }) 
         startTransition(async () => {
             try {
                 const response = await enqueueManualSmsBatch(targetRecipients, message.trim(), { requestId });
-                setBatch({ batchId: response.batchId, status: "PENDING", total: response.total, pending: response.total, processing: 0, success: 0, failed: 0, uncertain: 0 });
+                setBatch({ batchId: response.batchId, status: "PENDING", total: response.total, pending: response.total, processing: 0, accepted: 0, success: 0, failed: 0, uncertain: 0 });
                 void loadBatch(response.batchId).catch(() => undefined);
                 requestIdRef.current = null;
                 requestPayloadRef.current = null;
@@ -583,11 +587,12 @@ function ManualSendPanel({ initialCoaches }: { initialCoaches?: CoachPhone[] }) 
                     <div className="mt-4 space-y-3">
                         <div className="rounded-xl border border-blue-200 bg-blue-50 p-3 dark:border-blue-900 dark:bg-blue-950/30">
                             <p className="text-sm font-bold text-blue-800 dark:text-blue-200">배치 번호 {batch.batchId}</p>
-                            <div className="mt-2 grid grid-cols-3 gap-2 text-center text-xs sm:grid-cols-6">
-                                {[["전체", batch.total], ["대기", batch.pending], ["처리", batch.processing], ["성공", batch.success], ["실패", batch.failed], ["확인 필요", batch.uncertain]].map(([label, value]) => (
+                            <div className="mt-2 grid grid-cols-4 gap-2 text-center text-xs sm:grid-cols-7">
+                                {[["전체", batch.total], ["대기", batch.pending], ["전송 요청 중", batch.processing], ["Solapi 접수", acceptedCount], ["최종 성공", batch.success], ["실패", batch.failed], ["확인 필요", batch.uncertain]].map(([label, value]) => (
                                     <span key={label} className="rounded-lg bg-white p-2 dark:bg-gray-900"><strong className="block text-base text-gray-900 dark:text-white">{value}</strong>{label}</span>
                                 ))}
                             </div>
+                            {acceptedCount > 0 && <p className="mt-2 text-xs text-blue-700 dark:text-blue-300">Solapi 접수는 솔라피가 요청을 받은 단계이며, 학부모 휴대폰의 최종 발송 성공과는 다릅니다. 최종 결과를 확인하고 있습니다.</p>}
                             {batchIsActive && <p className="mt-2 text-xs font-bold text-blue-700 dark:text-blue-300">화면을 닫지 마세요. 2.5초마다 진행 상황을 확인하고 있습니다.</p>}
                         </div>
                         {batch.uncertain > 0 && (
@@ -601,8 +606,8 @@ function ManualSendPanel({ initialCoaches }: { initialCoaches?: CoachPhone[] }) 
                                 {batch.recipients.map(item => (
                                     <li key={item.id} className="flex items-center justify-between gap-3 rounded-lg px-2 py-1.5">
                                         <span className="text-gray-600 dark:text-gray-300">수신자 {item.recipient}</span>
-                                        <strong className={item.status === "FAILED" ? "text-red-600" : item.status === "UNCERTAIN" ? "text-amber-700 dark:text-amber-300" : "text-green-700 dark:text-green-300"}>
-                                            {item.status === "SENT" ? "성공" : item.status === "FAILED" ? "실패" : item.status === "UNCERTAIN" ? "확인 필요" : item.status === "SENDING" ? "처리 중" : "대기"}
+                                        <strong className={item.status === "FAILED" ? "text-red-600" : item.status === "UNCERTAIN" || item.status === "SENDING" ? "text-amber-700 dark:text-amber-300" : item.status === "SENT" ? "text-green-700 dark:text-green-300" : "text-blue-700 dark:text-blue-300"}>
+                                            {item.status === "SENT" ? "최종 성공" : item.status === "FAILED" ? "실패" : item.status === "UNCERTAIN" ? "확인 필요" : item.providerStatus === "ACCEPTED" ? "Solapi 접수" : item.status === "SENDING" ? "전송 요청 중" : "대기"}
                                         </strong>
                                     </li>
                                 ))}

@@ -1,5 +1,11 @@
 # Decisions
 
+## 2026-09-02: 본사 카페24 결제는 서명된 브리지로 연결한다
+- 결정: 다산점 청구서는 `PAYMENT_PROVIDER=CAFE24_BRIDGE`일 때 본사 결제 브리지 API로 서명 요청을 보내고, 본사가 돌려준 `checkoutUrl`로 학부모를 이동시킨다.
+- 결정: 기본값은 기존 토스페이먼츠 직접결제(`PAYMENT_PROVIDER=TOSS`)로 유지해 환경변수 전환 전 운영 동작이 바뀌지 않게 한다.
+- 결정: 카페24 납부 완료는 본사에서 보내는 서명 웹훅을 통해서만 `Payment`, `PaymentInvoice`, `PaymentTransaction`에 반영한다. 주문번호와 금액이 맞지 않으면 완료 처리하지 않는다.
+- 이유: 카페24는 쇼핑몰 주문/결제 시스템이라 다산점이 결제창만 직접 띄우는 방식보다, 본사가 주문과 결제 링크를 만들고 다산점은 청구 장부와 결과만 맞추는 구조가 안전하다.
+
 ## 2026-09-01: Solapi 대량 문자는 한 번 접수하고 최종 결과를 재조회한다
 - 최대 500명은 `POST /messages/v4/send-many/detail` 한 요청으로 접수하고 `customFields.deliveryId`로 사이트 장부 행과 연결한다.
 - Solapi `ACCEPTED`는 최종 성공이 아니므로 장부 `SENDING`을 유지하고 `providerStatus=ACCEPTED`로 구분한다. 최종 `SENT/FAILED`는 그룹 결과 조회 뒤에만 확정한다.

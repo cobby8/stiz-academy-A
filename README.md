@@ -28,15 +28,27 @@ NEXT_PUBLIC_KAKAO_MAP_JS_KEY=your_kakao_javascript_key
 
 ## Online payment configuration
 
-토스페이먼츠 온라인 PG를 사용하려면 운영 환경에 다음 값을 등록합니다.
+기본값은 토스페이먼츠 직접 결제입니다. 운영 환경에 다음 값을 등록합니다.
 
 ```env
+PAYMENT_PROVIDER=TOSS
 NEXT_PUBLIC_TOSS_PAYMENTS_CLIENT_KEY=your_toss_client_key
 TOSS_PAYMENTS_SECRET_KEY=your_toss_secret_key
 NEXT_PUBLIC_SITE_URL=https://www.stiz-dasan.kr
 ```
 
 토스 관리자에는 웹훅 주소를 `https://www.stiz-dasan.kr/api/payments/toss/webhook`으로 등록합니다. 실제 결제 요청 없이 설정만 확인할 때는 다음 명령을 사용합니다.
+
+본사 카페24 결제로 넘길 때는 본사 서버가 카페24 주문/결제 링크를 만들어주는 브리지 API를 준비한 뒤 아래 값으로 전환합니다.
+
+```env
+PAYMENT_PROVIDER=CAFE24_BRIDGE
+CAFE24_PAYMENT_BRIDGE_URL=https://custom.stiz.kr/api/payments/cafe24/checkout
+STIZ_PARTNER_SECRET=64_char_hex_shared_secret
+NEXT_PUBLIC_SITE_URL=https://www.stiz-dasan.kr
+```
+
+본사 브리지는 다산점에서 받은 서명 요청을 검증한 뒤 `checkoutUrl`을 돌려줘야 합니다. 본사가 결제 완료를 다산점에 알려줄 주소는 `https://www.stiz-dasan.kr/api/payments/cafe24/webhook`입니다.
 
 ```bash
 npm run payments:preflight

@@ -2,10 +2,10 @@
 
 ## 현재 작업
 
-- 목표: 토스페이먼츠 온라인 PG로 청구서 결제부터 납부 완료 반영까지 자동화한다.
-- 현재 단계: 결제창 선택 UX, 성공 후 승인 재확인, 청구서 소유권/금액 검증, 웹훅 중복 처리 보강 및 로컬 검증 완료.
+- 목표: 다산점 청구서 결제를 본사 카페24 결제 링크로 넘길 수 있는 안전한 브리지 흐름을 준비한다.
+- 현재 단계: 토스 직접결제 기본값은 유지하고, `PAYMENT_PROVIDER=CAFE24_BRIDGE` 설정 시 본사 결제 링크 발급·서명 웹훅 수신·납부완료 반영으로 분기하는 코드 구현 및 검증 완료.
 - 운영 반영: 운영 DB 변경, 시트 변경, 실제 결제 승인, 문자, 배포 없음.
-- 별도 실행 대기: 토스 온라인 PG 공개키·서버키와 운영 사이트 주소를 Vercel 환경변수에 설정하고, 토스 관리자 웹훅 URL 등록 필요.
+- 별도 실행 대기: 본사 서버에 카페24 주문/결제 링크 생성 API를 준비하고 Vercel에 `PAYMENT_PROVIDER=CAFE24_BRIDGE`, `CAFE24_PAYMENT_BRIDGE_URL`, `STIZ_PARTNER_SECRET`, `NEXT_PUBLIC_SITE_URL` 설정 필요.
 
 ## 진행 현황표
 
@@ -23,6 +23,7 @@
 | Solapi 일괄 전송 | developer + tester + reviewer | 완료 | send-many 1회 접수·부분 실패·10분 유예·최종 결과 재조회 검증 |
 | 유니폼 본사 연동 | developer + tester | 완료(발송 대기) | 자체 폼·DB 원장·디자인/이니셜·HMAC 전송·관리자 상태 화면·운영 DB 프리플라이트·로컬 빌드 검증 |
 | 토스 온라인 PG 자동결제 | developer + tester | 완료(키 설정 대기) | 학부모 결제창·서버 승인·웹훅·관리자 상태·프리플라이트 검증 |
+| 본사 카페24 결제 브리지 | developer + tester | 완료(본사 API·환경변수 대기) | 결제 제공자 분기·서명 요청·서명 웹훅·관리자 표시·프리플라이트·빌드 검증 |
 
 ## 구현 기록
 
@@ -50,6 +51,7 @@
 
 ## 테스트 결과
 
+- 본사 카페24 결제 브리지: 결제 회귀 10건, `npx tsc --noEmit`, `npm run release:code-check`, `npm run build` 통과. `npm run payments:preflight`는 현재 기본 토스 모드의 키 미설정으로 의도된 실패. 실제 본사 주문·결제·운영 DB 변경·문자·배포 없음.
 - 토스 온라인 PG 보강: 결제 회귀 11건, 관련 결제 회귀 37건, `npx.cmd tsc --noEmit`, `npm run release:code-check`, `npm run build` 통과. `npm run payments:preflight`는 토스 공개키·서버키 미설정으로 의도된 실패. 실제 결제 승인·운영 DB 변경·문자·배포 없음.
 - 유니폼 주문 보강: `node --test tests\uniform-partner.test.mjs tests\uniform-order-db-preflight.test.mjs tests\uniform-orders.test.mjs`, `npx.cmd tsc --noEmit`, `npm run release:code-check`, `npm run build` 통과. 운영 DB 컬럼과 최근 2건 디자인/이니셜 보강 완료. 본사 주문 전송·SMS 발송·배포 호출 없음.
 - Solapi 묶음 발송 최종 재QA: 타깃 20건과 문자·장부 확대 회귀 129건, `npx.cmd tsc --noEmit`, `git diff --check` 모두 통과했다.
@@ -89,6 +91,7 @@
 - RESUME/CLASS_ADD/CLASS_CHANGE 자동 실행 어댑터는 다음 그룹이다.
 
 ## 작업 로그 (최근 10건)
+- 2026-09-02: 본사 카페24 결제 브리지 흐름을 추가했다. 결제 제공자 분기, 서명 요청, 서명 웹훅, 관리자 설정 표시, 프리플라이트와 회귀 테스트를 보강했으며 실제 결제·본사 주문·운영 DB 변경은 없음.
 - 2026-09-02: 토스 온라인 PG 자동결제 흐름을 카드/간편결제·계좌이체 선택, 성공 후 승인 재확인, 청구서 ID 검증, 웹훅 중복 방지로 보강했다. 결제 회귀 37건·tsc·release:code-check·build 통과, 토스 키 미설정으로 실결제 차단.
 - 2026-09-02: 정규 셔틀 좌표 설정을 지도 직접 클릭·핀 조정·개별 저장 방식으로 재구성하고 검색은 보조 기능으로 내렸다. 셔틀 회귀 8건·eslint·tsc·diff-check 통과, 운영 좌표 저장·배포 없음.
 - 2026-09-02: 유니폼 주문 항목에 디자인·이니셜 필드를 추가하고 신청 폼·관리자 화면·본사 payload·DB 검사·운영 DB 최근 2건을 보강했다. release:code-check 1,331건·빌드 통과, 본사 주문/SMS 발송 없음.
@@ -98,7 +101,6 @@
 - 2026-08-31: 유니폼 자체 신청 폼·DB 주문 원장·STIZ 본사 HMAC 전송·관리자 상태 화면과 Vercel/릴리스 DB 프리플라이트를 구현했다. release:code-check 1,319건·타깃 60건·빌드 검증, 운영 DB·외부 주문·문자·배포 없음.
 - 2026-08-31: 대량 SMS 큐 최종 재QA에서 poison 격리·payload 삭제·5건 제한·격리 배치 재집계를 확인했다. 관련 63건 통과, 선행 실패 1건 분리, tsc·diff-check 통과, 실제 DB·문자·배포 없음.
 - 2026-08-31: 유니폼 신청서를 신규·입금확인·발주완료·학원도착·과거자료로 나누고 학생 원장과 대조하는 관리자 화면을 구현했다. 회귀 3건·tsc·diff 검사 통과, 시트·주문·문자·배포 없음.
-- 2026-08-31: 카카오 학부모 최초 1회 인증, HMAC 사용자 식별, 15분 연결 링크, 21종 자연어 분류, 접수 전 확인, 관리자 카카오 접수함을 구현했다. 회귀 3건·tsc·Prisma·diff 검사 통과, DB·배포·외부 발송 없음.
 
 ## PM 체크
 

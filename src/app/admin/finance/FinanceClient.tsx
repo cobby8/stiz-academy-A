@@ -59,7 +59,8 @@ type Summary = {
 };
 
 type PaymentProviderStatus = {
-    provider: "TOSS";
+    provider: "TOSS" | "CAFE24_BRIDGE";
+    providerLabel: string;
     providerReady: boolean;
     clientKeyConfigured: boolean;
     secretKeyConfigured: boolean;
@@ -67,6 +68,11 @@ type PaymentProviderStatus = {
     secretKeyMode: "test" | "live" | "unknown";
     keyMode: "test" | "live" | "mixed" | "unknown";
     keyPairReady: boolean;
+    cafe24BridgeUrlConfigured: boolean;
+    cafe24BridgeUrlValid: boolean;
+    cafe24BridgeSecretConfigured: boolean;
+    cafe24BridgeSecretValid: boolean;
+    cafe24BridgeReady: boolean;
     siteUrlConfigured: boolean;
     siteUrlValid: boolean;
     successUrlPreview: string | null;
@@ -214,6 +220,7 @@ const METHOD_LABELS: Record<string, string> = {
 
 const PROVIDER_LABELS: Record<string, string> = {
     TOSS: "토스페이먼츠",
+    CAFE24_BRIDGE: "본사 카페24",
     MANUAL: "직접 처리",
 };
 
@@ -245,6 +252,7 @@ function getErrorMessage(error: unknown, fallback: string) {
 }
 
 function getPaymentModeLabel(status: PaymentProviderStatus) {
+    if (status.provider === "CAFE24_BRIDGE") return status.cafe24BridgeReady ? "본사 결제 링크" : "브리지 준비 필요";
     if (status.keyMode === "test") return "테스트 결제";
     if (status.keyMode === "live") return "실거래 결제";
     if (status.keyMode === "mixed") return "키 종류 불일치";
@@ -357,6 +365,7 @@ export default function FinanceClient({
     const [paymentProvider, setPaymentProvider] = useState<PaymentProviderStatus>(
         initialPaymentProvider ?? {
             provider: "TOSS",
+            providerLabel: "토스페이먼츠",
             providerReady: false,
             clientKeyConfigured: false,
             secretKeyConfigured: false,
@@ -364,6 +373,11 @@ export default function FinanceClient({
             secretKeyMode: "unknown",
             keyMode: "unknown",
             keyPairReady: false,
+            cafe24BridgeUrlConfigured: false,
+            cafe24BridgeUrlValid: false,
+            cafe24BridgeSecretConfigured: false,
+            cafe24BridgeSecretValid: false,
+            cafe24BridgeReady: false,
             siteUrlConfigured: false,
             siteUrlValid: false,
             successUrlPreview: null,
@@ -887,9 +901,21 @@ export default function FinanceClient({
         Boolean(payment.invoiceId) && !payment.invoiceSentAt && ["PENDING", "OVERDUE"].includes(payment.status)
     ).length;
     const paymentProviderMissing = [
-        !paymentProvider.clientKeyConfigured ? "결제 클라이언트 키 미설정" : null,
-        !paymentProvider.secretKeyConfigured ? "결제 서버 키 미설정" : null,
-        paymentProvider.clientKeyConfigured && paymentProvider.secretKeyConfigured && !paymentProvider.keyPairReady
+        paymentProvider.provider === "CAFE24_BRIDGE" && !paymentProvider.cafe24BridgeUrlConfigured
+            ? "본사 카페24 브리지 URL"
+            : null,
+        paymentProvider.provider === "CAFE24_BRIDGE" && paymentProvider.cafe24BridgeUrlConfigured && !paymentProvider.cafe24BridgeUrlValid
+            ? "본사 카페24 브리지 URL 형식"
+            : null,
+        paymentProvider.provider === "CAFE24_BRIDGE" && !paymentProvider.cafe24BridgeSecretConfigured
+            ? "본사 연동 서명키"
+            : null,
+        paymentProvider.provider === "CAFE24_BRIDGE" && paymentProvider.cafe24BridgeSecretConfigured && !paymentProvider.cafe24BridgeSecretValid
+            ? "본사 연동 서명키 형식"
+            : null,
+        paymentProvider.provider === "TOSS" && !paymentProvider.clientKeyConfigured ? "결제 클라이언트 키 미설정" : null,
+        paymentProvider.provider === "TOSS" && !paymentProvider.secretKeyConfigured ? "결제 서버 키 미설정" : null,
+        paymentProvider.provider === "TOSS" && paymentProvider.clientKeyConfigured && paymentProvider.secretKeyConfigured && !paymentProvider.keyPairReady
             ? "테스트/실거래 키 종류 확인"
             : null,
         !paymentProvider.siteUrlConfigured
@@ -1150,13 +1176,13 @@ export default function FinanceClient({
                 <details className="mt-2 rounded-lg border border-gray-100 bg-gray-50 px-3 py-2 text-xs font-semibold text-gray-600 dark:border-gray-800 dark:bg-gray-950 dark:text-gray-300">
                     <summary className="cursor-pointer font-extrabold text-gray-800 dark:text-gray-100">결제 설정 보기</summary>
                     <div className="mt-2 grid gap-2 sm:grid-cols-3">
-                        <p>온라인 결제 상태: {paymentProvider.providerReady ? "토스페이먼츠 온라인 결제를 사용할 수 있습니다." : `준비 필요${paymentProviderMissing.length > 0 ? `: ${paymentProviderMissing.join(", ")}` : ""}`}</p>
+                        <p>온라인 결제 상태: {paymentProvider.providerReady ? `${paymentProvider.providerLabel} 온라인 결제를 사용할 수 있습니다.` : `준비 필요${paymentProviderMissing.length > 0 ? `: ${paymentProviderMissing.join(", ")}` : ""}`}</p>
                         <p>복귀 주소: {paymentProvider.siteUrlValid ? "준비됨" : "확인 필요"}</p>
-                        <p>웹훅 주소: {paymentProvider.webhookUrl ? "등록 가능" : "사이트 주소 필요"}</p>
+                        <p>콜백/웹훅 주소: {paymentProvider.webhookUrl ? "등록 가능" : "사이트 주소 필요"}</p>
                     </div>
                     {paymentProvider.webhookUrl && (
                         <p className="mt-2 break-all font-mono text-[11px]">
-                            토스 관리자 웹훅 등록 주소: {paymentProvider.webhookUrl}
+                            {paymentProvider.providerLabel} 콜백/웹훅 등록 주소: {paymentProvider.webhookUrl}
                         </p>
                     )}
                 </details>

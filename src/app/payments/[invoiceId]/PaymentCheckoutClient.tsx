@@ -3,6 +3,7 @@
 import { useState } from "react";
 
 type TossPaymentMethod = "CARD" | "TRANSFER";
+type PaymentProvider = "TOSS" | "CAFE24_BRIDGE";
 
 declare global {
     interface Window {
@@ -25,7 +26,10 @@ declare global {
 
 type CheckoutResponse = {
     ok: boolean;
+    provider?: PaymentProvider;
+    providerLabel?: string;
     providerReady?: boolean;
+    checkoutUrl?: string;
     clientKey?: string;
     customerKey?: string;
     orderId?: string;
@@ -75,10 +79,14 @@ function loadTossScript() {
 export default function PaymentCheckoutClient({
     invoiceId,
     providerReady,
+    provider,
+    providerLabel,
     amount,
 }: {
     invoiceId: string;
     providerReady: boolean;
+    provider: PaymentProvider;
+    providerLabel: string;
     amount: number;
 }) {
     const [loading, setLoading] = useState(false);
@@ -105,8 +113,21 @@ export default function PaymentCheckoutClient({
             if (!response.ok || !data.ok) {
                 throw new Error(data.error || "결제 준비에 실패했습니다.");
             }
-            if (!data.providerReady || !data.clientKey || !data.customerKey || !data.orderId || !data.amount || !data.orderName || !data.successUrl || !data.failUrl) {
+            const responseProvider = data.provider || provider;
+            if (!data.providerReady || !data.orderId || !data.amount || !data.orderName || !data.successUrl || !data.failUrl) {
                 throw new Error("결제 정보가 부족합니다. 학원으로 문의해 주세요.");
+            }
+
+            if (responseProvider === "CAFE24_BRIDGE") {
+                if (!data.checkoutUrl) {
+                    throw new Error("본사 카페24 결제 링크를 받지 못했습니다. 학원으로 문의해 주세요.");
+                }
+                window.location.assign(data.checkoutUrl);
+                return;
+            }
+
+            if (!data.clientKey || !data.customerKey) {
+                throw new Error("토스 결제 정보가 부족합니다. 학원으로 문의해 주세요.");
             }
 
             await loadTossScript();
@@ -136,11 +157,11 @@ export default function PaymentCheckoutClient({
         <div className="mt-6">
             {!providerReady && (
                 <div className="mb-4 rounded-xl border border-yellow-200 bg-yellow-50 p-4 text-sm text-yellow-900 dark:border-brand-neon-lime/30 dark:bg-brand-neon-lime/10 dark:text-brand-neon-lime">
-                    지금은 온라인 납부 준비 중입니다. 학원에서 계좌이체, 현장 결제, 수동 납부 확인으로 처리할 수 있습니다.
+                    지금은 {providerLabel} 온라인 납부 준비 중입니다. 학원에서 계좌이체, 현장 결제, 수동 납부 확인으로 처리할 수 있습니다.
                 </div>
             )}
 
-            {providerReady && (
+            {providerReady && provider === "TOSS" && (
                 <div className="mb-4 grid grid-cols-2 gap-2">
                     {PAYMENT_METHODS.map((option) => {
                         const active = method === option.value;
@@ -167,6 +188,15 @@ export default function PaymentCheckoutClient({
                 </div>
             )}
 
+            {providerReady && provider === "CAFE24_BRIDGE" && (
+                <div className="mb-4 rounded-xl border border-gray-200 bg-gray-50 p-4 text-sm text-gray-700 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-200">
+                    <p className="font-extrabold">본사 카페24 결제창으로 이동합니다.</p>
+                    <p className="mt-1 text-xs font-bold text-gray-500 dark:text-gray-400">
+                        결제 완료 후 본사 확인 신호가 도착하면 납부 완료로 자동 반영됩니다.
+                    </p>
+                </div>
+            )}
+
             {error && (
                 <div className="mb-4 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-100">
                     {error}
@@ -179,7 +209,11 @@ export default function PaymentCheckoutClient({
                 disabled={loading || amount <= 0 || !providerReady}
                 className="flex w-full items-center justify-center rounded-xl bg-brand-orange-500 px-5 py-4 text-base font-extrabold text-white transition hover:bg-orange-600 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-brand-neon-lime dark:text-brand-navy-900"
             >
-                {loading ? "결제창 여는 중..." : providerReady ? `${amount.toLocaleString("ko-KR")}원 납부하기` : "온라인 납부 준비 중"}
+                {loading
+                    ? "결제창 여는 중..."
+                    : providerReady
+                        ? `${amount.toLocaleString("ko-KR")}원 ${providerLabel}로 납부하기`
+                        : "온라인 납부 준비 중"}
             </button>
 
             <p className="mt-3 text-center text-xs text-gray-500 dark:text-gray-400">

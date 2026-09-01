@@ -22,6 +22,57 @@ function hasValidStizPartnerSecret() {
   return /^[a-f0-9]{64}$/i.test(value);
 }
 
+function hasValidCafe24BridgeSecret() {
+  const value = process.env.CAFE24_PAYMENT_BRIDGE_SECRET?.trim()
+    || process.env.STIZ_PARTNER_SECRET?.trim()
+    || "";
+  return /^[a-f0-9]{64}$/i.test(value);
+}
+
+function selectedPaymentProvider() {
+  const raw = (process.env.PAYMENT_PROVIDER || process.env.NEXT_PUBLIC_PAYMENT_PROVIDER || "TOSS")
+    .trim()
+    .toUpperCase();
+  if (["CAFE24", "CAFE24_BRIDGE", "CAFE24_PAYMENT", "STIZ_CAFE24"].includes(raw)) {
+    return "CAFE24_BRIDGE";
+  }
+  return "TOSS";
+}
+
+function hasHttpUrl(name) {
+  const value = process.env[name]?.trim() || "";
+  if (!value) return false;
+  try {
+    const url = new URL(value);
+    return url.protocol === "https:" || url.protocol === "http:";
+  } catch {
+    return false;
+  }
+}
+
+function requirePaymentEnvironment(missing) {
+  const provider = selectedPaymentProvider();
+  if (provider === "CAFE24_BRIDGE") {
+    const hasBridgeUrl = isPresent("CAFE24_PAYMENT_BRIDGE_URL") || isPresent("STIZ_CAFE24_PAYMENT_API_URL");
+    if (!hasBridgeUrl) {
+      missing.push("CAFE24_PAYMENT_BRIDGE_URL (또는 STIZ_CAFE24_PAYMENT_API_URL)");
+    } else if (!hasHttpUrl("CAFE24_PAYMENT_BRIDGE_URL") && !hasHttpUrl("STIZ_CAFE24_PAYMENT_API_URL")) {
+      missing.push("CAFE24_PAYMENT_BRIDGE_URL (http/https URL 형식)");
+    }
+    if (!hasValidCafe24BridgeSecret()) {
+      missing.push("CAFE24_PAYMENT_BRIDGE_SECRET 또는 STIZ_PARTNER_SECRET (64자 hex 형식의 본사 결제 서명키)");
+    }
+    return;
+  }
+
+  if (!isPresent("TOSS_PAYMENTS_SECRET_KEY")) {
+    missing.push("TOSS_PAYMENTS_SECRET_KEY");
+  }
+  if (!isPresent("NEXT_PUBLIC_TOSS_PAYMENTS_CLIENT_KEY") && !isPresent("TOSS_PAYMENTS_CLIENT_KEY")) {
+    missing.push("NEXT_PUBLIC_TOSS_PAYMENTS_CLIENT_KEY (또는 TOSS_PAYMENTS_CLIENT_KEY)");
+  }
+}
+
 function currentSmsProvider() {
   const provider = (process.env.SMS_PROVIDER || "").trim().toUpperCase();
   if (provider === "BIZPPURIO" || provider === "BIZ_PPURIO" || provider === "PPURIO") return "BIZPPURIO";
@@ -70,7 +121,6 @@ function checkEnvironment() {
     "VAPID_PRIVATE_KEY",
     "GEMINI_API_KEY",
     "INVITE_OTP_SECRET",
-    "TOSS_PAYMENTS_SECRET_KEY",
     "STIZ_PARTNER_SECRET",
   ]);
 
@@ -82,10 +132,7 @@ function checkEnvironment() {
   }
 
   requireSmsEnvironment(missing);
-
-  if (!isPresent("NEXT_PUBLIC_TOSS_PAYMENTS_CLIENT_KEY") && !isPresent("TOSS_PAYMENTS_CLIENT_KEY")) {
-    missing.push("NEXT_PUBLIC_TOSS_PAYMENTS_CLIENT_KEY (또는 TOSS_PAYMENTS_CLIENT_KEY)");
-  }
+  requirePaymentEnvironment(missing);
 
   if (process.env.RELEASE_REQUIRE_INSTAGRAM === "true") {
     if (!isPresent("INSTAGRAM_ACCESS_TOKEN") && !isPresent("META_ACCESS_TOKEN")) {

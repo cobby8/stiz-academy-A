@@ -48,7 +48,7 @@ STIZ_PARTNER_SECRET=64_char_hex_shared_secret
 NEXT_PUBLIC_SITE_URL=https://www.stiz-dasan.kr
 ```
 
-본사 브리지는 다산점에서 받은 서명 요청을 검증한 뒤 `checkoutUrl`을 돌려줘야 합니다. 본사가 결제 완료를 다산점에 알려줄 주소는 `https://www.stiz-dasan.kr/api/payments/cafe24/webhook`입니다.
+본사 브리지는 다산점에서 받은 서명 요청을 검증한 뒤 `checkoutUrl`을 돌려줘야 합니다. 본사가 결제 완료를 다산점에 알려줄 주소는 `https://www.stiz-dasan.kr/api/payments/cafe24/webhook`입니다. 요청/응답/웹훅 계약은 [본사 카페24 결제 브리지 계약](docs/cafe24-payment-bridge-contract.md)에 정리되어 있습니다.
 
 ```bash
 npm run payments:preflight

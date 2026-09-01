@@ -2006,10 +2006,22 @@ export default function StudentManagementClient({
                         <div>
                             <label className="block text-sm font-bold text-gray-700 dark:text-gray-200 mb-1">생년월일 *</label>
                             <input
-                                type="date"
-                                min="1950-01-01" max="2025-12-31"
+                                type="text"
+                                inputMode="numeric"
+                                placeholder="YYYY-MM-DD"
+                                pattern="\d{4}-\d{2}-\d{2}"
+                                title="YYYY-MM-DD 형식으로 입력해주세요."
+                                maxLength={10}
                                 value={birthDate}
-                                onChange={(e) => setBirthDate(e.target.value)}
+                                onChange={(e) => {
+                                    const digits = e.target.value.replace(/\D/g, "").slice(0, 8);
+                                    const formatted = [
+                                        digits.slice(0, 4),
+                                        digits.slice(4, 6),
+                                        digits.slice(6, 8),
+                                    ].filter(Boolean).join("-");
+                                    setBirthDate(formatted);
+                                }}
                                 required
                                 className="w-full border border-gray-300 dark:border-gray-600 rounded-lg p-2.5 text-sm dark:bg-gray-800 dark:text-white focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime"
                             />

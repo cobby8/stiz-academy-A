@@ -5,6 +5,7 @@ const isPlainObject = (value: unknown): value is Record<string, unknown> => {
 };
 
 const inRangeOrMissing = (value: unknown, min: number, max: number) => value == null || (typeof value === "number" && Number.isFinite(value) && value >= min && value <= max);
+const timeOrMissing = (value: unknown) => value == null || (typeof value === "string" && /^\d{2}:\d{2}$/.test(value));
 
 /** 확정 노선 저장에 필요한 최소 구조를 검증하고, 비정상·과대 payload는 저장 전에 차단한다. */
 export function validateRegularDispatchVehicles(value: unknown): unknown[] {
@@ -14,6 +15,7 @@ export function validateRegularDispatchVehicles(value: unknown): unknown[] {
     if (!isPlainObject(vehicle) || !Array.isArray(vehicle.stops) || vehicle.stops.length > 100) {
       throw new Error("차량 또는 정차 목록 형식이 올바르지 않습니다.");
     }
+    if (!timeOrMissing(vehicle.classStart) || !timeOrMissing(vehicle.classEnd)) throw new Error("차량 실행의 수업시간 형식이 올바르지 않습니다.");
     for (const stop of vehicle.stops) {
       if (!isPlainObject(stop) || typeof stop.label !== "string" || stop.label.trim().length === 0 || stop.label.length > 200) {
         throw new Error("정차 위치 형식이 올바르지 않습니다.");

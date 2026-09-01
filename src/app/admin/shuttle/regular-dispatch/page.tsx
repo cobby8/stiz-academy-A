@@ -31,6 +31,17 @@ export default async function RegularDispatchPage({ searchParams }: { searchPara
   const initialPickup = JSON.parse(JSON.stringify(pickup));
   const initialDropoff = JSON.parse(JSON.stringify(dropoff));
   const totalStopCount = new Set(regularStops.stops.map((stop) => stop.stopName).filter(Boolean)).size;
+  const dowNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+  const classTimeByStudent = new Map<string, { dayOfWeek: string; studentName: string; pickupClassTime: string | null; dropoffClassTime: string | null }>();
+  for (const stop of regularStops.stops) {
+    if (!stop.studentName || (stop.direction !== "BOARD" && stop.direction !== "ALIGHT")) continue;
+    const key = `${stop.weekday}:${stop.studentId ?? stop.studentName.replace(/\s/g, "")}`;
+    const row = classTimeByStudent.get(key) ?? { dayOfWeek: dowNames[stop.weekday] ?? "", studentName: stop.studentName, pickupClassTime: null, dropoffClassTime: null };
+    if (stop.direction === "BOARD") row.pickupClassTime = stop.classTime;
+    if (stop.direction === "ALIGHT") row.dropoffClassTime = stop.classTime;
+    classTimeByStudent.set(key, row);
+  }
+  const classTimeMismatches = [...classTimeByStudent.values()].filter((row) => row.pickupClassTime && row.dropoffClassTime && row.pickupClassTime !== row.dropoffClassTime);
 
   return (
     <>
@@ -49,6 +60,7 @@ export default async function RegularDispatchPage({ searchParams }: { searchPara
         initialDropoff={initialDropoff}
         serviceMonth={serviceMonth}
         months={months}
+        classTimeMismatches={classTimeMismatches}
       />
     </>
   );

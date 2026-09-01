@@ -90,6 +90,8 @@ type StopStudent = { name: string; grade: string | null; parentPhone: string | n
 type Stop = { lat: number; lng: number; label: string; students: StopStudent[]; approx: boolean; isHub?: boolean; etaLabel?: string; etaMinutes?: number; etaManual?: number | null };
 type Run = {
   index: number; vehicleName: string; plate: string | null; capacity: number; tripLabel: string | null;
+  /** 정규 셔틀은 한 요일 안에서도 수업시간별 실행이 다르다. 저장·재계산 때 이 실행의 앵커를 보존한다. */
+  classStart?: string | null; classEnd?: string | null; timeGroupLabel?: string | null;
   passengers: number; stops: Stop[]; over: boolean;
   provider: "TMAP" | "LOCAL"; tmapMinutes: number | null; tmapKm: number | null; depotTime: string | null;
   // 첫 노드 출발 시각 / 마지막 노드 도착 시각. 등원=차고지 출발·학원 도착, 하원=학원 출발·차고지 복귀.
@@ -110,6 +112,8 @@ export type DispatchSuggestion = {
   totalRiders: number;
   vehicleFleet: { name: string; plate: string | null; capacity: number }[];
   routingProvider: "TMAP" | "LOCAL"; // 전체적으로 T맵이 쓰였는지
+  /** 정규 셔틀 시간대별 실행 요약. 방학특강에는 없으므로 선택값이다. */
+  timeGroups?: { anchor: string | null; label: string; riders: number }[];
   // 저장 노선 이후의 변동(Phase 2a). 저장본이 있을 때만 채워지고, 관리자 배너 표시에만 쓴다.
   // 기사님 화면(DriverRunClient)은 이 필드를 읽지 않으므로 노출되지 않는다.
   added?: DispatchChange[];

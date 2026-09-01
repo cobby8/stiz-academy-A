@@ -49,7 +49,9 @@ function recomputeRunTimes(cur: DispatchSuggestion, run: Run, pinnedDepart?: str
   const sum = segs.reduce((a, b) => a + b, 0) || 1;
   const scale = run.tmapMinutes != null && run.tmapMinutes > 0 ? run.tmapMinutes / sum : 1;
   const seg = segs.map((s) => s * scale);
-  const csMin = parseHHMM(cur.classStart), ceMin = parseHHMM(cur.classEnd);
+  // 정규 셔틀은 같은 요일의 여러 수업시간을 한 저장 payload에 담는다.
+  // 개별 실행의 앵커를 우선해야 순서 변경·경로 재계산 때 전체 일과의 최저/최고 시각으로 되돌아가지 않는다.
+  const csMin = parseHHMM(run.classStart ?? cur.classStart), ceMin = parseHHMM(run.classEnd ?? cur.classEnd);
   const times = new Array<number>(path.length).fill(0);
   const pinMin = pinnedDepart ? parseHHMM(pinnedDepart) : null;
   if (pinMin != null) {
@@ -440,7 +442,7 @@ export default function RouteSection({ initial, date, refreshKey, apiBase = "/ap
   const activeMapIdx = sug.vehicles.length ? Math.min(Math.max(mapVehicle, 0), sug.vehicles.length - 1) : 0;
   const mapStartPt = isPickup ? (sug.depot ?? sug.academy) : sug.academy;
   const mapEndPt = isPickup ? sug.academy : (sug.depot ?? sug.academy);
-  const sectionTime = isPickup ? sug.classStart : sug.classEnd;
+  const sectionTime = (sug.timeGroups?.length ?? 0) > 1 ? "시간대별" : (isPickup ? sug.classStart : sug.classEnd);
 
   return (
     <section className="rounded-2xl border border-gray-200 bg-white p-3 dark:border-gray-700 dark:bg-gray-800">
@@ -450,7 +452,7 @@ export default function RouteSection({ initial, date, refreshKey, apiBase = "/ap
           <span className={`grid h-8 w-8 place-items-center rounded-xl text-lg ${isPickup ? "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-200" : "bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-200"}`}>{isPickup ? "⬆" : "⬇"}</span>
           <div>
             <p className="text-[15px] font-black text-gray-900 dark:text-white">{sectionTime ?? "-"} · {isPickup ? "등원" : "하원"}</p>
-            <p className="text-[11.5px] font-bold text-gray-500">{sug.classStart ?? "-"}{sug.classEnd ? `~${sug.classEnd}` : ""} 수업 · 탑승 {sug.totalRiders}명{rerouting ? " · 🔄 경로 재계산…" : ""}</p>
+            <p className="text-[11.5px] font-bold text-gray-500">{sug.timeGroups && sug.timeGroups.length > 1 ? `${sug.timeGroups.length}개 수업시간` : `${sug.classStart ?? "-"}${sug.classEnd ? `~${sug.classEnd}` : ""} 수업`} · 탑승 {sug.totalRiders}명{rerouting ? " · 🔄 경로 재계산…" : ""}</p>
           </div>
         </div>
         <div className="flex items-center gap-1.5 print:hidden">

@@ -8,6 +8,9 @@ const noticeRoute = readFileSync("src/app/api/admin/shuttle/regular-notice/route
 const geocodePanel = readFileSync("src/components/shuttle/RegularStopGeocodePanel.tsx", "utf8");
 const dispatchPage = readFileSync("src/app/admin/shuttle/regular-dispatch/page.tsx", "utf8");
 const seasonalRouteSection = readFileSync("src/components/seasonal/RouteSection.tsx", "utf8");
+const regularDispatch = readFileSync("src/lib/regular/shuttle-dispatch.ts", "utf8");
+const regularPayload = readFileSync("src/lib/regular/regularDispatchPayload.ts", "utf8");
+const regularDispatchClient = readFileSync("src/app/admin/shuttle/regular-dispatch/RegularDispatchClient.tsx", "utf8");
 
 test("정규 셔틀 월 선택은 한국시간과 가장 가까운 이전 월을 사용한다", () => {
   assert.match(client, /timeZone: "Asia\/Seoul"/);
@@ -69,4 +72,24 @@ test("정규 셔틀 좌표는 검색 없이 지도를 직접 눌러 지정할 �
 test("정규 배차의 좌표 누락 명단은 기본 접고 설정 화면으로 안내한다", () => {
   assert.match(seasonalRouteSection, /href="#regular-stop-coordinate-setup"/);
   assert.match(seasonalRouteSection, /누락 학생 확인/);
+});
+
+test("정규 셔틀 자동 제안은 등원 시작·하원 종료 시각별로 학생을 분리한다", () => {
+  assert.match(regularDispatch, /direction === "PICKUP" \? rider\.classStart : rider\.classEnd/);
+  assert.match(regularDispatch, /orderedGroups/);
+  assert.match(regularDispatch, /timeGroupLabel: label/);
+  assert.match(regularDispatch, /timeGroups: suggestions\.map/);
+});
+
+test("시간대별 실행은 순서 변경과 저장 후에도 자기 수업시간 앵커를 유지한다", () => {
+  assert.match(seasonalRouteSection, /run\.classStart \?\? cur\.classStart/);
+  assert.match(seasonalRouteSection, /run\.classEnd \?\? cur\.classEnd/);
+  assert.match(regularPayload, /timeOrMissing\(vehicle\.classStart\)/);
+  assert.match(regularPayload, /timeOrMissing\(vehicle\.classEnd\)/);
+});
+
+test("등원과 하원 수업시간이 다르면 자동 수정하지 않고 관리자에게 표시한다", () => {
+  assert.match(dispatchPage, /classTimeMismatches/);
+  assert.match(regularDispatchClient, /등원·하원 수업시간이 다른 학생/);
+  assert.match(regularDispatchClient, /자동으로 고치지 않았습니다/);
 });

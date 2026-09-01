@@ -15,16 +15,18 @@ const DOW_LABEL: Record<string, string> = {
   Mon: "월요일", Tue: "화요일", Wed: "수요일", Thu: "목요일", Fri: "금요일", Sat: "토요일", Sun: "일요일",
 };
 
-export default function RegularDispatchClient({ weekdays, initialDay, initialPickup, initialDropoff, serviceMonth, months }: {
+export default function RegularDispatchClient({ weekdays, initialDay, initialPickup, initialDropoff, serviceMonth, months, classTimeMismatches }: {
   weekdays: string[];            // 셔틀 학생이 있는 요일 목록("Mon" 등, 월→일 정렬)
   initialDay: string;            // 최초 표시 요일
   initialPickup: DispatchSuggestion;
   initialDropoff: DispatchSuggestion;
   serviceMonth: string;
   months: string[];
+  classTimeMismatches: { dayOfWeek: string; studentName: string; pickupClassTime: string | null; dropoffClassTime: string | null }[];
 }) {
   const router = useRouter();
   const [day, setDay] = useState<string>(initialDay);
+  const visibleMismatches = classTimeMismatches.filter((row) => row.dayOfWeek === day);
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-4">
@@ -52,6 +54,8 @@ export default function RegularDispatchClient({ weekdays, initialDay, initialPic
             </button>
           ))}
         </div>
+
+        {visibleMismatches.length > 0 && <div className="mt-3 rounded-xl border border-amber-300 bg-amber-50 p-3 text-xs text-amber-900 dark:border-amber-700 dark:bg-amber-950/30 dark:text-amber-100"><p className="font-black">⚠ 등원·하원 수업시간이 다른 학생 {visibleMismatches.length}명</p><ul className="mt-1 space-y-1">{visibleMismatches.map((row) => <li key={`${row.studentName}-${row.pickupClassTime}-${row.dropoffClassTime}`}><b>{row.studentName}</b> · 등원 {row.pickupClassTime} / 하원 {row.dropoffClassTime}</li>)}</ul><p className="mt-1 font-bold">자동으로 고치지 않았습니다. 차량 시트의 수업시간을 확인해 주세요.</p></div>}
 
         <p className="mt-3 text-[12.5px] font-black text-gray-700 dark:text-gray-200">📅 {DOW_LABEL[day] ?? day} 노선</p>
 

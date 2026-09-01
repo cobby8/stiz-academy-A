@@ -3,7 +3,7 @@ import ShuttleSectionTabs from "../ShuttleSectionTabs";
 import SeasonalHeader from "../../seasonal/SeasonalHeader";
 import { getRegularShuttleWeekdays } from "@/lib/regular/shuttleRoster";
 import { getRegularDispatchForView } from "@/lib/regular/regularDispatchRoute";
-import { getRegularStopsWithoutCoords } from "@/lib/shuttle/regularImport";
+import { getRegularShuttleStops, getRegularStopsWithoutCoords } from "@/lib/shuttle/regularImport";
 import RegularStopGeocodePanel from "@/components/shuttle/RegularStopGeocodePanel";
 import { getRegularShuttleMonths } from "@/lib/shuttle/regularImport";
 
@@ -19,8 +19,9 @@ export default async function RegularDispatchPage({ searchParams }: { searchPara
   const initialDay = weekdays[0] ?? "Mon";
 
   // 좌표 없는 정류장(1회용 좌표 채우기 패널용). 배차 조회와 병렬.
-  const [missingStops, [pickup, dropoff]] = await Promise.all([
+  const [missingStops, regularStops, [pickup, dropoff]] = await Promise.all([
     getRegularStopsWithoutCoords(serviceMonth),
+    getRegularShuttleStops(serviceMonth),
     // 저장본이 있으면 T맵 없이 그대로(제공량 절약). 없을 때만 T맵으로 초안 계산.
     Promise.all([
       getRegularDispatchForView(initialDay, "PICKUP", true, serviceMonth),
@@ -29,13 +30,18 @@ export default async function RegularDispatchPage({ searchParams }: { searchPara
   ]);
   const initialPickup = JSON.parse(JSON.stringify(pickup));
   const initialDropoff = JSON.parse(JSON.stringify(dropoff));
+  const totalStopCount = new Set(regularStops.stops.map((stop) => stop.stopName).filter(Boolean)).size;
 
   return (
     <>
       <SeasonalHeader eyebrow="SHUTTLE" title="셔틀 관리" subtitle="정규 수업 셔틀을 요일별로 자동 배차합니다(학생 신청서 좌표 기반)." />
       <ShuttleSectionTabs />
       {/* 1회용 준비 작업: 좌표 없는 정류장이 있으면 좌표 채우기 패널을 배차 위에 노출 */}
-      <RegularStopGeocodePanel stopNames={missingStops} />
+      <RegularStopGeocodePanel
+        stopNames={missingStops}
+        totalStopCount={totalStopCount}
+        initialCompletedCount={Math.max(0, totalStopCount - missingStops.length)}
+      />
       <RegularDispatchClient
         weekdays={weekdays}
         initialDay={initialDay}

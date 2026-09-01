@@ -5,6 +5,9 @@ import { readFileSync } from "node:fs";
 const client = readFileSync("src/app/admin/shuttle/regular/RegularShuttleClient.tsx", "utf8");
 const routeSection = readFileSync("src/components/shuttle/RegularRouteSection.tsx", "utf8");
 const noticeRoute = readFileSync("src/app/api/admin/shuttle/regular-notice/route.ts", "utf8");
+const geocodePanel = readFileSync("src/components/shuttle/RegularStopGeocodePanel.tsx", "utf8");
+const dispatchPage = readFileSync("src/app/admin/shuttle/regular-dispatch/page.tsx", "utf8");
+const seasonalRouteSection = readFileSync("src/components/seasonal/RouteSection.tsx", "utf8");
 
 test("정규 셔틀 월 선택은 한국시간과 가장 가까운 이전 월을 사용한다", () => {
   assert.match(client, /timeZone: "Asia\/Seoul"/);
@@ -46,4 +49,17 @@ test("문자 원장은 변경 시 승인을 무효화하고 승인된 최신 pay
   assert.match(noticeRoute, /status='UNCERTAIN'/);
   assert.match(noticeRoute, /status='SENT'/);
   assert.match(noticeRoute, /eventId: payload\.payloadHash/);
+});
+
+test("정규 셔틀 좌표는 정류장별 후보와 지도 핀을 확인한 뒤 한 곳씩 저장한다", () => {
+  assert.match(geocodePanel, /검색 후보를 선택하세요/);
+  assert.match(geocodePanel, /draggable: true/);
+  assert.match(geocodePanel, /이 위치 확인 후 저장/);
+  assert.match(geocodePanel, /entries: \[\{ stopName: selectedName/);
+  assert.match(dispatchPage, /totalStopCount/);
+});
+
+test("정규 배차의 좌표 누락 명단은 기본 접고 설정 화면으로 안내한다", () => {
+  assert.match(seasonalRouteSection, /href="#regular-stop-coordinate-setup"/);
+  assert.match(seasonalRouteSection, /누락 학생 확인/);
 });

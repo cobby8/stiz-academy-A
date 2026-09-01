@@ -632,8 +632,15 @@ export default function RouteSection({ initial, date, refreshKey, apiBase = "/ap
 
       {sug.unassigned.length > 0 && (
         <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-3 dark:border-amber-500/30 dark:bg-amber-500/10">
-          <div className="text-[12.5px] font-black text-amber-800 dark:text-amber-200">⚠ 좌표가 없어 배차하지 못한 학생 {sug.unassigned.length}명</div>
-          <div className="mt-1 text-[12px] text-amber-700 dark:text-amber-200">{sug.unassigned.map((u) => `${u.name}(${u.label ?? "위치없음"})`).join(", ")}</div>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="text-[12.5px] font-black text-amber-800 dark:text-amber-200">⚠ 좌표가 없어 배차하지 못한 학생 {sug.unassigned.length}명</div>
+            {!rosterEditable && <a href="#regular-stop-coordinate-setup" className="rounded-lg bg-amber-700 px-3 py-1.5 text-xs font-black text-white">좌표 설정으로 이동</a>}
+          </div>
+          {rosterEditable ? (
+            <div className="mt-1 text-[12px] text-amber-700 dark:text-amber-200">{sug.unassigned.map((u) => `${u.name}(${u.label ?? "위치없음"})`).join(", ")}</div>
+          ) : (
+            <details className="mt-2 text-[12px] text-amber-700 dark:text-amber-200"><summary className="cursor-pointer font-bold">누락 학생 확인</summary><div className="mt-1">{sug.unassigned.map((u) => `${u.name}(${u.label ?? "위치없음"})`).join(", ")}</div></details>
+          )}
         </div>
       )}
 

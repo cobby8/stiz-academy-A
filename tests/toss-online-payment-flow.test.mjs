@@ -59,6 +59,8 @@ test("토스 승인 처리에는 멱등키와 재시도 보호가 있다", () =>
 test("학부모 결제 화면은 토스 SDK 결과를 검증하고 안내 화면으로 복귀시킨다", () => {
   assert.match(checkoutClient, /https:\/\/js\.tosspayments\.com\/v2\/standard/);
   assert.match(checkoutClient, /requestPayment/);
+  assert.match(checkoutClient, /CARD/);
+  assert.match(checkoutClient, /TRANSFER/);
   assert.match(checkoutClient, /data\.orderId/);
   assert.match(checkoutClient, /data\.amount/);
   assert.match(checkoutClient, /data\.successUrl/);
@@ -68,8 +70,21 @@ test("학부모 결제 화면은 토스 SDK 결과를 검증하고 안내 화면
   assert.match(successClient, /orderId/);
   assert.match(successClient, /amount/);
   assert.match(successClient, /invoiceId/);
+  assert.match(successClient, /MAX_CONFIRM_RETRIES/);
+  assert.match(successClient, /retryable/);
+  assert.match(successClient, /다시 확인/);
   assert.match(failPage, /params\.invoiceId/);
   assert.match(invoicePage, /PaymentCheckoutClient/);
+});
+
+test("결제 승인과 웹훅은 청구서 소유권과 중복 처리를 더 좁게 검증한다", () => {
+  assert.match(checkoutRoute, /configurationMissing" in result/);
+  assert.match(ledger, /invoiceId\?: string \| null/);
+  assert.match(ledger, /tx\."invoiceId" = \$3/);
+  assert.match(ledger, /amount: Number\(tx\.amount\)/);
+  assert.match(ledger, /TOSS_CONFIRM_VERIFICATION_FAILED/);
+  assert.match(ledger, /makeTossWebhookEventId/);
+  assert.match(ledger, /generated:\$\{digest\}/);
 });
 
 test("관리자는 온라인 결제 운영 준비 상태를 개발 메시지 없이 확인한다", () => {

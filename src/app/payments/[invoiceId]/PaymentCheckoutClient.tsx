@@ -2,12 +2,14 @@
 
 import { useState } from "react";
 
+type TossPaymentMethod = "CARD" | "TRANSFER";
+
 declare global {
     interface Window {
         TossPayments?: (clientKey: string) => {
             payment: (options: { customerKey: string }) => {
                 requestPayment: (options: {
-                    method: "CARD";
+                    method: TossPaymentMethod;
                     amount: { currency: "KRW"; value: number };
                     orderId: string;
                     orderName: string;
@@ -35,6 +37,16 @@ type CheckoutResponse = {
     failUrl?: string;
     error?: string;
 };
+
+const PAYMENT_METHODS: {
+    value: TossPaymentMethod;
+    label: string;
+    description: string;
+    icon: string;
+}[] = [
+        { value: "CARD", label: "카드/간편결제", description: "카드, 토스페이 등", icon: "credit_card" },
+        { value: "TRANSFER", label: "계좌이체", description: "실시간 계좌이체", icon: "account_balance" },
+    ];
 
 function loadTossScript() {
     return new Promise<void>((resolve, reject) => {
@@ -71,6 +83,7 @@ export default function PaymentCheckoutClient({
 }) {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [method, setMethod] = useState<TossPaymentMethod>("CARD");
 
     async function startPayment() {
         if (!providerReady) {
@@ -104,7 +117,7 @@ export default function PaymentCheckoutClient({
             const tossPayments = window.TossPayments(data.clientKey);
             const payment = tossPayments.payment({ customerKey: data.customerKey });
             await payment.requestPayment({
-                method: "CARD",
+                method,
                 amount: { currency: "KRW", value: data.amount },
                 orderId: data.orderId,
                 orderName: data.orderName,
@@ -127,6 +140,33 @@ export default function PaymentCheckoutClient({
                 </div>
             )}
 
+            {providerReady && (
+                <div className="mb-4 grid grid-cols-2 gap-2">
+                    {PAYMENT_METHODS.map((option) => {
+                        const active = method === option.value;
+                        return (
+                            <button
+                                key={option.value}
+                                type="button"
+                                onClick={() => setMethod(option.value)}
+                                disabled={loading}
+                                className={`flex min-h-16 items-center gap-3 rounded-xl border px-3 text-left transition disabled:cursor-not-allowed disabled:opacity-60 ${
+                                    active
+                                        ? "border-brand-orange-500 bg-orange-50 text-brand-navy-900 dark:border-brand-neon-lime dark:bg-brand-neon-lime/15 dark:text-white"
+                                        : "border-gray-200 bg-white text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-200 dark:hover:bg-gray-800"
+                                }`}
+                            >
+                                <span className="material-symbols-outlined text-xl" aria-hidden="true">{option.icon}</span>
+                                <span>
+                                    <span className="block text-sm font-extrabold">{option.label}</span>
+                                    <span className="block text-xs font-bold text-gray-500 dark:text-gray-400">{option.description}</span>
+                                </span>
+                            </button>
+                        );
+                    })}
+                </div>
+            )}
+
             {error && (
                 <div className="mb-4 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-100">
                     {error}
@@ -139,7 +179,7 @@ export default function PaymentCheckoutClient({
                 disabled={loading || amount <= 0 || !providerReady}
                 className="flex w-full items-center justify-center rounded-xl bg-brand-orange-500 px-5 py-4 text-base font-extrabold text-white transition hover:bg-orange-600 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-brand-neon-lime dark:text-brand-navy-900"
             >
-                {loading ? "결제창 준비 중..." : providerReady ? `${amount.toLocaleString("ko-KR")}원 납부하기` : "온라인 납부 준비 중"}
+                {loading ? "결제창 여는 중..." : providerReady ? `${amount.toLocaleString("ko-KR")}원 납부하기` : "온라인 납부 준비 중"}
             </button>
 
             <p className="mt-3 text-center text-xs text-gray-500 dark:text-gray-400">

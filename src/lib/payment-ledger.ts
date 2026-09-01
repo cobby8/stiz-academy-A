@@ -118,6 +118,33 @@ function makeTossIdempotencyKey(transactionId: string, orderId: string) {
         : makeUuidFromSeed(`stiz-toss-confirm:${transactionId}:${orderId}`);
 }
 
+function makeTossWebhookEventId(input: {
+    payload: unknown;
+    explicitEventId: string | null;
+    eventType: string | null;
+    paymentKey: string | null;
+    orderId: string | null;
+    status: string | null;
+    totalAmount: number | null;
+}) {
+    if (input.explicitEventId) return input.explicitEventId;
+
+    const fingerprintSource = input.paymentKey || input.orderId || input.eventType || input.status || input.totalAmount
+        ? {
+            eventType: input.eventType,
+            paymentKey: input.paymentKey,
+            orderId: input.orderId,
+            status: input.status,
+            totalAmount: input.totalAmount,
+        }
+        : input.payload;
+    const digest = createHash("sha256")
+        .update(JSON.stringify(fingerprintSource ?? null))
+        .digest("hex")
+        .slice(0, 48);
+    return `generated:${digest}`;
+}
+
 function inferTossKeyMode(key: string): TossKeyMode {
     if (key.startsWith("test_")) return "test";
     if (key.startsWith("live_")) return "live";
@@ -897,7 +924,6 @@ export async function getInvoiceForParent(invoiceId: string, owner: PaymentOwner
         `,
         invoiceId,
         owner.authUserId,
-        owner.email || "",
     );
 
     return rows[0] ?? null;
@@ -1124,6 +1150,7 @@ export async function confirmTossPayment(input: {
     paymentKey: string;
     orderId: string;
     amount: number;
+    invoiceId?: string | null;
     owner: PaymentOwnerIdentity;
 }) {
     await ensurePaymentInfrastructure();
@@ -1135,6 +1162,7 @@ export async function confirmTossPayment(input: {
          JOIN "Payment" p ON p.id = tx."paymentId"
          JOIN "User" u ON u.id = tx."parentId"
          WHERE tx."orderId" = $1
+           AND ($3::text IS NULL OR tx."invoiceId" = $3)
            AND (
              u."authUserId" = $2
              OR (u."authUserId" IS NULL AND u.id = $2)
@@ -1142,7 +1170,7 @@ export async function confirmTossPayment(input: {
          LIMIT 1`,
         input.orderId,
         input.owner.authUserId,
-        input.owner.email || "",
+        input.invoiceId ?? null,
     );
     const tx = txRows[0];
     if (!tx) return { ok: false as const, error: "결제 주문을 찾을 수 없습니다." };
@@ -1178,7 +1206,7 @@ export async function confirmTossPayment(input: {
         body: JSON.stringify({
             paymentKey: input.paymentKey,
             orderId: input.orderId,
-            amount: Number(input.amount),
+            amount: Number(tx.amount),
         }),
     });
 
@@ -1227,6 +1255,19 @@ export async function confirmTossPayment(input: {
 
     if (result.status !== "DONE" || result.paymentKey !== input.paymentKey
         || result.orderId !== input.orderId || Number(result.totalAmount) !== Number(tx.amount)) {
+        await prisma.$executeRawUnsafe(
+            `UPDATE "PaymentTransaction"
+             SET "paymentKey" = $2,
+                 status = CASE WHEN status = 'DONE' THEN status ELSE 'FAILED' END,
+                 "failureCode" = 'TOSS_CONFIRM_VERIFICATION_FAILED',
+                 "failureMessage" = 'Toss confirm response did not match the stored invoice transaction',
+                 "rawResponse" = $3::jsonb,
+                 "updatedAt" = NOW()
+             WHERE id = $1`,
+            tx.id,
+            input.paymentKey,
+            JSON.stringify(result),
+        );
         return { ok: false as const, error: "Toss 결제 검증에 실패했습니다." };
     }
 
@@ -1241,10 +1282,18 @@ export async function recordTossWebhook(payload: unknown) {
 
     const payloadRecord = asRecord(payload);
     const data = asRecord(payloadRecord.data ?? payload);
-    const eventId = readString(payloadRecord.eventId) ?? readString(payloadRecord.id);
     const eventType = readString(payloadRecord.eventType) ?? readString(payloadRecord.type) ?? readString(data.status);
     const paymentKey = readString(data.paymentKey);
     const orderId = readString(data.orderId);
+    const eventId = makeTossWebhookEventId({
+        payload,
+        explicitEventId: readString(payloadRecord.eventId) ?? readString(payloadRecord.id),
+        eventType,
+        paymentKey,
+        orderId,
+        status: readString(data.status),
+        totalAmount: readNumber(data.totalAmount),
+    });
 
     const eventRows = await prisma.$queryRawUnsafe<Array<{ id: string; processed: boolean }>>(
         `INSERT INTO "PaymentWebhookEvent" (

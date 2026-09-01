@@ -26,6 +26,22 @@ NEXT_PUBLIC_KAKAO_MAP_JS_KEY=your_kakao_javascript_key
 
 카카오 개발자 콘솔의 JavaScript SDK 허용 도메인에 운영 도메인과 로컬 개발 주소를 등록해야 합니다. 키가 없거나 지도 SDK가 일시적으로 실패하면 신청서는 기존 텍스트 위치 입력 방식으로 자동 전환됩니다.
 
+## Online payment configuration
+
+토스페이먼츠 온라인 PG를 사용하려면 운영 환경에 다음 값을 등록합니다.
+
+```env
+NEXT_PUBLIC_TOSS_PAYMENTS_CLIENT_KEY=your_toss_client_key
+TOSS_PAYMENTS_SECRET_KEY=your_toss_secret_key
+NEXT_PUBLIC_SITE_URL=https://www.stiz-dasan.kr
+```
+
+토스 관리자에는 웹훅 주소를 `https://www.stiz-dasan.kr/api/payments/toss/webhook`으로 등록합니다. 실제 결제 요청 없이 설정만 확인할 때는 다음 명령을 사용합니다.
+
+```bash
+npm run payments:preflight
+```
+
 You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
 
 This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.

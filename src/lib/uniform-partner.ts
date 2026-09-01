@@ -6,6 +6,8 @@ export const STIZ_UNIFORM_API_URL = "https://custom.stiz.kr/api/orders";
 
 export type UniformOrderStudentInput = {
   studentName: string;
+  design?: string | null;
+  initials?: string | null;
   backNumber?: string | null;
   topSize?: string | null;
   bottomSize?: string | null;
@@ -22,6 +24,8 @@ export type UniformOrderFormInput = {
 
 export type NormalizedUniformOrderItem = {
   studentName: string;
+  design: string | null;
+  initials: string | null;
   backNumber: string | null;
   topSize: string | null;
   bottomSize: string | null;
@@ -100,11 +104,13 @@ export function normalizeUniformOrderInput(input: UniformOrderFormInput): Normal
   const students = input.students
     .map((student) => {
       const studentName = compact(student.studentName);
+      const design = compact(student.design);
+      const initials = compact(student.initials);
       const backNumber = compact(student.backNumber);
       const topSize = compact(student.topSize);
       const bottomSize = compact(student.bottomSize);
       const quantity = (topSize ? 1 : 0) + (bottomSize ? 1 : 0);
-      return studentName ? { studentName, backNumber, topSize, bottomSize, quantity } : null;
+      return studentName ? { studentName, design, initials, backNumber, topSize, bottomSize, quantity } : null;
     })
     .filter((student): student is NormalizedUniformOrderItem => Boolean(student));
 
@@ -118,6 +124,8 @@ export function normalizeUniformOrderInput(input: UniformOrderFormInput): Normal
     .map((student) => ({
       bottomSize: student.bottomSize,
       backNumber: student.backNumber,
+      design: student.design,
+      initials: student.initials,
       studentName: student.studentName,
       topSize: student.topSize,
     }))
@@ -164,6 +172,8 @@ export function buildStizUniformOrderPayload(input: {
       const options: Record<string, string> = {
         "학생명": student.studentName,
       };
+      if (student.design) options["디자인"] = student.design;
+      if (student.initials) options["이니셜"] = student.initials;
       if (student.backNumber) options["등번호"] = student.backNumber;
       if (student.topSize) options["상의"] = student.topSize;
       if (student.bottomSize) options["하의"] = student.bottomSize;

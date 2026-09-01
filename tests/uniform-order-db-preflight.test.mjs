@@ -31,6 +31,8 @@ test("유니폼 주문 화면과 본사 전송이 사용하는 필수 컬럼을 
     { table: "UniformOrder", column: "partnerRequestId" },
   ]);
   assert.ok(REQUIRED_UNIFORM_ORDER_COLUMNS.UniformOrder.includes("stizSyncStatus"));
+  assert.ok(REQUIRED_UNIFORM_ORDER_COLUMNS.UniformOrderItem.includes("design"));
+  assert.ok(REQUIRED_UNIFORM_ORDER_COLUMNS.UniformOrderItem.includes("initials"));
   assert.ok(REQUIRED_UNIFORM_ORDER_COLUMNS.UniformOrderItem.includes("topSize"));
   assert.ok(REQUIRED_UNIFORM_ORDER_COLUMNS.UniformOrderItem.includes("bottomSize"));
 });

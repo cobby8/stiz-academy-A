@@ -8,7 +8,8 @@ export const REQUIRED_UNIFORM_ORDER_COLUMNS = {
     "stizMessage", "sendAttempts", "nextRetryAt", "lastError", "lastSentAt", "createdAt", "updatedAt",
   ],
   UniformOrderItem: [
-    "id", "uniformOrderId", "studentName", "backNumber", "topSize", "bottomSize", "quantity", "createdAt",
+    "id", "uniformOrderId", "studentName", "design", "initials",
+    "backNumber", "topSize", "bottomSize", "quantity", "createdAt",
   ],
 };
 

@@ -25,7 +25,7 @@ export default function UniformApplyPage() {
             <p className="mb-3 text-sm font-bold uppercase tracking-widest text-brand-orange-500 dark:text-brand-neon-lime">UNIFORM</p>
             <h1 className="mb-3 break-keep text-3xl font-black md:text-4xl">유니폼 추가주문 신청</h1>
             <p className="max-w-xl text-base text-blue-200">
-              학부모 정보와 학생별 사이즈를 남겨주세요. 형제·자매는 한 신청서에 함께 접수됩니다.
+              학부모 정보와 학생별 디자인, 이니셜, 사이즈를 남겨주세요. 형제·자매는 한 신청서에 함께 접수됩니다.
             </p>
           </AnimateOnScroll>
         </div>

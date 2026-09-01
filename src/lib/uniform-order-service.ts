@@ -104,6 +104,8 @@ export async function createUniformOrderSubmission(input: UniformOrderFormInput)
       items: {
         create: normalized.students.map((student) => ({
           studentName: student.studentName,
+          design: student.design,
+          initials: student.initials,
           backNumber: student.backNumber,
           topSize: student.topSize,
           bottomSize: student.bottomSize,
@@ -235,6 +237,8 @@ export async function getUniformOrdersForAdmin(limit = 150): Promise<UniformOrde
 function toNormalizedItem(item: UniformOrderItem): NormalizedUniformOrderItem {
   return {
     studentName: item.studentName,
+    design: item.design,
+    initials: item.initials,
     backNumber: item.backNumber,
     topSize: item.topSize,
     bottomSize: item.bottomSize,

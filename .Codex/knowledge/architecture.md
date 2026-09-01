@@ -220,3 +220,10 @@ STIZ 농구교실 다산점의 홈페이지와 학원관리 플랫폼이다. 일
 - 학부모 요청 링크 생성·복사·활성 링크 취소는 개별 학생 상세 화면에서 `studentId`로 정확히 관리한다.
 - `OperationsRequest`, `OperationsCommand`, `OperationsSyncAttempt`, 감사 원장, 공개 `/request/[token]`, 실시간 이벤트와 Rallyz 출석 서버 기능은 다른 운영 기능이 계속 사용하므로 보존한다.
 - 다음 접수 창구는 카카오채널을 우선 검토하되, 채널 입력은 기존 승인 원장에 DRAFT/HELD로 연결하고 자동 실행하지 않는다.
+
+# 2026-09-02: 유니폼 주문은 디자인·이니셜까지 구조화한다
+
+- 공개 `/apply/uniform` 신청서는 학생별 디자인, 이니셜, 등번호, 상·하의 사이즈를 필수 입력으로 받는다.
+- `UniformOrderItem`은 `design`, `initials`, `backNumber`, `topSize`, `bottomSize`를 구조화 필드로 저장한다. 본사 전송 payload의 옵션도 같은 값을 사용한다.
+- 중복 판단은 주문자 연락처와 학생 이름뿐 아니라 디자인, 이니셜, 등번호, 사이즈 조합까지 포함한다. 같은 이름의 다른 디자인 주문을 덮어쓰지 않기 위해서다.
+- 본사 전송은 `STIZ_PARTNER_SECRET` HMAC 서명이 양쪽 서버에 모두 설정된 뒤에만 정상 실행한다. 주문 재전송은 기존 `partnerRequestId`를 재사용한다.

@@ -77,7 +77,13 @@ function summarizeItems(order: UniformOrderAdminView) {
         .filter(Boolean)
         .join(" · ");
       const number = item.backNumber ? `#${item.backNumber}` : "등번호 없음";
-      return `${item.studentName} (${number}${sizes ? ` · ${sizes}` : ""})`;
+      const details = [
+        item.design,
+        item.initials ? `이니셜 ${item.initials}` : "",
+        number,
+        sizes,
+      ].filter(Boolean).join(" · ");
+      return `${item.studentName} (${details})`;
     })
     .join(" / ");
 }

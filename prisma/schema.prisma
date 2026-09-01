@@ -530,6 +530,8 @@ model UniformOrderItem {
   id             String       @id @default(dbgenerated("(gen_random_uuid())::text"))
   uniformOrderId String
   studentName    String
+  design         String?
+  initials       String?
   backNumber     String?
   topSize        String?
   bottomSize     String?

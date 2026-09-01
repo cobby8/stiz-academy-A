@@ -21,7 +21,7 @@
 | 신규 수강신청 1건 | PM | 승인 대기 | 3중 등록 재조회 후 청구·알림·초대는 미리보기 승인 전 HELD, 승인 후 재조회 완료 |
 | 대량 SMS 큐 | developer + tester + reviewer | 완료 | 최대 500명 접수·멱등·비동기 처리·진행률·UNCERTAIN 격리 검증 |
 | Solapi 일괄 전송 | developer + tester + reviewer | 완료 | send-many 1회 접수·부분 실패·10분 유예·최종 결과 재조회 검증 |
-| 유니폼 본사 연동 | developer + tester | 완료 | 자체 폼·DB 원장·HMAC 전송·관리자 상태 화면·Vercel DB 프리플라이트·로컬 빌드 검증 |
+| 유니폼 본사 연동 | developer + tester | 완료(발송 대기) | 자체 폼·DB 원장·디자인/이니셜·HMAC 전송·관리자 상태 화면·운영 DB 프리플라이트·로컬 빌드 검증 |
 
 ## 구현 기록
 
@@ -48,6 +48,7 @@
 
 ## 테스트 결과
 
+- 유니폼 주문 보강: `node --test tests\uniform-partner.test.mjs tests\uniform-order-db-preflight.test.mjs tests\uniform-orders.test.mjs`, `npx.cmd tsc --noEmit`, `npm run release:code-check`, `npm run build` 통과. 운영 DB 컬럼과 최근 2건 디자인/이니셜 보강 완료. 본사 주문 전송·SMS 발송·배포 호출 없음.
 - Solapi 묶음 발송 최종 재QA: 타깃 20건과 문자·장부 확대 회귀 129건, `npx.cmd tsc --noEmit`, `git diff --check` 모두 통과했다.
 - `send-many/detail` 단일 접수·500명 상한·`customFields.deliveryId` 매칭, 4xx 실패/5xx·누락·timeout 불확실 분리, `groupInfo.groupId`·객체형 목록/customFields 호환, Bizppurio 순차 호환, `ACCEPTED`와 최종 `SENT` 분리, stale sweep의 ACCEPTED 제외, 결과 누락 10분 유예·그룹 5개 제한·페이지네이션·최종 집계·providerStatus 노출을 확인했다.
 - 테스트는 실제 Solapi·Bizppurio·운영 DB를 호출하지 않았다. 신규 공급자 테스트는 소스 계약 검사 중심이므로 실제 응답 fixture 기반 분기 행동과 DB 상태 전이·페이지네이션 통합 검증은 후속 보강 권장이다.
@@ -85,6 +86,7 @@
 - RESUME/CLASS_ADD/CLASS_CHANGE 자동 실행 어댑터는 다음 그룹이다.
 
 ## 작업 로그 (최근 10건)
+- 2026-09-02: 유니폼 주문 항목에 디자인·이니셜 필드를 추가하고 신청 폼·관리자 화면·본사 payload·DB 검사·운영 DB 최근 2건을 보강했다. release:code-check 1,331건·빌드 통과, 본사 주문/SMS 발송 없음.
 - 2026-09-01: 관리자 신규 원생 등록의 생년월일 입력을 모바일·자동 입력에 안정적인 YYYY-MM-DD 숫자 입력 방식으로 수정했다. `tsc --noEmit` 통과, 운영 DB·배포·외부 발송 없음.
 - 2026-09-01: 필수 보완까지 반영된 Solapi `send-many/detail` 대량 발송을 외부 호출 없이 최종 재QA했다. 타깃 20건·문자/장부 회귀 129건·tsc·diff-check 통과, 차단 결함과 실제 Solapi·DB·문자 발송 없음.
 - 2026-08-31: 운영 동기화 PENDING 항목을 시트·랠리즈·홈페이지 순서로 읽기 전용 분류하는 워커와 인증 크론 라우트를 추가했다. 관련 40건·eslint·tsc 통과, Vercel cron 미등록, 운영 DB·시트·랠리즈 쓰기 없음.
@@ -94,7 +96,6 @@
 - 2026-08-31: 카카오 학부모 최초 1회 인증, HMAC 사용자 식별, 15분 연결 링크, 21종 자연어 분류, 접수 전 확인, 관리자 카카오 접수함을 구현했다. 회귀 3건·tsc·Prisma·diff 검사 통과, DB·배포·외부 발송 없음.
 - 2026-08-30: 신규 학생 최초 등록의 완료 범위를 3중 수강 등록·최초 청구/알림·Rallyz 학부모 초대·재조회로 확정하고, 월 중간 시작 일할계산과 실행 직전 승인 경계를 공용 스킬에 기록했다.
 - 2026-08-30: 신청관리의 체험수업·수강신청 목록을 접수일 최신순으로 통일하고 동일 시각 순서를 고정했다. 관련 17건·독립 QA·tsc·diff 검사 통과, 배포 없음.
-- 2026-08-30: 수강 승인과 외부 알림을 분리하고 신규·복귀 수강 변경을 운영 원장에 같은 트랜잭션으로 적재했다. 관련 14건·독립 QA·tsc·Prisma·diff 검사 통과, 운영 DB·알림·배포 없음.
 
 ## PM 체크
 

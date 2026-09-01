@@ -24,6 +24,8 @@ export type UniformOrderAdminView = {
   items: Array<{
     id: string;
     studentName: string;
+    design: string | null;
+    initials: string | null;
     backNumber: string | null;
     topSize: string | null;
     bottomSize: string | null;
@@ -52,6 +54,8 @@ function serializeOrder(order: UniformOrderWithItems): UniformOrderAdminView {
     items: order.items.map((item) => ({
       id: item.id,
       studentName: item.studentName,
+      design: item.design,
+      initials: item.initials,
       backNumber: item.backNumber,
       topSize: item.topSize,
       bottomSize: item.bottomSize,

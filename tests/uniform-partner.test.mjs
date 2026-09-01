@@ -44,8 +44,8 @@ test("유니폼 신청은 형제자매를 한 주문 payload의 items로 묶는�
     parentPhone: "01012345678",
     agreedPrivacy: true,
     students: [
-      { studentName: "김첫째", backNumber: "7", topSize: "M", bottomSize: "M" },
-      { studentName: "김둘째", topSize: "S" },
+      { studentName: "김첫째", design: "DYG 블랙&화이트", initials: "FIRST", backNumber: "7", topSize: "M", bottomSize: "M" },
+      { studentName: "김둘째", design: "카툰 블랙&화이트", initials: "SECOND", topSize: "S" },
     ],
   });
   const payload = buildStizUniformOrderPayload({
@@ -59,6 +59,10 @@ test("유니폼 신청은 형제자매를 한 주문 payload의 items로 묶는�
   assert.equal(payload.customer.phone, "010-1234-5678");
   assert.equal(payload.items.length, 2);
   assert.equal(payload.items[0].quantity, 2);
+  assert.equal(payload.items[0].options["디자인"], "DYG 블랙&화이트");
+  assert.equal(payload.items[0].options["이니셜"], "FIRST");
+  assert.equal(payload.items[1].options["디자인"], "카툰 블랙&화이트");
+  assert.equal(payload.items[1].options["이니셜"], "SECOND");
   assert.equal(payload.items[1].quantity, 1);
   assert.equal("productId" in payload, false);
   assert.equal("orderNumber" in payload, false);
@@ -70,7 +74,15 @@ test("HMAC 서명은 timestamp.partner.canonicalJson 순서로 만든다", () =>
     parentName: "김보호",
     parentPhone: "010-1234-5678",
     memo: null,
-    students: [{ studentName: "김학생", backNumber: null, topSize: "M", bottomSize: "M", quantity: 2 }],
+    students: [{
+      studentName: "김학생",
+      design: "DYG 블랙&화이트",
+      initials: "STIZ",
+      backNumber: null,
+      topSize: "M",
+      bottomSize: "M",
+      quantity: 2,
+    }],
   });
   const secret = "a".repeat(64);
   const timestamp = 1788150000;

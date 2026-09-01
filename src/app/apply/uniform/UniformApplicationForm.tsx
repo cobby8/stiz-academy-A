@@ -7,6 +7,8 @@ import FontFreeIcon from "@/components/ui/FontFreeIcon";
 
 type StudentForm = {
   studentName: string;
+  design: string;
+  initials: string;
   backNumber: string;
   topSize: string;
   bottomSize: string;
@@ -21,9 +23,12 @@ type FormData = {
   students: StudentForm[];
 };
 
-const SIZE_OPTIONS = ["", "5XS", "4XS", "3XS", "2XS", "XS", "S", "M", "L", "XL", "2XL", "3XL", "4XL"];
+const DESIGN_OPTIONS = ["", "DYG 블랙&화이트", "카툰 블랙&화이트"];
+const SIZE_OPTIONS = ["", "5XS(110)", "4XS(120)", "3XS(130)", "2XS(140)", "XS(150)", "S(160)", "M", "L", "XL", "2XL", "3XL", "4XL"];
 const EMPTY_STUDENT: StudentForm = {
   studentName: "",
+  design: "",
+  initials: "",
   backNumber: "",
   topSize: "",
   bottomSize: "",
@@ -101,10 +106,16 @@ export default function UniformApplicationForm() {
     if (!form.parentName.trim()) return "학부모 이름을 입력해주세요.";
     const phoneDigits = form.parentPhone.replace(/\D/g, "");
     if (phoneDigits.length < 10 || phoneDigits.length > 11) return "학부모 휴대폰 번호를 정확히 입력해주세요.";
-    const activeStudents = form.students.filter((student) => student.studentName.trim() || hasOrderSize(student) || student.backNumber.trim());
+    const activeStudents = form.students.filter((student) =>
+      student.studentName.trim() || student.design.trim() || student.initials.trim() || hasOrderSize(student) || student.backNumber.trim(),
+    );
     if (activeStudents.length === 0) return "학생 정보를 1명 이상 입력해주세요.";
     const missingName = activeStudents.find((student) => !student.studentName.trim());
     if (missingName) return "학생 이름을 입력해주세요.";
+    const missingDesign = activeStudents.find((student) => !student.design.trim());
+    if (missingDesign) return "유니폼 디자인을 선택해주세요.";
+    const missingInitials = activeStudents.find((student) => !student.initials.trim());
+    if (missingInitials) return "유니폼 이니셜을 입력해주세요.";
     const missingSize = activeStudents.find((student) => !hasOrderSize(student));
     if (missingSize) return "학생마다 상의 또는 하의 사이즈 중 하나 이상을 선택해주세요.";
     if (!form.agreedPrivacy) return "개인정보 수집 및 이용에 동의해주세요.";
@@ -130,6 +141,8 @@ export default function UniformApplicationForm() {
             .filter((student) => student.studentName.trim())
             .map((student) => ({
               studentName: student.studentName,
+              design: student.design,
+              initials: student.initials,
               backNumber: student.backNumber,
               topSize: student.topSize,
               bottomSize: student.bottomSize,
@@ -260,19 +273,36 @@ export default function UniformApplicationForm() {
                   placeholder="학생 이름"
                 />
                 <Field
+                  label="이니셜"
+                  required
+                  value={student.initials}
+                  onChange={(value) => updateStudent(index, "initials", value)}
+                  placeholder="예: GENO"
+                />
+                <Field
                   label="등번호"
                   value={student.backNumber}
                   onChange={(value) => updateStudent(index, "backNumber", value.replace(/\D/g, "").slice(0, 3))}
                   placeholder="선택"
                 />
                 <SelectField
+                  label="디자인"
+                  required
+                  value={student.design}
+                  options={DESIGN_OPTIONS}
+                  emptyLabel="디자인 선택"
+                  onChange={(value) => updateStudent(index, "design", value)}
+                />
+                <SelectField
                   label="상의 사이즈"
                   value={student.topSize}
+                  options={SIZE_OPTIONS}
                   onChange={(value) => updateStudent(index, "topSize", value)}
                 />
                 <SelectField
                   label="하의 사이즈"
                   value={student.bottomSize}
+                  options={SIZE_OPTIONS}
                   onChange={(value) => updateStudent(index, "bottomSize", value)}
                 />
               </div>
@@ -361,24 +391,30 @@ function Field({
 
 function SelectField({
   label,
+  required,
   value,
+  options,
+  emptyLabel = "선택 안 함",
   onChange,
 }: {
   label: string;
+  required?: boolean;
   value: string;
+  options: string[];
+  emptyLabel?: string;
   onChange: (value: string) => void;
 }) {
   return (
     <label className="block text-sm font-bold text-gray-700 dark:text-gray-200">
-      {label}
+      {label} {required && <span className="text-red-500">*</span>}
       <select
         value={value}
         onChange={(event) => onChange(event.target.value)}
         className="mt-2 w-full rounded-xl border border-gray-300 px-4 py-3 text-gray-900 outline-none transition-colors focus:border-brand-orange-500 focus:ring-2 focus:ring-brand-orange-500 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
       >
-        {SIZE_OPTIONS.map((size) => (
+        {options.map((size) => (
           <option key={size || "none"} value={size}>
-            {size || "선택 안 함"}
+            {size || emptyLabel}
           </option>
         ))}
       </select>

@@ -59,6 +59,13 @@ test("정규 셔틀 좌표는 정류장별 후보와 지도 핀을 확인한 뒤
   assert.match(dispatchPage, /totalStopCount/);
 });
 
+test("정규 셔틀 좌표는 검색 없이 지도를 직접 눌러 지정할 수 있다", () => {
+  assert.match(geocodePanel, /addListener\(map, "click"/);
+  assert.match(geocodePanel, /지도에서 실제 승하차 위치를 누르세요/);
+  assert.match(geocodePanel, /지도에서 직접 지정/);
+  assert.match(geocodePanel, /장소를 찾기 어려울 때만 검색을 사용하세요/);
+});
+
 test("정규 배차의 좌표 누락 명단은 기본 접고 설정 화면으로 안내한다", () => {
   assert.match(seasonalRouteSection, /href="#regular-stop-coordinate-setup"/);
   assert.match(seasonalRouteSection, /누락 학생 확인/);

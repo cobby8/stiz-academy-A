@@ -18,10 +18,32 @@ export function toCsvExportUrl(sheetUrl: string): string | null {
   return `https://docs.google.com/spreadsheets/d/${id}/export?format=csv&gid=${gid}`;
 }
 
-/** 시트를 가져와 파싱한 뒤 해당 월의 RegularShuttleStop만 교체한다(원장 전용). */
+/** 시트를 가져와 파싱한 뒤 해당 월의 RegularShuttleStop을 증분 동기화한다(원장 전용). */
 type RosterIdentity = { id: string; name: string; studentPhone: string | null; parentPhones: string[]; monthStatus: string | null };
 function phoneDigits(value: string | null | undefined): string { return String(value ?? "").replace(/\D/g, ""); }
 function normalizedName(value: string | null | undefined): string { return String(value ?? "").replace(/\s/g, "").toLowerCase(); }
+function canonicalStopName(value: string | null | undefined): string {
+  return String(value ?? "")
+    .trim()
+    .replace(/\s/g, "")
+    .replace(/^다산다산/, "다산")
+    .replace(/1호점앞?버스정류장|1호점/g, "1호점앞버스정류장")
+    .replace(/별빛초(등학교)?(정문|후문)?|다산별빛초등학교(정문|후문)?/g, "다산별빛초등학교후문")
+    .replace(/플루리움404동|다산플루리움404동앞|플루리움3단지놀이터|플루리움3단지1,2,3동놀이터앞|플루리움3단지/g, "플루리움3단지놀이터")
+    .toLowerCase();
+}
+function stopSyncKey(stop: RegularShuttleStop): string {
+  return [
+    stop.weekday,
+    stop.direction,
+    stop.studentId ?? "",
+    normalizedName(stop.studentName),
+    phoneDigits(stop.parentPhone).slice(-4) || phoneDigits(stop.studentPhone).slice(-4),
+    stop.classTime ?? "",
+    stop.arriveTime ?? "",
+    canonicalStopName(stop.stopName),
+  ].join("|");
+}
 
 async function reconcileActiveStudents(stops: RegularShuttleStop[], serviceMonth: string): Promise<{ stops: RegularShuttleStop[]; excluded: string[]; held: string[] }> {
   const [targetYear, targetMonth] = serviceMonth.split("-").map(Number);
@@ -100,19 +122,46 @@ export async function importRegularShuttleFromSheet(sheetUrl: string, serviceMon
     throw new Error(`확인보류 ${reconciled.held.length}명이 임계치(${heldLimit}명) 이상이라 차량표를 교체하지 않았습니다. 신원을 확인한 뒤 다시 가져오세요.`);
   }
 
-  // 같은 정류장 좌표는 이전 스냅샷에서 승계한다. 해당 월만 교체하므로 과거 비교 원장은 보존된다.
+  // 같은 정류장 좌표는 이전 스냅샷에서 승계한다. 직접 찍은 좌표는 stopName 표기 차이가 있어도
+  // canonicalStopName 기준으로 최대한 보존한다.
   const coords = await prisma.$queryRawUnsafe<{ stopName: string; latitude: number; longitude: number }[]>(
     `SELECT DISTINCT ON ("stopName") "stopName","latitude","longitude"
        FROM "RegularShuttleStop"
       WHERE "latitude" IS NOT NULL AND "longitude" IS NOT NULL
       ORDER BY "stopName", "importedAt" DESC`,
   );
-  const coordByName = new Map(coords.map((row) => [row.stopName, row]));
-  // 월 스냅샷 교체는 한 트랜잭션으로 묶어, 한 행이라도 실패하면 기존 차량표를 온전히 보존한다.
+  const coordByName = new Map(coords.map((row) => [canonicalStopName(row.stopName), row]));
+  const existing = await prisma.$queryRawUnsafe<(RegularShuttleStop & { id: string })[]>(
+    `SELECT "id","serviceMonth","weekday","classTime","arriveTime","stopName","direction","studentName","studentId","studentPhone","parentPhone","note","sortOrder","latitude","longitude"
+       FROM "RegularShuttleStop"
+      WHERE "serviceMonth"=$1`,
+    month,
+  );
+  const existingByKey = new Map(existing.map((row) => [stopSyncKey(row), row]));
+  const nextKeys = new Set(stops.map(stopSyncKey));
+  const inserts = stops.filter((stop) => !existingByKey.has(stopSyncKey(stop)));
+  const deletes = existing.filter((row) => !nextKeys.has(stopSyncKey(row)));
+  const orderUpdates = stops
+    .map((stop) => {
+      const current = existingByKey.get(stopSyncKey(stop));
+      return current && current.sortOrder !== stop.sortOrder ? { id: current.id, sortOrder: stop.sortOrder } : null;
+    })
+    .filter((row): row is { id: string; sortOrder: number } => row != null);
+
+  // 증분 동기화는 한 트랜잭션으로 묶어, 한 행이라도 실패하면 기존 차량표를 온전히 보존한다.
+  // 월 전체 삭제 후 재삽입을 금지하는 이유: 원장이 직접 찍은 좌표·정차 조정값이 대량 손실될 수 있다.
   await prisma.$transaction(async (tx) => {
-    await tx.$executeRawUnsafe(`DELETE FROM "RegularShuttleStop" WHERE "serviceMonth"=$1`, month);
-    for (const s of stops) {
-      const coord = coordByName.get(s.stopName);
+    for (const row of orderUpdates) {
+      await tx.$executeRawUnsafe(
+        `UPDATE "RegularShuttleStop" SET "sortOrder"=$1 WHERE "id"=$2 AND "serviceMonth"=$3`,
+        row.sortOrder, row.id, month,
+      );
+    }
+    for (const row of deletes) {
+      await tx.$executeRawUnsafe(`DELETE FROM "RegularShuttleStop" WHERE "id"=$1 AND "serviceMonth"=$2`, row.id, month);
+    }
+    for (const s of inserts) {
+      const coord = coordByName.get(canonicalStopName(s.stopName));
       await tx.$executeRawUnsafe(
         `INSERT INTO "RegularShuttleStop"
           ("serviceMonth","weekday","classTime","arriveTime","stopName","direction","studentName","studentId","studentPhone","parentPhone","note","sortOrder","latitude","longitude")

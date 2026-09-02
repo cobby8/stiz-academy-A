@@ -10,8 +10,10 @@ const client = readFileSync(new URL("../src/app/admin/shuttle/regular/RegularShu
 test("정규 차량표와 저장 노선은 월별로 보존된다", () => {
   assert.match(schema, /model RegularShuttleStop[\s\S]*serviceMonth\s+String/);
   assert.match(schema, /model RegularDispatchRoute[\s\S]*@@unique\(\[serviceMonth, dayOfWeek, direction\]\)/);
-  assert.match(importSource, /DELETE FROM "RegularShuttleStop" WHERE "serviceMonth"=\$1/);
+  assert.match(importSource, /DELETE FROM "RegularShuttleStop" WHERE "id"=\$1 AND "serviceMonth"=\$2/);
+  assert.match(importSource, /stopSyncKey/);
   assert.doesNotMatch(importSource, /DELETE FROM "RegularShuttleStop"`\)/);
+  assert.doesNotMatch(importSource, /DELETE FROM "RegularShuttleStop" WHERE "serviceMonth"=\$1/);
 });
 
 test("차량 변동은 학생별 추가·제외·변경으로 구분한다", () => {

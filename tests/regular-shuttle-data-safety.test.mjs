@@ -23,12 +23,14 @@ const parent = readFileSync("src/lib/shuttle/parent.ts", "utf8");
 const orderApi = readFileSync("src/app/api/admin/shuttle/regular-order/route.ts", "utf8");
 const noticeApi = readFileSync("src/app/api/admin/shuttle/regular-notice/route.ts", "utf8");
 
-test("월 차량표 교체는 DELETE와 전체 INSERT를 한 트랜잭션으로 묶는다", () => {
+test("월 차량표 이관은 전체 삭제 없이 증분 동기화한다", () => {
   const transactionAt = importSource.indexOf("prisma.$transaction(async (tx)");
-  const deleteAt = importSource.indexOf('tx.$executeRawUnsafe(`DELETE FROM "RegularShuttleStop"');
+  const deleteAt = importSource.indexOf('DELETE FROM "RegularShuttleStop" WHERE "id"=$1 AND "serviceMonth"=$2');
   const insertAt = importSource.indexOf('tx.$executeRawUnsafe(\n        `INSERT INTO "RegularShuttleStop"');
   assert.ok(transactionAt >= 0 && deleteAt > transactionAt && insertAt > deleteAt);
-  assert.doesNotMatch(importSource, /await prisma\.\$executeRawUnsafe\(`DELETE FROM "RegularShuttleStop"/);
+  assert.doesNotMatch(importSource, /DELETE FROM "RegularShuttleStop" WHERE "serviceMonth"=\$1/);
+  assert.match(importSource, /canonicalStopName/);
+  assert.match(importSource, /existingByKey/);
 });
 
 test("확인보류·비활성 학생은 저장하지 않고 target serviceMonth 상태를 사용한다", () => {

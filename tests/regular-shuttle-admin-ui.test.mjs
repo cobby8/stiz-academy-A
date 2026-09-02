@@ -93,3 +93,10 @@ test("등원과 하원 수업시간이 다르면 자동 수정하지 않고 관�
   assert.match(regularDispatchClient, /등원·하원 수업시간이 다른 학생/);
   assert.match(regularDispatchClient, /자동으로 고치지 않았습니다/);
 });
+
+test("정규 배차 화면은 등원과 하원을 시간순 타임라인으로 먼저 보여준다", () => {
+  assert.match(regularDispatchClient, /시간순 노선/);
+  assert.match(regularDispatchClient, /하루 운행 흐름/);
+  assert.match(regularDispatchClient, /buildTimelineRows/);
+  assert.match(regularDispatchClient, /방향별 세부 조정 열기/);
+});

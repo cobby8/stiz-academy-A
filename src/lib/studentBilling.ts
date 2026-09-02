@@ -68,6 +68,8 @@ export interface BillingRow {
   carryOverAmount: number | null;
   /** 이 행에서 선택한 정규반 슬롯 키 (예: `Sun-8`) */
   slotKeys?: readonly string[];
+  /** 시트의 `셔틀비 구분`에서 무료셔틀로 확정된 행인지 여부 */
+  isFreeShuttle?: boolean;
 }
 
 /** 일8 대표팀은 다른 정규반을 함께 타더라도 학생의 월 셔틀비 전체를 면제한다. */
@@ -77,9 +79,10 @@ export function hasFullShuttleFeeExemption(rows: BillingRow[]): boolean {
   return rows.some(
     (row) =>
       !isExcludedFromBilling(row.paymentMethodRaw) &&
-      (row.slotKeys ?? []).some((slotKey) =>
-        FULL_SHUTTLE_FEE_EXEMPT_SLOT_KEYS.has(slotKey)
-      )
+      (row.isFreeShuttle === true ||
+        (row.slotKeys ?? []).some((slotKey) =>
+          FULL_SHUTTLE_FEE_EXEMPT_SLOT_KEYS.has(slotKey)
+        ))
   );
 }
 

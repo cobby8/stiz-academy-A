@@ -52,6 +52,7 @@ export interface RawCsvRow {
   amount: number | null;     // `결제액` 칸 (실제 납부액. 대부분 비어 있음)
   tuitionAmount: number | null;   // `수강료` 칸 — 청구의 기준 금액
   shuttleFee: number | null;      // `셔틀비` 칸 — 월 단위 값이라 첫 행에만 적힌다
+  shuttleFeeCategory: string | null; // `셔틀비 구분` — 무료셔틀 등 명시적 운영 구분
   carryOverAmount: number | null; // `이월` 금액 칸 — 채워져 있으면 차감
   referralSource: string | null; // 가입경로
   uniformStatus: string | null;  // 유니폼 상태
@@ -634,6 +635,9 @@ export function parseAndTransformCsv(csvText: string): ImportPreviewResult {
         amount: readAmountColumn(row, colIndex.paymentAmount),
         tuitionAmount: readAmountColumn(row, tuitionColumn),
         shuttleFee: readAmountColumn(row, colIndex.shuttleFee),
+        shuttleFeeCategory: colIndex.shuttleFeeCategory !== -1
+          ? row[colIndex.shuttleFeeCategory] || null
+          : null,
         carryOverAmount: readAmountColumn(row, colIndex.carryOverAmount),
         referralSource: row[colIndex.referralSource] || null,
         uniformStatus: row[colIndex.uniformStatus] || null,
@@ -718,6 +722,7 @@ export function parseAndTransformCsv(csvText: string): ImportPreviewResult {
         paymentMethodRaw: r.paymentMethod,
         tuitionAmount: r.tuitionAmount,
         shuttleFee: r.shuttleFee,
+        isFreeShuttle: (r.shuttleFeeCategory || "").includes("무료셔틀"),
         carryOverAmount: r.carryOverAmount,
         slotKeys: slotKeysByRow.get(r.rowNumber) ?? [],
       }))
@@ -819,6 +824,8 @@ interface ColumnIndices {
   paymentAmount: number;
   /** `셔틀비` 칸 */
   shuttleFee: number;
+  /** `셔틀비 구분` 칸 */
+  shuttleFeeCategory: number;
   /** `이월` 금액 칸 */
   carryOverAmount: number;
   referralSource: number;
@@ -852,6 +859,7 @@ function detectColumnIndices(headers: string[]): ColumnIndices {
     tuitionAmount: -1,
     paymentAmount: -1,
     shuttleFee: -1,
+    shuttleFeeCategory: -1,
     carryOverAmount: -1,
     referralSource: -1,
     uniformStatus: -1,
@@ -940,6 +948,9 @@ function detectColumnIndices(headers: string[]): ColumnIndices {
     // 각각 처음 매칭된 컬럼만 채택한다(뒤 컬럼이 덮어쓰지 못하게).
     else if (h.includes("수강료")) {
       if (result.tuitionAmount === -1) result.tuitionAmount = i;
+    }
+    else if (h.includes("셔틀비") && h.includes("구분")) {
+      if (result.shuttleFeeCategory === -1) result.shuttleFeeCategory = i;
     }
     else if (h.includes("셔틀비")) {
       if (result.shuttleFee === -1) result.shuttleFee = i;

@@ -11,6 +11,7 @@ type Row = {
   shuttleFee: number | null;
   carryOverAmount: number | null;
   slotKeys?: readonly string[];
+  isFreeShuttle?: boolean;
 };
 
 function row(partial: Partial<Row> & { rowNumber: number }): Row {
@@ -93,6 +94,17 @@ test("셔틀비는 첫 행에만 적혀도 청구에 포함된다", () => {
 
   assert.equal(result.shuttleFeeTotal, 10000);
   assert.equal(result.billableAmount, 150000);
+});
+
+test("무료셔틀로 확정된 학생은 시트에 셔틀비가 있어도 0원으로 계산한다", () => {
+  const result = summarizeStudentBilling([
+    row({ rowNumber: 1, tuitionAmount: 90000, shuttleFee: 15000, isFreeShuttle: true }),
+    row({ rowNumber: 2, tuitionAmount: 90000 }),
+  ]);
+
+  assert.equal(result.tuitionTotal, 180000);
+  assert.equal(result.shuttleFeeTotal, 0);
+  assert.equal(result.billableAmount, 180000);
 });
 
 test("일8 대표팀 수강생은 다른 정규반을 함께 타도 월 셔틀비가 전액 면제된다", () => {

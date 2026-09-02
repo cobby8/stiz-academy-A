@@ -1,5 +1,6 @@
 import { getDispatchForView } from "@/lib/seasonal/shuttle-optimize";
 import { getBoardingMap } from "@/lib/seasonal/shuttleRun";
+import { prisma } from "@/lib/prisma";
 // 정규 쪽 "그날 무엇을 띄울지"(확정 저장 노선 우선 · 없으면 시트 명단 폴백)는 이 게이트웨이 한곳에서만 만든다.
 import { getRegularDriverClasses } from "./regularDriverRoute";
 import { getRegularBoardingMap } from "./regularRun";
@@ -26,6 +27,12 @@ import type { DriverClass } from "./regularDriverRouteLogic";
 export type BoardingStatus = "BOARDED" | "NOSHOW" | "SELF";
 
 const PREFIX = /^(STIZ 다산점 · |차고지 · )/;
+const KST_DATE_FORMATTER = new Intl.DateTimeFormat("en-CA", {
+  timeZone: "Asia/Seoul",
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+});
 
 type DispatchVehicleLike = {
   vehicleName: string; tripLabel?: string | null;
@@ -36,8 +43,46 @@ type DispatchVehicleLike = {
   }[];
 };
 
+function toKstDateKey(value: Date | string | null | undefined): string | null {
+  if (!value) return null;
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  return KST_DATE_FORMATTER.format(date);
+}
+
+/**
+ * 방학특강은 시즌 기간 안에서만 기사님 통합 링크에 붙인다.
+ * 시즌이 끝난 뒤 저장된 과거 배차가 정규 기사님 링크에 섞이면 실제 운행표가 오염된다.
+ */
+export async function hasSeasonalRunOnDate(viewDate: string): Promise<boolean> {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(viewDate)) return false;
+
+  try {
+    const seasons = await prisma.$queryRawUnsafe<{
+      startsAt: Date | null;
+      endsAt: Date | null;
+      status: string | null;
+    }[]>(
+      `SELECT "startsAt", "endsAt", "status"
+         FROM "SpecialProgramSeason"
+        WHERE "status" IN ('PUBLISHED', 'ACTIVE')`,
+    );
+
+    return seasons.some((season) => {
+      const startsAt = toKstDateKey(season.startsAt);
+      const endsAt = toKstDateKey(season.endsAt);
+      return Boolean(startsAt && endsAt && startsAt <= viewDate && viewDate <= endsAt);
+    });
+  } catch {
+    // 시즌 확인이 안 되면 종료된 특강을 잘못 노출하는 쪽이 더 위험하다.
+    return false;
+  }
+}
+
 /** 방학특강 그날 구간(등원·하원) — 종전 기사님 화면이 만들던 것과 같은 모양·같은 값. */
 export async function loadSeasonalSections(viewDate: string): Promise<SeasonalSectionInput[]> {
+  if (!(await hasSeasonalRunOnDate(viewDate))) return [];
+
   const directions: ("PICKUP" | "DROPOFF")[] = ["PICKUP", "DROPOFF"];
   return Promise.all(directions.map(async (d) => {
     const sug = await getDispatchForView(viewDate, d, false); // 기사님 화면은 T맵 미호출(저장본/직선)
@@ -99,12 +144,17 @@ export async function loadUnifiedDriverRun(viewDate: string): Promise<UnifiedDri
     }
   };
 
-  const [sections, pickup, dropoff, regular] = await Promise.all([
+  const [sections, regular] = await Promise.all([
     loadSeasonalSections(viewDate),
-    getBoardingMap(viewDate, "PICKUP"),
-    getBoardingMap(viewDate, "DROPOFF"),
     regularSafe(),
   ]);
+
+  const [pickup, dropoff] = sections.length > 0
+    ? await Promise.all([
+      getBoardingMap(viewDate, "PICKUP"),
+      getBoardingMap(viewDate, "DROPOFF"),
+    ])
+    : [{}, {}];
 
   // 이름표는 종전 화면 규칙 그대로: 특강 차량명 → 없으면 정규 명단 유무에 따라 기본 문구.
   const driverLabel = sections[0]?.vehicles?.[0]?.vehicleName

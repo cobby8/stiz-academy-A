@@ -284,3 +284,12 @@ test("탑승 상태 저장·조회 키는 특강/정규 접두사로만 합치�
   assert.match(src, /S:DROPOFF:/);
   assert.match(src, /R:\$\{id\}/);
 });
+
+test("기사 통합 링크는 종료된 방학특강 시즌을 정규 운행에 섞지 않는다", async () => {
+  const src = await readFile("src/lib/shuttle/unifiedDriverRun.ts", "utf8");
+  assert.match(src, /hasSeasonalRunOnDate/);
+  assert.match(src, /SpecialProgramSeason/);
+  assert.match(src, /startsAt/);
+  assert.match(src, /endsAt/);
+  assert.match(src, /if \(!\(await hasSeasonalRunOnDate\(viewDate\)\)\) return \[\];/);
+});

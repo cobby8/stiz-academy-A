@@ -22,6 +22,14 @@ Classify each target as `READY`, `HELD`, `APPLIED`, `SKIPPED`, or `FAILED`. A we
 
 Rallyz has no confirmed official write API, so use a logged-in supervised browser flow. Do not infer success from a click; inspect the resulting state.
 
+## Shuttle coupling for status changes
+
+- Pause and withdrawal are not limited to class rows. When a student becomes paused or withdrawn for a target month, remove that month and later regular shuttle assignments from the website shuttle ledger unless the user explicitly preserves a historical snapshot.
+- Never import or reconcile a regular shuttle month from the vehicle sheet alone. Always join the target-month enrollment/status ledger first; vehicle-sheet rows for paused or withdrawn students are stale candidates and must be excluded from the website driver/admin route views.
+- Resume should use the student's last valid pre-pause shuttle assignment as a restoration candidate, not as an automatic final state.
+- If the resumed class day/time, shuttle route, stop name, pickup/dropoff time, free-shuttle eligibility, or vehicle sheet route changed while the student was paused, keep the shuttle restoration `HELD` and ask the administrator to adjust it.
+- If only the status changed and the class/route/time still matches the latest vehicle sheet and website route map, restore the previous shuttle assignment idempotently and verify Sheet/Rallyz/website after the change.
+
 ## Billing and notification boundary
 
 - Enrollment approval does not automatically authorize invoice creation, cancellation, payment/refund, SMS, Kakao, push, or invitation delivery.

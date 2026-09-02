@@ -1,15 +1,15 @@
 import PublicPageLayout from "@/components/PublicPageLayout";
 import AnimateOnScroll from "@/components/ui/AnimateOnScroll";
 import { buildPublicMetadata } from "@/lib/publicMetadata";
-import UniformApplicationForm from "./UniformApplicationForm";
+import UniformShopTabs from "./UniformShopTabs";
 
 export const revalidate = 60;
 
 export const metadata = buildPublicMetadata({
-  title: "유니폼 추가주문 신청 | STIZ 농구교실 다산점",
-  description: "스티즈 농구교실 다산점 유니폼 추가주문을 신청하세요. 형제·자매도 한 번에 접수할 수 있습니다.",
+  title: "클럽샵 · 유니폼 추가주문 | STIZ 농구교실 다산점",
+  description: "스티즈 농구교실 다산점 클럽샵 상품을 둘러보고 유니폼 추가주문을 신청하세요.",
   path: "/apply/uniform",
-  imageAlt: "STIZ 농구교실 다산점 유니폼 추가주문 신청 미리보기",
+  imageAlt: "STIZ 농구교실 다산점 클럽샵과 유니폼 추가주문 미리보기",
 });
 
 export default function UniformApplyPage() {
@@ -22,18 +22,18 @@ export default function UniformApplyPage() {
         </div>
         <div className="relative mx-auto max-w-3xl px-6">
           <AnimateOnScroll>
-            <p className="mb-3 text-sm font-bold uppercase tracking-widest text-brand-orange-500 dark:text-brand-neon-lime">UNIFORM</p>
-            <h1 className="mb-3 break-keep text-3xl font-black md:text-4xl">유니폼 추가주문 신청</h1>
+            <p className="mb-3 text-sm font-bold uppercase tracking-widest text-brand-orange-500 dark:text-brand-neon-lime">CLUB SHOP</p>
+            <h1 className="mb-3 break-keep text-3xl font-black md:text-4xl">클럽샵 · 유니폼 추가주문</h1>
             <p className="max-w-xl text-base text-blue-200">
-              학부모 정보와 학생별 디자인, 이니셜, 사이즈를 남겨주세요. 형제·자매는 한 신청서에 함께 접수됩니다.
+              유소년 클럽 상품은 카페24에서 바로 구매하고, 맞춤 유니폼은 기존 방식대로 학생별 정보를 접수합니다.
             </p>
           </AnimateOnScroll>
         </div>
       </section>
 
       <section className="bg-gray-50 py-8 dark:bg-gray-900 md:py-12">
-        <div className="mx-auto max-w-3xl px-4">
-          <UniformApplicationForm />
+        <div className="mx-auto max-w-5xl px-4">
+          <UniformShopTabs />
         </div>
       </section>
     </PublicPageLayout>

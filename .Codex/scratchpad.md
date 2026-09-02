@@ -2,10 +2,10 @@
 
 ## 현재 작업
 
-- 목표: 다산점 청구서 결제를 본사 카페24 결제 링크로 넘길 수 있는 안전한 브리지 흐름을 준비한다.
-- 현재 단계: 토스 직접결제 기본값은 유지하고, `PAYMENT_PROVIDER=CAFE24_BRIDGE` 설정 시 본사 결제 링크 발급·서명 웹훅 수신·납부완료 반영으로 분기하는 코드 구현 및 검증 완료. 본사 구현은 `cobby8/stiz-shopping-mall` Issue #134로 인계 완료.
-- 운영 반영: 운영 DB 변경, 시트 변경, 실제 결제 승인, 문자, 배포 없음.
-- 별도 실행 대기: 본사 서버에 카페24 주문/결제 링크 생성 API를 준비하고 Vercel에 `PAYMENT_PROVIDER=CAFE24_BRIDGE`, `CAFE24_PAYMENT_BRIDGE_URL`, `STIZ_PARTNER_SECRET`, `NEXT_PUBLIC_SITE_URL` 설정 필요.
+- 목표: 9월 재원생·정규 셔틀·셔틀비를 세 시스템에서 대조하고 무료셔틀을 명시적으로 구분한다.
+- 현재 단계: 무료셔틀 청구 규칙과 시트 구분 열을 추가하고, 직접 일치 7건 및 윤정원 화6+토3 변경을 시트·Rallyz·사이트에 반영·재검증했다.
+- 운영 반영: 시트 무료셔틀 7건, 윤정원 반 변경 1건, 사이트/Rallyz 동일 반영. 청구·문자·초대·배포 없음.
+- 확인보류: 사이트 학생 누락 후보 8명, 반 배정 불일치 24명, 무료셔틀 차량표/시트 충돌 13명.
 
 ## 진행 현황표
 
@@ -72,18 +72,6 @@
 | reviewer | `src/lib/message-ledger.ts:103-105,119` | stale·복호화 실패 UNCERTAIN 전환 때 payloadJSON을 즉시 제거하도록 보완됨 | 완료 |
 | reviewer | `src/app/api/cron/manual-message-dispatch/route.ts:6-45` | 실행당 5건으로 축소해 공급자 최대 대기시간을 약 25초로 제한함 | 완료 |
 | reviewer | `src/lib/message-ledger.ts:103-127`, `src/app/api/cron/manual-message-dispatch/route.ts:14-43` | stale·복호화 실패·정상 claim의 batchId를 모두 finalize 대상으로 전달해 배치 집계 정합성 보완 | 완료 |
-| reviewer | `tests/manual-message-bulk-queue.test.mjs` | 보강 후에도 문자열 존재 검사만 있어 실제 동시 claim, 동일 requestId 경합, stale/복호화 실패, cron 중단 후 중복 없음이 검증되지 않음. DB 행동 테스트 필요 | 요청 |
-
-### 리뷰 결과 (reviewer)
-
-- 최종 판정: 통과. 이전 필수 수정 2건과 크론 시간·UI 상태 문제가 반영되었으며 추가 차단 결함은 발견하지 못했다.
-- 확인 내용: Solapi 4xx만 FAILED, 5xx·타임아웃은 UNCERTAIN; `groupInfo.groupId` 우선; 배열·객체 messageList와 문자열 customFields 지원; 결과 누락 10분 유예; 그룹 5개/회; ACCEPTED stale 재전송 차단; recipient providerStatus 노출; Bizppurio 단건 호환 유지.
-- 검증: 관련 테스트 20건, `tsc --noEmit`, `git diff --check` 통과. 실제 Solapi·운영 DB 호출 없음.
-- 남은 권장사항: 현재 공급자 테스트는 정규식 계약 중심이므로 추후 fetch mock 기반 부분 성공·5xx·결과 지연 행동 테스트를 추가한다.
-| tester | `tests/manual-message-bulk-queue.test.mjs` | 실제 DB 행동 테스트가 없어 동시 claim·requestId 경합·stale 격리를 정규식으로만 검사함. 가짜 DB 또는 테스트 DB 행동 검증 보강 필요 | 대기 |
-| tester | `tests/sms-business-delivery-reliability.test.mjs` | 수강승인 이벤트 ID 기대식 불일치. 변경 전 HEAD에도 동일하며 이번 대량 큐와 무관한 선행 실패로 분리 | 별도 대기 |
-| reviewer | `src/app/api/cron/manual-message-reconcile/route.ts:21-27` | Solapi 결과 누락은 10분 동안 ACCEPTED 상태로 재조회하고 유예 뒤에만 UNCERTAIN 격리하도록 보완됨 | 완료 |
-| reviewer | `src/lib/sms.ts:370-386` | HTTP 4xx만 FAILED, 5xx는 UNCERTAIN으로 분리해 중복 재발송 위험을 차단함 | 완료 |
 
 ## 확인보류
 
@@ -92,6 +80,7 @@
 - RESUME/CLASS_ADD/CLASS_CHANGE 자동 실행 어댑터는 다음 그룹이다.
 
 ## 작업 로그 (최근 10건)
+- 2026-09-02: 정규반 무료셔틀 구분을 청구 계산에 연결하고 시트 직접 일치 7건을 표시했다. 윤정원 목7→화6, 토3 유지를 시트·Rallyz·사이트에 반영·재검증했으며 알림·청구·배포는 없음.
 - 2026-09-02: 본사 쇼핑몰 저장소에 카페24 결제 브리지 구현 요청 Issue #134를 생성했다. 학원 서버의 서명 요청·웹훅 계약, 멱등·금액검증·보안 조건, 기존 결제 라우트와 분리해야 할 범위를 전달했다.
 - 2026-09-02: 정규 셔틀 자동 제안을 등원 시작·하원 종료 시각별로 분리하고 실행별 앵커를 저장·재계산까지 유지했다. 셔틀 회귀 167건·tsc·diff-check 통과, 운영 DB·배포 없음.
 - 2026-09-02: 본사 카페24 결제 브리지 흐름을 추가했다. 결제 제공자 분기, 서명 요청, 서명 웹훅, 관리자 설정 표시, 프리플라이트와 회귀 테스트를 보강했으며 실제 결제·본사 주문·운영 DB 변경은 없음.
@@ -101,7 +90,6 @@
 - 2026-09-01: 관리자 신규 원생 등록의 생년월일 입력을 모바일·자동 입력에 안정적인 YYYY-MM-DD 숫자 입력 방식으로 수정했다. `tsc --noEmit` 통과, 운영 DB·배포·외부 발송 없음.
 - 2026-09-01: 필수 보완까지 반영된 Solapi `send-many/detail` 대량 발송을 외부 호출 없이 최종 재QA했다. 타깃 20건·문자/장부 회귀 129건·tsc·diff-check 통과, 차단 결함과 실제 Solapi·DB·문자 발송 없음.
 - 2026-08-31: 운영 동기화 PENDING 항목을 시트·랠리즈·홈페이지 순서로 읽기 전용 분류하는 워커와 인증 크론 라우트를 추가했다. 관련 40건·eslint·tsc 통과, Vercel cron 미등록, 운영 DB·시트·랠리즈 쓰기 없음.
-- 2026-08-31: 유니폼 자체 신청 폼·DB 주문 원장·STIZ 본사 HMAC 전송·관리자 상태 화면과 Vercel/릴리스 DB 프리플라이트를 구현했다. release:code-check 1,319건·타깃 60건·빌드 검증, 운영 DB·외부 주문·문자·배포 없음.
 
 ## PM 체크
 

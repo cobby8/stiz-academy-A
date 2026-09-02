@@ -63,8 +63,9 @@ export function kakaoText(text: string, quickReplies: string[] = [], webLink?: {
 
 export async function resolveIdentity(botId: string, userKey: string): Promise<IdentityRow | null> {
   const rows = await prisma.$queryRawUnsafe<IdentityRow[]>(
-    `SELECT id, "parentUserId", status FROM "KakaoParentIdentity"
-      WHERE "botId"=$1 AND "userKeyHash"=$2 LIMIT 1`, botId, digest(userKey),
+    `UPDATE "KakaoParentIdentity" SET "lastSeenAt"=now(),"updatedAt"=now()
+      WHERE "botId"=$1 AND "userKeyHash"=$2
+      RETURNING id,"parentUserId",status`, botId, digest(userKey),
   );
   return rows[0] ?? null;
 }
@@ -119,24 +120,39 @@ async function latestDraft(identityId: string): Promise<IntakeRow | null> {
   return rows[0] ?? null;
 }
 
-export async function handleLinkedMessage(identity: IdentityRow, utterance: string) {
+function draftResponse(draft: IntakeRow, studentName?: string | null) {
+  if (draft.status === "SUBMITTED") return kakaoText("이미 접수된 요청이에요.");
+  if (!draft.studentId || !studentName) return null;
+  return kakaoText(
+    `${studentName} 학생의 ‘${KIND_LABEL[draft.kind]}’ 요청으로 이해했어요.\n\n“${draft.sourceText}”\n\n이 내용으로 접수할까요?`,
+    ["접수할게요", "다시 말할게요", "취소"],
+  );
+}
+
+export async function handleLinkedMessage(identity: IdentityRow, utterance: string, providerRequestId?: string | null) {
   const text = utterance.replace(/\s+/g, " ").trim().slice(0, 1000);
   if (!identity.parentUserId) throw new Error("IDENTITY_NOT_LINKED");
   const children = await childrenOf(identity.parentUserId);
   if (children.length === 0) return kakaoText("연결된 수강생을 찾지 못했어요. 학원으로 문의해 주세요.", ["상담원 연결"]);
 
   const draft = await latestDraft(identity.id);
-  if (draft && CANCEL_WORDS.test(text)) {
+  if (draft && (CANCEL_WORDS.test(text) || text === "다시 말할게요")) {
     await prisma.$executeRawUnsafe(`UPDATE "KakaoParentIntake" SET status='CANCELED',"updatedAt"=now() WHERE id=$1 AND status IN ('DRAFT','NEEDS_DETAILS')`, draft.id);
     return kakaoText("작성 중인 요청을 취소했어요. 새로 말씀해 주세요.", ["결석·보강", "셔틀", "청구·영수증", "수강 변경", "정보·상담"]);
   }
   if (draft && CONFIRM_WORDS.test(text)) {
+    if (!draft.studentId) {
+      return kakaoText("접수 전에 자녀를 먼저 선택해 주세요.", children.slice(0, 10).map((item) => item.name));
+    }
     const changed = Number(await prisma.$executeRawUnsafe(
       `UPDATE "KakaoParentIntake" SET status='SUBMITTED',"confirmedAt"=now(),"updatedAt"=now()
-        WHERE id=$1 AND status IN ('DRAFT','NEEDS_DETAILS')`, draft.id,
+        WHERE id=$1 AND "studentId" IS NOT NULL AND status IN ('DRAFT','NEEDS_DETAILS')`, draft.id,
     ));
     if (changed === 0) return kakaoText("이미 접수된 요청이에요.");
     return kakaoText(`${KIND_LABEL[draft.kind]} 요청을 접수했어요. 원장님이 확인한 뒤 필요한 경우 카카오톡이나 전화로 연락드릴게요.`);
+  }
+  if (!draft && CONFIRM_WORDS.test(text)) {
+    return kakaoText("이미 접수됐거나 현재 확인할 요청이 없어요. 새 요청은 내용을 문장으로 말씀해 주세요.", ["결석·보강", "셔틀", "청구·영수증", "수강 변경", "정보·상담"]);
   }
 
   if (draft && !draft.studentId) {
@@ -167,26 +183,38 @@ export async function handleLinkedMessage(identity: IdentityRow, utterance: stri
     return kakaoText("무엇을 도와드릴까요? 평소처럼 문장으로 말씀하셔도 알아들을게요.", ["결석·보강", "셔틀", "청구·영수증", "수강 변경", "정보·상담"]);
   }
   const child = selectChild(children, text);
-  if (!child) {
-    const intakeId = randomUUID();
-    await prisma.$executeRawUnsafe(
-      `INSERT INTO "KakaoParentIntake"
-        (id,"identityId",kind,"sourceText","structuredJson",status,"idempotencyKey")
-       VALUES ($1,$2,$3,$4,$5::jsonb,'NEEDS_DETAILS',$6)`,
-      intakeId, identity.id, kind, text, JSON.stringify({ kind }), `kakao:intake:${intakeId}`,
+  const intakeId = randomUUID();
+  const created = await prisma.$transaction(async (tx) => {
+    await tx.$queryRawUnsafe(`SELECT pg_advisory_xact_lock(hashtext($1))`, identity.id);
+    if (providerRequestId) {
+      const existing = await tx.$queryRawUnsafe<Array<IntakeRow & { studentName: string | null }>>(
+        `SELECT r.id,r.kind,r."sourceText",r."studentId",r.status,s.name AS "studentName"
+           FROM "KakaoParentIntake" r LEFT JOIN "Student" s ON s.id=r."studentId"
+          WHERE r."identityId"=$1 AND r."providerRequestId"=$2 LIMIT 1`, identity.id, providerRequestId,
+      );
+      if (existing[0]) return { duplicate: existing[0] };
+    }
+    await tx.$executeRawUnsafe(
+      `UPDATE "KakaoParentIntake" SET status='CANCELED',"updatedAt"=now()
+        WHERE "identityId"=$1 AND status IN ('DRAFT','NEEDS_DETAILS')`, identity.id,
     );
+    await tx.$executeRawUnsafe(
+      `INSERT INTO "KakaoParentIntake"
+        (id,"identityId","studentId",kind,"sourceText","structuredJson",status,"idempotencyKey","providerRequestId")
+       VALUES ($1,$2,$3,$4,$5,$6::jsonb,$7,$8,$9)`,
+      intakeId, identity.id, child?.id ?? null, kind, text,
+      JSON.stringify(child ? { studentId: child.id, studentName: child.name, kind } : { kind }),
+      child ? "DRAFT" : "NEEDS_DETAILS", `kakao:intake:${intakeId}`, providerRequestId ?? null,
+    );
+    return { duplicate: null };
+  });
+  if (created.duplicate) {
+    const repeated = draftResponse(created.duplicate, created.duplicate.studentName);
+    return repeated ?? kakaoText("이미 같은 요청을 확인하고 있어요. 자녀를 선택해 주세요.", children.slice(0, 10).map((item) => item.name));
+  }
+  if (!child) {
     return kakaoText("어느 자녀의 요청인지 알려주세요.", children.slice(0, 10).map((item) => item.name));
   }
-
-  const intakeId = randomUUID();
-  await prisma.$executeRawUnsafe(
-    `INSERT INTO "KakaoParentIntake"
-      (id,"identityId","studentId",kind,"sourceText","structuredJson",status,"idempotencyKey")
-     VALUES ($1,$2,$3,$4,$5,$6::jsonb,'DRAFT',$7)`,
-    intakeId, identity.id, child.id, kind, text,
-    JSON.stringify({ studentId: child.id, studentName: child.name, kind }),
-    `kakao:intake:${intakeId}`,
-  );
   return kakaoText(
     `${child.name} 학생의 ‘${KIND_LABEL[kind]}’ 요청으로 이해했어요.\n\n“${text}”\n\n이 내용으로 접수할까요?`,
     ["접수할게요", "다시 말할게요", "취소"],

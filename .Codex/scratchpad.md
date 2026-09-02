@@ -24,6 +24,7 @@
 | 유니폼 본사 연동 | developer + tester | 완료(발송 대기) | 자체 폼·DB 원장·디자인/이니셜·HMAC 전송·관리자 상태 화면·운영 DB 프리플라이트·로컬 빌드 검증 |
 | 토스 온라인 PG 자동결제 | developer + tester | 완료(키 설정 대기) | 학부모 결제창·서버 승인·웹훅·관리자 상태·프리플라이트 검증 |
 | 본사 카페24 결제 브리지 | developer + tester | 완료(본사 API 인계 완료) | 결제 제공자 분기·서명 요청·서명 웹훅·관리자 표시·프리플라이트·빌드 검증, 본사 Issue #134 생성 |
+| 카카오 학부모 접수 | developer + tester + reviewer | 코드 완료·운영 HELD | 인증·멱등·분류·DB 사전검사 통과, 운영 DB·채널 스킬·자동 크론 적용 승인 대기 |
 
 ## 구현 기록
 
@@ -55,6 +56,8 @@
 
 ## 테스트 결과
 
+- 카카오 학부모 접수 최종 재QA: 카카오 챗봇·DB 사전점검·접수 라우팅과 정규/특강 결석·당일 셔틀 회귀 65건, `npx.cmd prisma validate`, `npx.cmd tsc --noEmit`, `git diff --check` 모두 통과했다. 확인 초안 없는 확인어는 신규 요청을 만들지 않으며, 도메인 반영 뒤 마감 기록 실패는 자동 재실행 없이 `PROCESSING`으로 남는 계약을 확인했다.
+- DB 연결정보가 없어 운영 DB 구조 실조회는 명시적으로 건너뛰었으며, 미연결 시 실패 차단·명시적 skip만 허용하는 코드 계약은 통과했다. 실제 DB·카카오·문자·내부 알림 호출은 없었다.
 - 본사 카페24 결제 브리지: 결제 회귀 10건, `npx tsc --noEmit`, `npm run release:code-check`, `npm run build` 통과. `npm run payments:preflight`는 현재 기본 토스 모드의 키 미설정으로 의도된 실패. 실제 본사 주문·결제·운영 DB 변경·문자·배포 없음.
 - 토스 온라인 PG 보강: 결제 회귀 11건, 관련 결제 회귀 37건, `npx.cmd tsc --noEmit`, `npm run release:code-check`, `npm run build` 통과. `npm run payments:preflight`는 토스 공개키·서버키 미설정으로 의도된 실패. 실제 결제 승인·운영 DB 변경·문자·배포 없음.
 - 유니폼 주문 보강: `node --test tests\uniform-partner.test.mjs tests\uniform-order-db-preflight.test.mjs tests\uniform-orders.test.mjs`, `npx.cmd tsc --noEmit`, `npm run release:code-check`, `npm run build` 통과. 운영 DB 컬럼과 최근 2건 디자인/이니셜 보강 완료. 본사 주문 전송·SMS 발송·배포 호출 없음.
@@ -79,8 +82,10 @@
 - 성인반 복귀 1건: 시트·Rallyz·사이트의 상태와 금액 기준이 달라 등록과 청구를 분리하고 확인보류한다.
 - 다음 월 개강일과 청구 기준일은 실행 시 공식 연간일정표에서 재확인한다.
 - RESUME/CLASS_ADD/CLASS_CHANGE 자동 실행 어댑터는 다음 그룹이다.
+- 카카오 운영 적용은 전용 migration·비밀 환경변수·챗봇 관리자센터 스킬/블록 배포·단일 ACTIVE 처리기 승인이 필요하다.
 
 ## 작업 로그 (최근 10건)
+- 2026-09-02: 리뷰 수정 후 카카오 학부모 접수를 최종 재QA했다. no-draft 확인어 차단과 도메인 성공 후 마감 실패의 PROCESSING 유지 포함 회귀 65건·Prisma·tsc·diff-check 통과, 외부 호출 없음.
 - 2026-09-02: 기사님 통합 링크에서 종료된 방학특강 시즌 배차를 숨기도록 수정했다. 정규 셔틀 원천 테이블의 완전 중복 후보는 0건으로 확인했고, 통합 기사 화면 회귀 16건·tsc·diff-check 통과, 운영 DB 쓰기·배포 없음.
 - 2026-09-02: 유니폼 본사 연동 공유키를 새 64자 hex로 재발급해 학원 로컬·학원 Vercel `STIZ_PARTNER_SECRET`과 본사 Vercel `STIZ_PARTNER_SECRET_DASAN`에 맞췄다. 본사 `custom.stiz.kr` Production 재배포 후 기존 테스트 주문을 재전송해 `ORD-20260902-001`로 본사 접수 완료했다.
 - 2026-09-02: 유니폼 본사 연동 실측 테스트 1건을 실제 신청 화면으로 실행했다. 수신번호 끝자리 8117 테스트 주문은 학원 DB에 저장됐지만 본사 응답이 `서명이 맞지 않습니다`라 `NEEDS_REVIEW`로 남았고, 본사 주문번호·문자 발송은 발생하지 않았다. 학원 `STIZ_PARTNER_SECRET`과 본사 `STIZ_PARTNER_SECRET_DASAN` 값 재확인이 필요하다.
@@ -90,7 +95,6 @@
 - 2026-09-02: 본사 카페24 결제 브리지 흐름을 추가했다. 결제 제공자 분기, 서명 요청, 서명 웹훅, 관리자 설정 표시, 프리플라이트와 회귀 테스트를 보강했으며 실제 결제·본사 주문·운영 DB 변경은 없음.
 - 2026-09-02: 토스 온라인 PG 자동결제 흐름을 카드/간편결제·계좌이체 선택, 성공 후 승인 재확인, 청구서 ID 검증, 웹훅 중복 방지로 보강했다. 결제 회귀 37건·tsc·release:code-check·build 통과, 토스 키 미설정으로 실결제 차단.
 - 2026-09-02: 정규 셔틀 좌표 설정을 지도 직접 클릭·핀 조정·개별 저장 방식으로 재구성하고 검색은 보조 기능으로 내렸다. 셔틀 회귀 8건·eslint·tsc·diff-check 통과, 운영 좌표 저장·배포 없음.
-- 2026-09-02: 유니폼 주문 항목에 디자인·이니셜 필드를 추가하고 신청 폼·관리자 화면·본사 payload·DB 검사·운영 DB 최근 2건을 보강했다. release:code-check 1,331건·빌드 통과, 본사 주문/SMS 발송 없음.
 
 ## PM 체크
 

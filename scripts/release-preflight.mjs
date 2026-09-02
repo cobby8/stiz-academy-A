@@ -182,6 +182,7 @@ const seasonalDbPreflight = resolve(root, "scripts", "seasonal-db-preflight.mjs"
 const regularShuttleDbPreflight = resolve(root, "scripts", "regular-shuttle-db-preflight.mjs");
 const operationsSyncDbPreflight = resolve(root, "scripts", "operations-sync-db-preflight.mjs");
 const uniformOrderDbPreflight = resolve(root, "scripts", "uniform-order-db-preflight.mjs");
+const kakaoParentDbPreflight = resolve(root, "scripts", "kakao-parent-db-preflight.mjs");
 
 if (!existsSync(prisma) || !existsSync(tsc)) {
   console.error("[실패] node_modules가 없습니다. npm ci 후 다시 실행하세요.");
@@ -206,9 +207,10 @@ if (!skipEnv) {
     ["정규 셔틀 DB 준비 상태", process.execPath, [regularShuttleDbPreflight, ...(skipDb ? ["--skip-db"] : [])]],
     ["방학특강 DB 준비 상태", process.execPath, [seasonalDbPreflight, ...(skipDb ? ["--skip-db"] : [])]],
     ["유니폼 주문 DB 준비 상태", process.execPath, [uniformOrderDbPreflight, ...(skipDb ? ["--skip-db"] : [])]],
+    ["카카오 학부모 접수 DB 준비 상태", process.execPath, [kakaoParentDbPreflight, ...(skipDb ? ["--skip-db"] : [])]],
   );
 } else {
-  console.log("[건너뜀] --skip-env 코드 검사에서는 방학특강·정규 셔틀·운영 동기화 DB 연결 검사를 실행하지 않습니다.");
+  console.log("[건너뜀] --skip-env 코드 검사에서는 방학특강·정규 셔틀·운영 동기화·유니폼·카카오 DB 연결 검사를 실행하지 않습니다.");
 }
 
 for (const [label, command, args] of checks) {

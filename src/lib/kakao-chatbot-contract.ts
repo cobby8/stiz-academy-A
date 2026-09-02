@@ -1,10 +1,18 @@
 export type KakaoSkillPayload = {
   bot?: { id?: string; name?: string };
   userRequest?: {
+    requestId?: string;
     utterance?: string;
     user?: { id?: string; properties?: Record<string, unknown> };
   };
 };
+
+export function getKakaoRequestId(payload: KakaoSkillPayload, headerRequestId?: string | null): string | null {
+  const value = headerRequestId ?? payload.userRequest?.requestId;
+  return typeof value === "string" && value.trim().length > 0 && value.trim().length <= 200
+    ? value.trim()
+    : null;
+}
 
 export type ParentRequestKind =
   | "REGULAR_ABSENCE" | "SEASONAL_ABSENCE" | "MAKEUP" | "EARLY_LEAVE"

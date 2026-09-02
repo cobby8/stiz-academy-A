@@ -66,6 +66,7 @@ model KakaoParentIntake {
   structuredJson Json?
   status         String              @default("DRAFT") // DRAFT | NEEDS_DETAILS | SUBMITTED | APPLIED | HELD | FAILED | CANCELED
   idempotencyKey String              @unique
+  providerRequestId String?
   confirmedAt    DateTime?           @db.Timestamptz(6)
   appliedAt      DateTime?           @db.Timestamptz(6)
   errorCode      String?
@@ -75,6 +76,7 @@ model KakaoParentIntake {
 
   @@index([identityId, status, createdAt(sort: Desc)])
   @@index([studentId, createdAt(sort: Desc)])
+  @@unique([identityId, providerRequestId])
 }
 
 model ParentAccountClaim {

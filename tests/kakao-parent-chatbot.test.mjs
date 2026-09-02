@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
-import { classifyParentUtterance, getKakaoUserKey } from "../src/lib/kakao-chatbot-contract.ts";
+import { classifyParentUtterance, getKakaoRequestId, getKakaoUserKey } from "../src/lib/kakao-chatbot-contract.ts";
 
 test("학부모 자연어를 주요 요청 종류로 분류한다", () => {
   const cases = [
@@ -22,6 +22,12 @@ test("카카오 공식 payload의 채널 키를 우선 사용한다", () => {
   assert.equal(getKakaoUserKey({ userRequest: { user: { id: "bot", properties: {} } } }), "bot");
 });
 
+test("카카오 요청 식별자는 헤더를 우선하고 비정상 길이는 거부한다", () => {
+  assert.equal(getKakaoRequestId({ userRequest: { requestId: "payload-1" } }, "header-1"), "header-1");
+  assert.equal(getKakaoRequestId({ userRequest: { requestId: "payload-1" } }), "payload-1");
+  assert.equal(getKakaoRequestId({ userRequest: { requestId: "x".repeat(201) } }), null);
+});
+
 test("카카오 키 원문 비저장과 승인 경계를 유지한다", async () => {
   const source = await readFile("src/lib/kakao-parent-chatbot.ts", "utf8");
   const route = await readFile("src/app/api/kakao/chatbot/skill/route.ts", "utf8");
@@ -29,7 +35,16 @@ test("카카오 키 원문 비저장과 승인 경계를 유지한다", async ()
   assert.match(source, /createHmac\("sha256"/);
   assert.doesNotMatch(migration, /userKey\" TEXT/);
   assert.match(source, /status='SUBMITTED'/);
+  assert.match(source, /"studentId" IS NOT NULL/);
+  assert.match(source, /다시 말할게요/);
+  assert.match(source, /pg_advisory_xact_lock/);
+  assert.match(source, /providerRequestId/);
+  assert.match(source, /!draft && CONFIRM_WORDS\.test\(text\)/);
+  assert.match(source, /이미 접수됐거나 현재 확인할 요청이 없어요/);
+  assert.match(source, /"lastSeenAt"=now\(\)/);
   assert.doesNotMatch(source, /status='APPLIED'.*UPDATE/s);
   assert.match(route, /x-stiz-kakao-skill-secret/);
+  assert.doesNotMatch(route, /Promise\.race/);
+  assert.match(route, /시작한 쓰기를 시간 제한 경주로 버리지 않는다/);
   assert.match(source, /15 \* 60_000/);
 });

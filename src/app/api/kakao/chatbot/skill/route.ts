@@ -8,6 +8,7 @@ import {
   verifySkillSecret,
   type KakaoSkillPayload,
 } from "@/lib/kakao-parent-chatbot";
+import { getKakaoRequestId } from "@/lib/kakao-chatbot-contract";
 
 export const dynamic = "force-dynamic";
 
@@ -31,6 +32,8 @@ export async function POST(request: NextRequest) {
   if (!botId || !userKey) return NextResponse.json(kakaoText("카카오 사용자 정보를 확인하지 못했어요."));
 
   try {
+    // 시작한 쓰기를 시간 제한 경주로 버리지 않는다. 응답 실패 뒤 DB만 반영되는
+    // 불일치는 빠른 실패보다 위험하므로, 각 쿼리를 짧게 유지하고 결과를 기다린다.
     const identity = await resolveIdentity(botId, userKey);
     if (!identity || identity.status !== "ACTIVE" || !identity.parentUserId) {
       const origin = process.env.NEXT_PUBLIC_SITE_URL || request.nextUrl.origin;
@@ -41,7 +44,8 @@ export async function POST(request: NextRequest) {
         { label: "학부모 인증하기", url: link.url },
       ));
     }
-    return NextResponse.json(await handleLinkedMessage(identity, utterance));
+    const requestId = getKakaoRequestId(payload, request.headers.get("x-kakao-request-id"));
+    return NextResponse.json(await handleLinkedMessage(identity, utterance, requestId));
   } catch (error) {
     console.error("[kakao chatbot skill] failed:", error instanceof Error ? error.message : "UNKNOWN");
     return NextResponse.json(kakaoText("지금은 접수 연결이 원활하지 않아요. 잠시 후 다시 시도해 주세요."));

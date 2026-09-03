@@ -58,25 +58,46 @@ model KakaoParentIdentity {
 /// 카카오 대화 원문과 구조화된 해석을 분리해 보존하는 접수 원장.
 /// APPLIED는 기존 결석/셔틀 검증 함수를 통과한 경우에만 사용한다.
 model KakaoParentIntake {
-  id             String              @id @default(dbgenerated("(gen_random_uuid())::text"))
-  identityId     String
-  studentId      String?
-  kind           String
-  sourceText     String
-  structuredJson Json?
-  status         String              @default("DRAFT") // DRAFT | NEEDS_DETAILS | SUBMITTED | APPLIED | HELD | FAILED | CANCELED
-  idempotencyKey String              @unique
-  providerRequestId String?
-  confirmedAt    DateTime?           @db.Timestamptz(6)
-  appliedAt      DateTime?           @db.Timestamptz(6)
-  errorCode      String?
-  createdAt      DateTime            @default(now()) @db.Timestamptz(6)
-  updatedAt      DateTime            @default(now()) @updatedAt @db.Timestamptz(6)
-  identity       KakaoParentIdentity @relation(fields: [identityId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  id                  String                   @id @default(dbgenerated("(gen_random_uuid())::text"))
+  identityId          String
+  studentId           String?
+  kind                String
+  sourceText          String
+  structuredJson      Json?
+  status              String                   @default("DRAFT") // DRAFT | NEEDS_DETAILS | SUBMITTED | APPLIED | HELD | FAILED | CANCELED
+  idempotencyKey      String                   @unique
+  providerRequestId   String?
+  confirmedAt         DateTime?                @db.Timestamptz(6)
+  appliedAt           DateTime?                @db.Timestamptz(6)
+  errorCode           String?
+  decidedByUserId     String?
+  decidedAt           DateTime?                @db.Timestamptz(6)
+  decisionNote        String?
+  operationsRequestId String?                  @unique
+  createdAt           DateTime                 @default(now()) @db.Timestamptz(6)
+  updatedAt           DateTime                 @default(now()) @updatedAt @db.Timestamptz(6)
+  identity            KakaoParentIdentity      @relation(fields: [identityId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  audits              KakaoParentIntakeAudit[]
 
+  @@unique([identityId, providerRequestId])
   @@index([identityId, status, createdAt(sort: Desc)])
   @@index([studentId, createdAt(sort: Desc)])
-  @@unique([identityId, providerRequestId])
+}
+
+/// 관리자가 카카오 접수를 검토한 이력. 외부 발송 없이 내부 판단만 감사 가능하게 남긴다.
+model KakaoParentIntakeAudit {
+  id          String            @id @default(dbgenerated("(gen_random_uuid())::text"))
+  intakeId    String
+  action      String
+  actorUserId String
+  fromStatus  String
+  toStatus    String
+  note        String?
+  detailsJson Json?
+  createdAt   DateTime          @default(now()) @db.Timestamptz(6)
+  intake      KakaoParentIntake @relation(fields: [intakeId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([intakeId, createdAt(sort: Desc)])
 }
 
 model ParentAccountClaim {

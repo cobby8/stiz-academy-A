@@ -137,7 +137,7 @@ export async function submitShuttleException(parentUserId: string, input: Submit
     studentId, serviceDate, direction, kind, location, note, parentUserId,
   );
 
-  await notifyAdminsOfShuttleException({
+  const notification = await notifyAdminsOfShuttleException({
     studentName: owned[0].name,
     serviceDate,
     direction,
@@ -145,7 +145,7 @@ export async function submitShuttleException(parentUserId: string, input: Submit
     location,
   });
 
-  return { ok: true as const };
+  return { ok: true as const, notification };
 }
 
 export async function cancelShuttleException(parentUserId: string, exceptionId: string) {
@@ -208,21 +208,21 @@ async function notifyAdminsOfShuttleException(input: {
   location: string | null;
 }) {
   try {
-    const { notifyAdmins } = await import("@/lib/notification");
+    const { notifyOperationalStaff } = await import("@/lib/operational-staff-notification");
     const { SHUTTLE_DIRECTION_LABEL, SHUTTLE_EXCEPTION_KIND_LABEL } = await import(
       "@/lib/shuttle/dayExceptionRules"
     );
     const what = input.kind === "SKIP"
       ? SHUTTLE_EXCEPTION_KIND_LABEL.SKIP
       : `${SHUTTLE_EXCEPTION_KIND_LABEL.LOCATION} (${input.location ?? "-"})`;
-    // 코치 SMS 는 보내지 않는다 — 기사님은 운행 화면에서 바로 본다.
-    await notifyAdmins(
-      "SHUTTLE_EXCEPTION",
-      "셔틀 당일 변경",
-      `${input.studentName} · ${input.serviceDate} · ${SHUTTLE_DIRECTION_LABEL[input.direction as ShuttleDirection] ?? input.direction} · ${what}`,
-      "/admin/shuttle",
-      { notifyCoaches: false },
-    );
+    return await notifyOperationalStaff({
+      type: "SHUTTLE_EXCEPTION",
+      title: "셔틀 당일 변경",
+      message: `${input.studentName} · ${input.serviceDate} · ${SHUTTLE_DIRECTION_LABEL[input.direction as ShuttleDirection] ?? input.direction} · ${what}`,
+      linkUrl: "/admin/shuttle",
+      staffLinkUrl: "/staff/shuttle",
+      includeDriver: true,
+    });
   } catch (error) {
     console.error("[parent-shuttle-exception] 원장 알림 실패:", error);
   }

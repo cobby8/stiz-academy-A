@@ -47,6 +47,10 @@
       "schedule": "10 15 * * *"
     },
     {
+      "path": "/api/cron/kakao-parent-intake-routing",
+      "schedule": "* * * * *"
+    },
+    {
       "path": "/api/cron/makeup-credits",
       "schedule": "30 15 * * *"
     },

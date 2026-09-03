@@ -128,14 +128,16 @@ async function routeOne(intake: ClaimedIntake): Promise<"APPLIED" | "HELD" | "FA
     return "HELD";
   }
 
+  let delivery: { admin?: string; coach?: string; driver?: string } | null | undefined;
   try {
     if (intake.kind === "REGULAR_ABSENCE") {
-      await reportRegularAbsence(intake.parentUserId, {
+      const result = await reportRegularAbsence(intake.parentUserId, {
         studentId: intake.studentId!,
         classId: text(checked.data.classId),
         date: text(checked.data.date),
         reason: text(checked.data.reason),
       });
+      delivery = result.notification;
     } else {
       const result = await submitShuttleException(intake.parentUserId, {
         studentId: intake.studentId!,
@@ -146,6 +148,7 @@ async function routeOne(intake: ClaimedIntake): Promise<"APPLIED" | "HELD" | "FA
         note: checked.data.note,
       });
       if (!result.ok) throw new Error(result.message);
+      delivery = result.notification;
     }
   } catch (error) {
     const code = error instanceof Error ? error.message.slice(0, 160) : "DOMAIN_VALIDATION_FAILED";
@@ -165,9 +168,9 @@ async function routeOne(intake: ClaimedIntake): Promise<"APPLIED" | "HELD" | "FA
   await finish(intake, "APPLIED", routingResult({
     mode: "AUTO",
     reason: "DOMAIN_VALIDATED",
-    admin: "NOTIFICATION_TRIGGERED",
-    coach: intake.kind === "REGULAR_ABSENCE" ? "AVAILABLE_IN_ATTENDANCE_VIEW" : "NOT_APPLICABLE",
-    driver: "AVAILABLE_IN_ROUTE_VIEW",
+    admin: delivery?.admin ?? "NOTIFICATION_FAILED",
+    coach: delivery?.coach ?? (intake.kind === "REGULAR_ABSENCE" ? "NOT_FOUND" : "NOT_APPLICABLE"),
+    driver: delivery?.driver ?? "NOT_FOUND",
   }));
   return "APPLIED";
 }

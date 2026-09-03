@@ -187,19 +187,28 @@ async function notifyAdminsOfAbsenceChange(input: {
   kind: "REPORTED" | "CANCELED";
   studentName: string;
   className: string;
+  classId: string;
   date: string;
   reason?: string;
 }) {
   try {
-    const { notifyAdmins } = await import("@/lib/notification");
+    const { notifyOperationalStaff } = await import("@/lib/operational-staff-notification");
     const reasonLabel = input.reason ? REASON_LABEL[input.reason as keyof typeof REASON_LABEL] : null;
     const title = input.kind === "REPORTED" ? "결석 사전 신고" : "결석 신고 취소";
     const message =
       input.kind === "REPORTED"
         ? `${input.studentName} 학생이 ${input.date} ${input.className} 수업에 결석 예정입니다.${reasonLabel ? ` (${reasonLabel})` : ""}`
         : `${input.studentName} 학생의 ${input.date} ${input.className} 결석 신고가 취소되었습니다.`;
-    // 코치 SMS 는 보내지 않는다 — 건당 비용이 들고, 선생님은 출석 화면에서 바로 보인다.
-    await notifyAdmins("ABSENCE", title, message, "/admin/absence", { notifyCoaches: false });
+    return await notifyOperationalStaff({
+      type: "ABSENCE",
+      title,
+      message,
+      linkUrl: "/admin/absence",
+      staffLinkUrl: "/staff",
+      classId: input.classId,
+      includeCoach: true,
+      includeDriver: true,
+    });
   } catch (error) {
     console.error("[parent-regular-absence] 원장 알림 실패:", error);
   }
@@ -242,15 +251,16 @@ export async function reportRegularAbsence(
     studentId, classId, date, reason, parentUserId,
   );
 
-  await notifyAdminsOfAbsenceChange({
+  const notification = await notifyAdminsOfAbsenceChange({
     kind: "REPORTED",
     studentName: owned.studentName,
     className: owned.className,
+    classId,
     date,
     reason,
   });
 
-  return { ok: true, reason };
+  return { ok: true, reason, notification };
 }
 
 // ── 3) 사전 결석 신고 취소 ────────────────────────────────────────────────
@@ -267,9 +277,9 @@ export async function cancelRegularAbsence(
 
   // RETURNING 으로 지운 건의 학생·반 이름을 함께 받는다. 원장 알림 문구에 필요한데,
   // 지운 뒤에 다시 조회하면 이미 사라져서 찾을 수 없다.
-  const returning = `RETURNING s.name AS "studentName", c.name AS "className",
+  const returning = `RETURNING s.name AS "studentName", c.name AS "className", c.id AS "classId",
                               to_char(ra.date,'YYYY-MM-DD') AS "date"`;
-  type CanceledRow = { studentName: string; className: string; date: string };
+  type CanceledRow = { studentName: string; className: string; classId: string; date: string };
   let canceled: CanceledRow[];
   if (id) {
     // id 로 지목: 그 결석이 이 부모 자녀의 것이고 REPORTED 인 경우만 삭제(IDOR 방어).
@@ -307,6 +317,7 @@ export async function cancelRegularAbsence(
     kind: "CANCELED",
     studentName: canceled[0].studentName,
     className: canceled[0].className,
+    classId: canceled[0].classId,
     date: canceled[0].date,
   });
 

@@ -5198,6 +5198,7 @@ export async function approveEnrollApplication(
                 className: classContext.className,
                 previousStatus: existingEnrollment?.status ?? null,
                 nextStatus: "ACTIVE",
+                enrollmentApplicationId: app.id,
             });
             if (event) await enqueueWebsiteOperationsEventInTransaction(tx, event);
         }

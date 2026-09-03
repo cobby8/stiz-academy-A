@@ -29,6 +29,7 @@ export function buildEnrollmentOperationsEvent(input: {
   className: string;
   previousStatus: EnrollmentStatus | null;
   nextStatus: EnrollmentStatus;
+  enrollmentApplicationId?: string;
 }): WebsiteOperationsEvent | null {
   if (input.previousStatus === input.nextStatus) return null;
 
@@ -58,6 +59,8 @@ export function buildEnrollmentOperationsEvent(input: {
       fromClassId,
       toClassId,
       parentConfirmed: true,
+      // 신청 출처만 연결하며, 외부 등록 완료를 의미하지 않습니다.
+      ...(input.enrollmentApplicationId ? { enrollmentApplicationId: input.enrollmentApplicationId } : {}),
     },
     summary: `${input.studentName} ${input.className} ${transition.label}`,
   };

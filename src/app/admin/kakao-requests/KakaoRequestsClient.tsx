@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { decideKakaoParentIntake, type KakaoIntakeDecision } from "@/app/actions/kakao-parent-intake-admin";
-import { prepareKakaoReconfirmationNotice } from "@/app/actions/kakao-reconfirmation-notice";
+import { prepareKakaoReconfirmationNotice, sendKakaoReconfirmationNotice } from "@/app/actions/kakao-reconfirmation-notice";
 import { kakaoFollowupSummary, isKakaoFollowupOverdue, type KakaoFollowupCommand } from "@/lib/kakaoIntakeFollowup";
 
 export type KakaoRequestAdminRow = {
@@ -61,6 +61,16 @@ export default function KakaoRequestsClient({ rows, classes, status, schemaReady
   const [reviewDetails, setReviewDetails] = useState<Record<string,ReviewDetails>>(() => Object.fromEntries(rows.map(row => [row.id, initialDetails(row)])));
   const [error, setError] = useState("");
   const [notice, setNotice] = useState<Awaited<ReturnType<typeof prepareKakaoReconfirmationNotice>> | null>(null);
+  const [noticeResult, setNoticeResult] = useState("");
+  function sendNotice() {
+    if (!notice || !window.confirm(`SMS 문자 1건\n${notice.studentName} 보호자 ${notice.maskedRecipient}\n표시된 문구 그대로 발송할까요?`)) return;
+    startTransition(async () => {
+      try {
+        const result = await sendKakaoReconfirmationNotice({ approvalId: notice.approvalId, intakeId: notice.intakeId, url: notice.url, channel: "SMS", approved: true });
+        setNoticeResult(result.message); setNotice(null); router.refresh();
+      } catch { setError("발송 결과를 확인하지 못했습니다. 발송 장부를 확인하고 중복 전송하지 마세요."); setNotice(null); }
+    });
+  }
   function prepareNotice(id: string) {
     setError("");
     setNotice(null);
@@ -88,11 +98,14 @@ export default function KakaoRequestsClient({ rows, classes, status, schemaReady
     <p className="text-sm">현재 목록 {rows.length}건(최대 200건) · 접수 후 24시간 이상 후속 대상 {rows.filter(row => isKakaoFollowupOverdue(row.status, row.createdAt, checkedAt)).length}건 · 접수/동기화 실패 {rows.filter(row => row.status === "FAILED" || row.commands.some(command => ["FAILED", "PARTIAL"].includes(command.status))).length}건</p>
     <p className="text-xs text-gray-500">상담 전환·운영 원장 이관은 업무 완료가 아닙니다. 접수 종결도 청구·알림 발송 완료를 뜻하지 않습니다.</p>
     {error && <p role="alert" className="rounded-xl bg-red-50 p-3 text-sm font-bold text-red-700">{error}</p>}
+    {noticeResult && <p role="status">{noticeResult}</p>}
     {notice && <section aria-label="재확인 안내 미리보기" className="rounded-xl border p-4 space-y-2">
       <h2 className="font-bold">{notice.studentName} 학생 보호자 · 재확인 안내 미발송</h2>
       <p className="text-sm">만료: {formatDate(notice.expiresAt)} · 발송 승인 대기</p>
+      <p className="text-sm">선택 채널: SMS 문자 · 수신자 {notice.maskedRecipient} · 1건 (카카오 메시지가 아닙니다)</p>
       <p className="text-sm">해당 보호자 대화방을 확인한 뒤 사용하세요. 다시 생성하면 이전 링크는 무효가 됩니다. 이 화면은 안내 준비만 하며 자동 발송하지 않습니다.</p>
       <textarea aria-label="재확인 안내 문구" readOnly value={notice.message} className="w-full min-h-40 rounded border p-2" />
+      <button type="button" disabled={pending} onClick={sendNotice} className="min-h-11 rounded border px-3 disabled:opacity-40">위 미리보기 승인 후 SMS 1건 발송</button>
       <button type="button" onClick={() => setNotice(null)} className="min-h-11 underline">미리보기 닫기</button>
     </section>}
     {!schemaReady || rows.length===0 ? <p className="rounded-2xl border bg-white p-8 text-center text-sm text-gray-500">{schemaReady ? "해당 요청이 없습니다." : "DB 준비 후 표시됩니다."}</p> : <ul className="space-y-4">{rows.map(row => {

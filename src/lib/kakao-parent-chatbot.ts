@@ -126,6 +126,15 @@ export async function issuePendingReconfirmationLink(identity: IdentityRow, inta
     );
     const candidate = rows[0];
     if (!candidate) return null;
+    // 발송 예약/접수된 유효 링크를 대화의 다음 발화가 회수하지 않도록 보호한다.
+    const protectedLinks = await tx.$queryRawUnsafe<Array<{ id: string }>>(
+      `SELECT l.id FROM "ParentOperationsRequestLink" l
+       JOIN "OperationsAuditLog" a ON a."linkId"=l.id AND a.action='KAKAO_RECONFIRMATION_LINK_ISSUED'
+       JOIN "NotificationDelivery" d ON d."stableEventKey"=l.id AND d."eventType"='KAKAO_RECONFIRMATION'
+       WHERE a."detailsJson"->>'commandId'=$1 AND l."revokedAt" IS NULL AND l."lastUsedAt" IS NULL
+         AND l."expiresAt">now() AND d.status IN ('PENDING','SENDING','SENT','FAILED') LIMIT 1`, candidate.commandId,
+    );
+    if (protectedLinks.length) return null;
     const payload = buildKakaoReconfirmationPayload({
       ...candidate, fromClass: classSnapshot(candidate, "from"), toClass: classSnapshot(candidate, "to"),
     });

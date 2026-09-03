@@ -3,6 +3,7 @@ import fs from "node:fs";
 import test from "node:test";
 
 import { buildEnrollmentOperationsEvent } from "../src/lib/operations-events/admin-hooks.ts";
+import { operationsEventPayloadFingerprint, assertOperationsEventPayloadMatch } from "../src/lib/operations-events/policy.ts";
 
 const BASE = {
   enrollmentId: "enrollment-1",
@@ -34,6 +35,31 @@ test("휴원생 활성화는 복귀, 활성생 퇴원은 퇴원 이벤트가 된
 
 test("같은 상태를 다시 저장하면 동기화 이벤트를 만들지 않는다", () => {
   assert.equal(buildEnrollmentOperationsEvent({ ...BASE, previousStatus: "ACTIVE", nextStatus: "ACTIVE" }), null);
+});
+
+test("신청 출처는 새 등록과 복귀에만 덧붙이며 기존 이벤트 계약을 보존한다", () => {
+  for (const previousStatus of [null, "PAUSED"]) {
+    const original = buildEnrollmentOperationsEvent({ ...BASE, previousStatus, nextStatus: "ACTIVE" });
+    const linked = buildEnrollmentOperationsEvent({ ...BASE, previousStatus, nextStatus: "ACTIVE", enrollmentApplicationId: "application-1" });
+    assert.equal(Object.hasOwn(original.after, "enrollmentApplicationId"), false);
+    assert.deepEqual(linked, { ...original, after: { ...original.after, enrollmentApplicationId: "application-1" } });
+  }
+  assert.equal(buildEnrollmentOperationsEvent({ ...BASE, previousStatus: "ACTIVE", nextStatus: "ACTIVE", enrollmentApplicationId: "application-1" }), null);
+});
+
+test("신청 승인에서 잠근 신청 ID를 반별 원장에 전달하며 일반 수강 경로는 유지한다", () => {
+  const source = fs.readFileSync(new URL("../src/app/actions/admin.ts", import.meta.url), "utf8");
+  const approval = source.slice(source.indexOf("export async function approveEnrollApplication"), source.indexOf("export async function rejectEnrollApplication"));
+  assert.match(approval, /enrollmentApplicationId: app\.id/);
+  assert.match(approval, /enqueueWebsiteOperationsEventInTransaction\(tx, event\)/);
+  assert.equal((source.match(/enrollmentApplicationId: app\.id/g) || []).length, 1);
+});
+
+test("같은 수강 이벤트를 다른 신청에 귀속하면 기존 중복 방지 검증에서 충돌한다", () => {
+  const first = buildEnrollmentOperationsEvent({ ...BASE, previousStatus: null, nextStatus: "ACTIVE", enrollmentApplicationId: "application-1" });
+  const other = buildEnrollmentOperationsEvent({ ...BASE, previousStatus: null, nextStatus: "ACTIVE", enrollmentApplicationId: "application-2" });
+  assert.equal(first.eventId, other.eventId);
+  assert.throws(() => assertOperationsEventPayloadMatch(operationsEventPayloadFingerprint(first), operationsEventPayloadFingerprint(other)));
 });
 
 test("등록·상태변경은 같은 트랜잭션에서 원장을 만들고 하드삭제는 자동 동기화하지 않는다", () => {

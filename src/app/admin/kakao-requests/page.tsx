@@ -1,6 +1,6 @@
 import { requireAdmin } from "@/lib/auth-guard";
 import { prisma } from "@/lib/prisma";
-import KakaoRequestsClient, { type KakaoRequestAdminRow } from "./KakaoRequestsClient";
+import KakaoRequestsClient, { type KakaoClassOption, type KakaoRequestAdminRow } from "./KakaoRequestsClient";
 
 export const dynamic = "force-dynamic";
 
@@ -28,6 +28,7 @@ export default async function KakaoRequestsPage({
   const requested = (await searchParams)?.status ?? "ACTION";
   const status = FILTER_VALUES.includes(requested as (typeof FILTER_VALUES)[number]) ? requested : "ACTION";
   let rows: DbRow[] = [];
+  let classes: KakaoClassOption[] = [];
   let schemaReady = true;
 
   try {
@@ -51,6 +52,23 @@ export default async function KakaoRequestsPage({
         LIMIT 200`,
       status,
     );
+    const studentIds = rows.flatMap((row) => row.studentId ? [row.studentId] : []);
+    const [classRows, enrollmentRows] = await Promise.all([
+      prisma.class.findMany({
+        where: { dayOfWeek: { not: "Seasonal" }, program:{ deletedAt:null } },
+        select: { id:true, name:true, dayOfWeek:true, startTime:true, endTime:true, program:{ select:{ name:true } } },
+        orderBy: [{ dayOfWeek:"asc" }, { startTime:"asc" }],
+      }),
+      studentIds.length === 0 ? Promise.resolve([]) : prisma.enrollment.findMany({
+        where: { studentId:{ in:studentIds }, status:{ in:["ACTIVE","PAUSED"] } },
+        select: { studentId:true, classId:true },
+      }),
+    ]);
+    const dayLabel: Record<string,string> = { Monday:"월", Tuesday:"화", Wednesday:"수", Thursday:"목", Friday:"금", Saturday:"토", Sunday:"일" };
+    classes = classRows.map((item) => ({ id:item.id, label:`${dayLabel[item.dayOfWeek] ?? item.dayOfWeek} ${item.startTime}~${item.endTime} · ${item.name} · ${item.program.name}` }));
+    const enrolledByStudent = new Map<string,string[]>();
+    for (const enrollment of enrollmentRows) enrolledByStudent.set(enrollment.studentId, [...(enrolledByStudent.get(enrollment.studentId) ?? []), enrollment.classId]);
+    rows = rows.map((row) => ({ ...row, currentClassIds:row.studentId ? enrolledByStudent.get(row.studentId) ?? [] : [] }));
   } catch (error) {
     if (!isKakaoSchemaNotReady(error)) throw error;
     schemaReady = false;
@@ -64,6 +82,7 @@ export default async function KakaoRequestsPage({
         createdAt: row.createdAt.toISOString(),
         decidedAt: row.decidedAt?.toISOString() ?? null,
       }))}
+      classes={classes}
       status={status}
       schemaReady={schemaReady}
     />

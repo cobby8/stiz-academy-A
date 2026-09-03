@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { createHash } from "node:crypto";
 import { notMergedStudent } from "@/lib/studentVisibility";
 import {
   SHUTTLE_EXCEPTION_MESSAGE,
@@ -123,19 +124,32 @@ export async function submitShuttleException(parentUserId: string, input: Submit
 
   // 가드3: 같은 날·같은 방향에 이미 있으면 덮어쓴다(학부모가 마음을 바꾼 것).
   // 두 건이 살아 있으면 기사님이 무엇을 따를지 모른다.
-  await prisma.$executeRawUnsafe(
-    `UPDATE "ShuttleDayException"
-        SET "canceledAt" = now(), "updatedAt" = now()
-      WHERE "studentId" = $1 AND "serviceDate" = $2::date AND direction = $3
-        AND "canceledAt" IS NULL`,
-    studentId, serviceDate, direction,
-  );
-  await prisma.$executeRawUnsafe(
-    `INSERT INTO "ShuttleDayException"
+  const saved = await prisma.$queryRawUnsafe<{ id: string; changed: boolean }[]>(
+    `WITH guard AS MATERIALIZED (
+       SELECT pg_advisory_xact_lock(hashtextextended($1||'|'||$2||'|'||$3, 0))
+     ), existing AS (
+       SELECT x.id FROM "ShuttleDayException" x CROSS JOIN guard
+        WHERE x."studentId"=$1 AND x."serviceDate"=$2::date AND x.direction=$3
+          AND x.kind=$4 AND x.location IS NOT DISTINCT FROM $5 AND x.note IS NOT DISTINCT FROM $6
+          AND x."canceledAt" IS NULL
+        LIMIT 1
+     ), canceled AS (
+       UPDATE "ShuttleDayException"
+          SET "canceledAt" = now(), "updatedAt" = now()
+        WHERE "studentId" = $1 AND "serviceDate" = $2::date AND direction = $3
+          AND "canceledAt" IS NULL
+          AND NOT EXISTS (SELECT 1 FROM existing)
+     ), inserted AS (
+       INSERT INTO "ShuttleDayException"
         ("studentId","serviceDate","direction","kind","location","note","requestedByUserId")
-     VALUES ($1,$2::date,$3,$4,$5,$6,$7)`,
+       SELECT $1,$2::date,$3,$4,$5,$6,$7 WHERE NOT EXISTS (SELECT 1 FROM existing)
+       RETURNING id
+     ) SELECT id, true AS changed FROM inserted
+       UNION ALL SELECT id, false AS changed FROM existing`,
     studentId, serviceDate, direction, kind, location, note, parentUserId,
   );
+  if (!saved[0]) return { ok: false as const, message: "셔틀 변경을 저장하지 못했습니다." };
+  if (!saved[0].changed) return { ok: true as const, notification: null, noOp: true as const };
 
   const notification = await notifyAdminsOfShuttleException({
     studentName: owned[0].name,
@@ -144,6 +158,10 @@ export async function submitShuttleException(parentUserId: string, input: Submit
     direction,
     kind,
     location,
+    recordId: saved[0].id,
+    eventVersion: createHash("sha256")
+      .update(JSON.stringify({ direction, kind, location, note }))
+      .digest("hex"),
   });
 
   return { ok: true as const, notification };
@@ -154,6 +172,7 @@ export async function cancelShuttleException(parentUserId: string, exceptionId: 
   if (!id) return { ok: false as const, message: "취소할 신청을 찾을 수 없습니다." };
 
   type CanceledException = {
+    id: string;
     studentId: string; studentName: string; serviceDate: string;
     direction: string; kind: string; location: string | null;
   };
@@ -164,7 +183,7 @@ export async function cancelShuttleException(parentUserId: string, exceptionId: 
          FROM "Student" s
         WHERE x."studentId" = s.id AND s."parentId" = $1
           AND x.id = $2 AND x."canceledAt" IS NULL
-        RETURNING x."studentId" AS "studentId", s.name AS "studentName",
+        RETURNING x.id, x."studentId" AS "studentId", s.name AS "studentName",
                   to_char(x."serviceDate",'YYYY-MM-DD') AS "serviceDate",
                   x.direction, x.kind, x.location`,
       parentUserId, id,
@@ -179,6 +198,8 @@ export async function cancelShuttleException(parentUserId: string, exceptionId: 
     direction: row.direction,
     kind: row.kind,
     location: row.location,
+    recordId: row.id,
+    eventVersion: "canceled",
   });
   return { ok: true as const, notification };
 }
@@ -217,7 +238,7 @@ export async function getShuttleExceptionsForDate(date: string): Promise<
   }
 }
 
-async function notifyAdminsOfShuttleException(input: {
+export async function notifyAdminsOfShuttleException(input: {
   action?: "SUBMITTED" | "CANCELED";
   studentName: string;
   studentId: string;
@@ -225,6 +246,8 @@ async function notifyAdminsOfShuttleException(input: {
   direction: string;
   kind: string;
   location: string | null;
+  recordId: string;
+  eventVersion: string;
 }) {
   try {
     const { notifyOperationalStaff } = await import("@/lib/operational-staff-notification");
@@ -235,6 +258,9 @@ async function notifyAdminsOfShuttleException(input: {
       ? SHUTTLE_EXCEPTION_KIND_LABEL.SKIP
       : `${SHUTTLE_EXCEPTION_KIND_LABEL.LOCATION} (${input.location ?? "-"})`;
     return await notifyOperationalStaff({
+      stableEventKey: `shuttle-day-exception:${input.recordId}:${input.action ?? "SUBMITTED"}:${input.eventVersion}`,
+      eventType: `SHUTTLE_DAY_EXCEPTION_${input.action ?? "SUBMITTED"}`,
+      studentId: input.studentId,
       type: "SHUTTLE_EXCEPTION",
       title: input.action === "CANCELED" ? "셔틀 당일 변경 취소" : "셔틀 당일 변경",
       message: `${input.studentName} · ${input.serviceDate} · ${SHUTTLE_DIRECTION_LABEL[input.direction as ShuttleDirection] ?? input.direction} · ${what}${input.action === "CANCELED" ? " · 취소" : ""}`,

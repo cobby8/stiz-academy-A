@@ -566,3 +566,9 @@
 - 정규 배차의 담당 기사는 별도 특강 노선의 `ShuttleRoutePlan`을 추측해 사용하지 않고 `RegularDispatchRoute.payload.vehicles[].driverUserId`에 운행별로 저장한다.
 - 저장 시 서버가 `User.role='DRIVER'`를 재검증한다.
 - 결석·당일 셔틀 요청과 취소는 적용 월, 요일, 방향, 학생 ID가 일치하는 고유 기사에게만 알린다. 미배정·비기사·같은 방향 복수 매칭은 기사 전체 발송으로 대체하지 않고 원장에게 `담당 기사 확인 필요`로 남긴다.
+
+# 운영 담당자 알림 전달 장부
+
+- 결석·당일 셔틀 담당자 알림은 기존 `NotificationDelivery`와 push outbox를 재사용하며 IN_APP과 PUSH를 수신자별 별도 채널 행으로 기록한다.
+- 동일 활성 payload 재요청은 no-op으로 처리하고, 취소 후 재신고 같은 새 상태 전환은 변경 버전으로 구분한다. 셔틀 동일 요청 경합은 advisory transaction lock과 원자 SQL로 중복 생성하지 않는다.
+- 푸시 payload는 재시도 중에만 보존하고 최종 상태에서 제거한다. 최근 14일 장부 누락은 사이트 내부 5분 복구 작업이 정확한 stableEventKey로 재적재하며 Sheet·Rallyz 외부 실행기와 책임을 분리한다.

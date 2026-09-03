@@ -692,6 +692,7 @@ function QuickManagementCard() {
                 <QuickLink title="출결 관리" href="/admin/attendance" color="orange" />
                 <QuickLink title="수납/결제" href="/admin/finance" color="blue" />
                 <QuickLink title="요청 관리" href="/admin/requests" color="orange" />
+                <QuickLink title="전달 장부" href="/admin/notification-deliveries" color="blue" />
                 <QuickLink title="갤러리" href="/admin/gallery" color="green" />
                 <QuickLink title="공지사항" href="/admin/notices" color="purple" />
                 <QuickLink title="시간표" href="/admin/schedule" color="orange" />

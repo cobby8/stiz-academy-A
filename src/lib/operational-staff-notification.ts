@@ -1,4 +1,5 @@
-import { createNotificationRecord } from "@/lib/notification";
+import { deliverOperationalNotification, type OperationalNotificationDeliveryResult } from "@/lib/operational-notification-delivery";
+import { randomUUID } from "node:crypto";
 import { prisma } from "@/lib/prisma";
 import { buildDriverLookupContext, selectAssignedDriverIds, type AssignedDriverRow } from "@/lib/operational-driver-resolution";
 
@@ -7,6 +8,9 @@ export type OperationalRecipientSummary = {
   coach: "NOTIFIED" | "NOT_FOUND" | "NOT_APPLICABLE";
   driver: "NOTIFIED" | "NEEDS_CONFIRMATION" | "NOT_APPLICABLE";
   recipientCount: number;
+  deliveredCount: number;
+  failedCount: number;
+  deliveries: Array<OperationalNotificationDeliveryResult & { role: string }>;
 };
 
 type Recipient = { id: string; role: string };
@@ -73,6 +77,9 @@ export async function notifyOperationalStaff(input: {
   includeCoach?: boolean;
   includeDriver?: boolean;
   driverContext?: DriverContext;
+  stableEventKey?: string;
+  eventType?: string;
+  studentId?: string;
 }): Promise<OperationalRecipientSummary> {
   const includeCoach = input.includeCoach === true;
   const includeDriver = input.includeDriver === true;
@@ -82,24 +89,42 @@ export async function notifyOperationalStaff(input: {
     : { recipients: [] as Recipient[], needsConfirmation: includeDriver };
   const allRecipients = [...recipients, ...driverResolution.recipients]
     .filter((recipient, index, list) => list.findIndex((candidate) => candidate.id === recipient.id) === index);
+  // 기존 수강변경 호출부는 아직 원본 이벤트 키 계약이 없다. 결석·셔틀은 호출부가 안정 키를 반드시 넘긴다.
+  const stableEventKey = input.stableEventKey ?? `operational:${input.type}:${randomUUID()}`;
+  const eventType = input.eventType ?? input.type;
 
-  await Promise.all(allRecipients.map((recipient) => createNotificationRecord({
-    userId: recipient.id,
-    type: input.type,
-    title: input.title,
-    message: driverResolution.needsConfirmation && (recipient.role === "ADMIN" || recipient.role === "VICE_ADMIN")
-      ? `${input.message} · 담당 기사 확인 필요`
-      : input.message,
-    linkUrl: recipient.role === "ADMIN" || recipient.role === "VICE_ADMIN"
-      ? input.linkUrl
-      : (input.staffLinkUrl ?? input.linkUrl),
+  const attempted = await Promise.allSettled(allRecipients.map(async (recipient) => ({
+    role: recipient.role,
+    ...await deliverOperationalNotification({
+      stableEventKey,
+      eventType,
+      trigger: input.type,
+      studentId: input.studentId,
+      recipientUserId: recipient.id,
+      title: input.title,
+      message: driverResolution.needsConfirmation && (recipient.role === "ADMIN" || recipient.role === "VICE_ADMIN")
+        ? `${input.message} · 담당 기사 확인 필요`
+        : input.message,
+      linkUrl: recipient.role === "ADMIN" || recipient.role === "VICE_ADMIN"
+        ? input.linkUrl
+        : (input.staffLinkUrl ?? input.linkUrl),
+    }),
   })));
+  const deliveries = attempted.flatMap((result) => result.status === "fulfilled" ? [result.value] : []);
+  const successfulDeliveries = deliveries.filter((delivery) => delivery.inAppCreated || delivery.duplicate);
+  const failedCount = attempted.length - successfulDeliveries.length;
+  for (const result of attempted) {
+    if (result.status === "rejected") console.error("[operational-staff-notification] 전달 장부 기록 실패:", result.reason);
+  }
 
-  const roles = new Set(allRecipients.map((recipient) => recipient.role));
+  const roles = new Set(successfulDeliveries.map((recipient) => recipient.role));
   return {
     admin: roles.has("ADMIN") || roles.has("VICE_ADMIN") ? "NOTIFIED" : "NOT_FOUND",
     coach: includeCoach ? (roles.has("INSTRUCTOR") ? "NOTIFIED" : "NOT_FOUND") : "NOT_APPLICABLE",
     driver: includeDriver ? (roles.has("DRIVER") ? "NOTIFIED" : "NEEDS_CONFIRMATION") : "NOT_APPLICABLE",
     recipientCount: allRecipients.length,
+    deliveredCount: successfulDeliveries.length,
+    failedCount,
+    deliveries,
   };
 }

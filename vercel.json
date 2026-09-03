@@ -51,6 +51,10 @@
       "schedule": "* * * * *"
     },
     {
+      "path": "/api/cron/operational-notification-reconciliation",
+      "schedule": "*/5 * * * *"
+    },
+    {
       "path": "/api/cron/makeup-credits",
       "schedule": "30 15 * * *"
     },

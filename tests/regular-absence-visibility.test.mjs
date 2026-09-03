@@ -23,9 +23,10 @@ test("알림이 실패해도 신고 자체는 되돌리지 않는다", () => {
   assert.match(parentAbsence, /async function notifyAdminsOfAbsenceChange[\s\S]{0,1400}catch \(error\)[\s\S]{0,120}console\.error/);
 });
 
-test("취소 알림에 쓸 이름을 지우기 전에 확보한다", () => {
-  // 지운 뒤 조회하면 이미 없다. DELETE ... RETURNING 으로 같이 받아야 한다.
+test("취소 알림 근거를 보존하면서 이름과 원본 ID를 확보한다", () => {
+  assert.match(parentAbsence, /SET status = 'CANCELLED'/);
   assert.match(parentAbsence, /RETURNING s\.name AS "studentName", c\.name AS "className"/);
+  assert.match(parentAbsence, /ra\.id/);
   assert.match(parentAbsence, /canceled\.length === 0/);
 });
 

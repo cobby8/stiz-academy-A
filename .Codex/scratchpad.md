@@ -1,7 +1,7 @@
 # STIZ 작업 스크래치패드
 ## 현재 작업
 - 목표: 인증된 카카오 학부모 요청을 사이트에 접수하고 원장·담당 코치·기사에게 전달하며 승인형 외부 동기화로 연결한다.
-- 현재 단계: 정규 배차 운행별 담당 기사 지정과 결석·당일 셔틀 요청/취소의 고유 담당 기사 알림 구현·검증 완료. 운영 배포 대기.
+- 현재 단계: 결석·당일 셔틀 담당자 알림을 수신자·채널별 전달 장부와 자동 누락 복구까지 연결해 검증 완료. 운영 배포 대기.
 - 운영 반영: 없음. 코드 변경과 테스트만 수행했다.
 - 확인보류: 9월 차량표 시트 기준 사이트 누락/초과 행, 셔틀비 0원 일반탑승 후보, 화면 재확인 후 남는 셔틀 중복 후보, 랠리즈 대조.
 
@@ -23,6 +23,7 @@
 | 본사 카페24 결제 브리지 | developer + tester | 완료(본사 API 인계 완료) | 결제 제공자 분기·서명 요청·서명 웹훅·관리자 표시·프리플라이트·빌드 검증, 본사 Issue #134 생성 |
 | 카카오 학부모 접수 | developer + tester | 내부 자동화 완료·채널 배포 HELD | 최초 인증, 매분 라우팅, 원장·담당 코치·기사 내부 알림 검증; 외부 3중 쓰기는 승인형 |
 | 정규 배차 담당 기사 알림 | developer + tester + reviewer | 완료·운영 배포 대기 | 월·요일·방향·학생 ID로 고유 기사 알림, 미배정/복수는 원장 확인, 요청 취소 포함 |
+| 담당자 알림 전달 장부 | developer + tester + reviewer | 완료·운영 배포 대기 | 인앱·푸시 상태/오류/시도 기록, 중복 방지, 개인정보 제거, 5분 누락 복구, 관리자 조회 |
 
 ## 구현 기록
 - 정규 셔틀 자동 제안은 요일 전체를 한 노선으로 합치지 않고 등원은 수업 시작, 하원은 수업 종료 시각별로 실행을 분리한다. 실행별 시간 앵커는 저장 JSON에 함께 보존한다.
@@ -53,11 +54,9 @@
 
 ## 테스트 결과
 
+- 전달 누락 복구 최종 재QA: 구버전 셔틀 키가 현재 payload 누락을 가리지 않도록 정확한 안정 키 집합으로 선별하고, 담당자 전달 실패·0건은 `processed`가 아니라 `failed`로 집계하는 계약을 확인했다. 관련 회귀 71건·`tsc --noEmit`·`git diff --check` 통과, 실제 DB·푸시·외부 발송·배포 없음.
 - 카카오 학부모 접수 최종 재QA: 카카오 챗봇·DB 사전점검·접수 라우팅과 정규/특강 결석·당일 셔틀 회귀 65건, `npx.cmd prisma validate`, `npx.cmd tsc --noEmit`, `git diff --check` 모두 통과했다. 확인 초안 없는 확인어는 신규 요청을 만들지 않으며, 도메인 반영 뒤 마감 기록 실패는 자동 재실행 없이 `PROCESSING`으로 남는 계약을 확인했다.
 - DB 연결정보가 없어 운영 DB 구조 실조회는 명시적으로 건너뛰었으며, 미연결 시 실패 차단·명시적 skip만 허용하는 코드 계약은 통과했다. 실제 DB·카카오·문자·내부 알림 호출은 없었다.
-- 본사 카페24 결제 브리지: 결제 회귀 10건, `npx tsc --noEmit`, `npm run release:code-check`, `npm run build` 통과. `npm run payments:preflight`는 현재 기본 토스 모드의 키 미설정으로 의도된 실패. 실제 본사 주문·결제·운영 DB 변경·문자·배포 없음.
-- 토스 온라인 PG 보강: 결제 회귀 11건, 관련 결제 회귀 37건, `npx.cmd tsc --noEmit`, `npm run release:code-check`, `npm run build` 통과. `npm run payments:preflight`는 토스 공개키·서버키 미설정으로 의도된 실패. 실제 결제 승인·운영 DB 변경·문자·배포 없음.
-- 유니폼 주문 보강: `node --test tests\uniform-partner.test.mjs tests\uniform-order-db-preflight.test.mjs tests\uniform-orders.test.mjs`, `npx.cmd tsc --noEmit`, `npm run release:code-check`, `npm run build` 통과. 운영 DB 컬럼과 최근 2건 디자인/이니셜 보강 완료. 본사 주문 전송·SMS 발송·배포 호출 없음.
 - Solapi 묶음 발송 최종 재QA: 타깃 20건과 문자·장부 확대 회귀 129건, `npx.cmd tsc --noEmit`, `git diff --check` 모두 통과했다.
 - `send-many/detail` 단일 접수·500명 상한·`customFields.deliveryId` 매칭, 4xx 실패/5xx·누락·timeout 불확실 분리, `groupInfo.groupId`·객체형 목록/customFields 호환, Bizppurio 순차 호환, `ACCEPTED`와 최종 `SENT` 분리, stale sweep의 ACCEPTED 제외, 결과 누락 10분 유예·그룹 5개 제한·페이지네이션·최종 집계·providerStatus 노출을 확인했다.
 - 테스트는 실제 Solapi·Bizppurio·운영 DB를 호출하지 않았다. 신규 공급자 테스트는 소스 계약 검사 중심이므로 실제 응답 fixture 기반 분기 행동과 DB 상태 전이·페이지네이션 통합 검증은 후속 보강 권장이다.
@@ -67,6 +66,7 @@
 
 | 요청자 | 파일 | 문제 | 상태 |
 |---|---|---|---|
+| tester | `parent-regular-absence.ts`, `parent-shuttle-exception.ts` | 결석 반복 lifecycle 버전과 셔틀 동일 payload no-op/advisory lock, 누락 복구 선별로 보완 후 회귀 검증 완료 | 완료 |
 | tester | 체험 일정/문자 경로 | Sat-2 canonical 시간, date-only 차단, stale Class 우선순위, 부모·담당자 동일 시간 보완 및 검증 완료 | 완료 |
 | tester | `tests/regular-shuttle-location-link.test.mjs` | Prisma 가짜 어댑터 기반 roundtrip·경합·멱등 행동 테스트 보완 완료 | 완료 |
 | reviewer | `src/lib/message-ledger.ts:101-125` | 암호문/키 오류 행을 UNCERTAIN 격리하고 나머지를 계속 처리하도록 보완됨 | 완료 |
@@ -82,6 +82,7 @@
 - 카카오 운영 적용은 전용 migration·비밀 환경변수·챗봇 관리자센터 스킬/블록 배포·단일 ACTIVE 처리기 승인이 필요하다.
 
 ## 작업 로그 (최근 10건)
+- 2026-09-03: 결석·당일 셔틀 담당자 알림을 기존 NotificationDelivery/push-outbox에 연결해 채널별 상태·오류·시도를 기록하고 관리자 전달 장부와 5분 누락 복구를 추가했다. 반복 요청/취소 lifecycle·동시 셔틀 요청의 중복을 차단하고 최종 푸시 payload를 제거했으며 관련 회귀 71건·tsc·diff-check를 통과했다. 실제 DB·푸시·배포 없음.
 - 2026-09-03: 정규 배차 운행별 담당 기사를 지정·검증·저장하고 결석 및 당일 셔틀 요청/취소를 해당 월·요일·방향·학생 ID의 고유 기사에게만 알리도록 보강했다. 미배정·비기사·복수 매칭은 원장 확인으로 차단했으며 관련 회귀 95건·tsc·diff-check를 통과했다. 실제 DB·알림·배포 없음.
 - 2026-09-03: 클럽샵에서 본사 API가 `purchasable=false`로 반환한 재고 없는 상품을 고객 목록에서 자동으로 숨기도록 변경했다. 현재 대상은 STIZ 트레이닝 콘 1개이며 본사 상품·주문 데이터는 변경하지 않았다.
 - 2026-09-03: SHOP 상품 카드를 `/shop/product/[productNo]` 내부 화면으로 연결하고, 다산점 상단 바 안에 카페24 상품 상세·옵션·구매 화면을 삽입했다. 허용 도메인 검증과 외부 열기 대안을 두었으며 390px 무가로스크롤, 실제 iframe 렌더링, tsc·lint·전체 빌드를 검증했다. 실제 주문·결제·배포 없음.
@@ -91,7 +92,6 @@
 - 2026-09-03: `SHOP`을 `/apply/uniform` 내부 탭에서 독립 메뉴와 `/shop` 페이지로 분리했다. 헤더·모바일 메뉴·푸터 바로가기에 SHOP을 추가하고 유니폼 신청 페이지는 기존 단독 신청 폼으로 복구했다. `tsc --noEmit`·`git diff --check`·`npm run build` 통과, 실제 주문·문자·결제 없음.
 - 2026-09-02: `/apply/uniform`에 유니폼 기본 탭과 클럽샵 탭을 추가했다. 본사 읽기 전용 상품 API 프록시, 상품 카드·품절/준비중/장애 상태, 카페24 새 창 구매 링크를 구현했고 `tsc --noEmit`·`git diff --check`·`npm run build` 통과, 실제 주문·문자·결제 없음.
 - 2026-09-02: 리뷰 수정 후 카카오 학부모 접수를 최종 재QA했다. no-draft 확인어 차단과 도메인 성공 후 마감 실패의 PROCESSING 유지 포함 회귀 65건·Prisma·tsc·diff-check 통과, 외부 호출 없음.
-- 2026-09-02: 기사님 통합 링크에서 종료된 방학특강 시즌 배차를 숨기도록 수정했다. 정규 셔틀 원천 테이블의 완전 중복 후보는 0건으로 확인했고, 통합 기사 화면 회귀 16건·tsc·diff-check 통과, 운영 DB 쓰기·배포 없음.
 
 ## PM 체크
 

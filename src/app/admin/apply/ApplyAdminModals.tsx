@@ -277,9 +277,14 @@ export default function ApplyAdminModals({
                 force,
             })) as
                 | { approved: true; sms: { parentFailed: boolean; adminFailed: number; coachFailed: number; errors: string[] } }
+                | { ok: false; code: "INVALID_CLASSES"; message: string }
                 | { ok: false; code: "CAPACITY_WARNING"; classes: { classId: string; name: string; current: number; capacity: number }[] }
                 | { ok: false; code: "STUDENT_AMBIGUOUS"; candidates: { id: string; name: string; birthDate: string | null }[] };
 
+            if ("ok" in result && result.code === "INVALID_CLASSES") {
+                window.alert(result.message);
+                return;
+            }
             // A. 정원 초과 경고 — 하드 차단이 아니라 관리자에게 재확인 후 강행(force) 여부를 묻는다.
             if (result && "ok" in result && result.ok === false && result.code === "CAPACITY_WARNING") {
                 const lines = (result.classes ?? [])

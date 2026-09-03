@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { decideKakaoParentIntake, type KakaoIntakeDecision } from "@/app/actions/kakao-parent-intake-admin";
+import { kakaoFollowupSummary, isKakaoFollowupOverdue, type KakaoFollowupCommand } from "@/lib/kakaoIntakeFollowup";
 
 export type KakaoRequestAdminRow = {
   id: string; kind: string; sourceText: string; structuredJson: Record<string, unknown> | null; status: string;
@@ -12,6 +13,8 @@ export type KakaoRequestAdminRow = {
   identityStatus: string; operationsRequestId: string | null; decisionNote: string | null; decidedByName: string | null;
   createdAt: string; decidedAt: string | null;
   currentClassIds: string[];
+  commands: KakaoFollowupCommand[];
+  hasProcessingError: boolean;
 };
 
 export type KakaoClassOption = {
@@ -27,8 +30,8 @@ type ReviewDetails = {
   details: string;
 };
 
-const FILTERS = [["ACTION","처리 필요"],["SUBMITTED","신규"],["HELD","보류"],["FAILED","실패"],["DONE","처리 완료"],["ALL","전체"]] as const;
-const LABEL: Record<string,string> = { SUBMITTED:"신규 접수", HELD:"관리자 확인 필요", FAILED:"처리 실패", NEEDS_DETAILS:"추가 확인 필요", APPROVED:"운영 원장 이관", REJECTED:"접수 반려", CONSULTATION:"상담 전환", APPLIED:"자동 반영 완료", CANCELED:"학부모 취소" };
+const FILTERS = [["ACTION","처리·후속 필요"],["SUBMITTED","신규"],["HELD","보류"],["FAILED","실패"],["FOLLOWUP","상담·이관 후속"],["DONE","접수 종결"],["ALL","전체"]] as const;
+const LABEL: Record<string,string> = { SUBMITTED:"신규 접수", PROCESSING:"처리 중·반영 확인", HELD:"관리자 확인 필요", FAILED:"처리 실패", NEEDS_DETAILS:"추가 확인 필요", APPROVED:"운영 원장 이관", REJECTED:"접수 반려", CONSULTATION:"상담 전환", APPLIED:"자동 반영 완료", CANCELED:"학부모 취소" };
 const TRANSFERABLE = new Set(["PAUSE","WITHDRAW","RESUME","CLASS_CHANGE","CLASS_ADD","SHUTTLE_START_STOP","SHUTTLE_CHANGE","SHUTTLE_FEE","CONTACT_CHANGE","BILLING_CORRECTION"]);
 const REVIEWABLE = new Set(["SUBMITTED","HELD","FAILED","NEEDS_DETAILS"]);
 const formatDate = (value: string) => new Intl.DateTimeFormat("ko-KR", { timeZone:"Asia/Seoul", dateStyle:"short", timeStyle:"short" }).format(new Date(value));
@@ -56,6 +59,7 @@ export default function KakaoRequestsClient({ rows, classes, status, schemaReady
   const [notes, setNotes] = useState<Record<string,string>>({});
   const [reviewDetails, setReviewDetails] = useState<Record<string,ReviewDetails>>(() => Object.fromEntries(rows.map(row => [row.id, initialDetails(row)])));
   const [error, setError] = useState("");
+  const [checkedAt] = useState(() => Date.now());
   function decide(id: string, decision: KakaoIntakeDecision) {
     setError("");
     startTransition(async () => {
@@ -71,16 +75,22 @@ export default function KakaoRequestsClient({ rows, classes, status, schemaReady
     <header><p className="text-sm font-bold text-yellow-600">학부모 채널</p><h1 className="mt-1 text-2xl font-black dark:text-white">카카오 접수함</h1><p className="mt-2 text-sm text-gray-500">검증된 요청은 운영 승인 대기로 이관하며, 관리자 보완값은 학부모 재확인 전 시트·랠리즈·사이트에 반영하거나 알림을 보내지 않습니다.</p></header>
     {!schemaReady && <section role="alert" className="rounded-2xl bg-amber-50 p-5 text-amber-950"><b>관리자 검토용 DB 적용이 필요합니다.</b><p className="mt-2 text-sm">새 migration 적용 전에는 목록과 처리 기능을 열지 않습니다.</p></section>}
     <nav className="flex gap-2 overflow-x-auto" aria-label="접수 상태 필터">{FILTERS.map(([value,label]) => <button key={value} type="button" onClick={() => router.push(`/admin/kakao-requests?status=${value}`)} className={`min-h-11 shrink-0 rounded-xl px-4 text-sm font-bold ${status===value ? "bg-brand-navy-900 text-white" : "border bg-white text-gray-600"}`}>{label}</button>)}</nav>
+    <p className="text-sm">현재 목록 {rows.length}건(최대 200건) · 접수 후 24시간 이상 후속 대상 {rows.filter(row => isKakaoFollowupOverdue(row.status, row.createdAt, checkedAt)).length}건 · 접수/동기화 실패 {rows.filter(row => row.status === "FAILED" || row.commands.some(command => ["FAILED", "PARTIAL"].includes(command.status))).length}건</p>
+    <p className="text-xs text-gray-500">상담 전환·운영 원장 이관은 업무 완료가 아닙니다. 접수 종결도 청구·알림 발송 완료를 뜻하지 않습니다.</p>
     {error && <p role="alert" className="rounded-xl bg-red-50 p-3 text-sm font-bold text-red-700">{error}</p>}
     {!schemaReady || rows.length===0 ? <p className="rounded-2xl border bg-white p-8 text-center text-sm text-gray-500">{schemaReady ? "해당 요청이 없습니다." : "DB 준비 후 표시됩니다."}</p> : <ul className="space-y-4">{rows.map(row => {
       const identityOk = row.identityStatus==="ACTIVE" && Boolean(row.studentId);
       const detail = reviewDetails[row.id] ?? EMPTY_DETAILS;
       const updateDetail = (key: keyof ReviewDetails, value: string) => setReviewDetails(current => ({ ...current, [row.id]: { ...(current[row.id] ?? EMPTY_DETAILS), [key]:value } }));
       const currentClasses = classes.filter(option => row.currentClassIds.includes(option.id));
+      const followup = kakaoFollowupSummary(row.status, row.commands);
       return <li key={row.id} className="rounded-2xl border bg-white p-5 shadow-sm dark:bg-gray-900">
         <div className="flex items-start gap-3"><div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-2"><span className="rounded-full bg-yellow-100 px-2 py-1 text-xs font-black text-yellow-800">{LABEL[row.status] ?? row.status}</span><span className="text-xs font-bold text-gray-500">{row.kind}</span></div><h2 className="mt-2 text-xl font-black text-gray-950 dark:text-white">{row.studentName ?? "학생 확인 필요"}</h2><p className="mt-1 text-xs text-gray-500">{row.studentGrade ?? "학년 미확인"} · 보호자 {row.parentName ?? "확인 필요"}</p>{row.linkedStudents.length > 1 && <p className="mt-2 rounded-lg bg-violet-50 px-3 py-2 text-xs text-violet-900"><b>연결 자녀</b> · {row.linkedStudents.map(student => `${student.name}${student.grade ? ` (${student.grade})` : ""}`).join(" · ")}</p>}</div><time className="shrink-0 text-xs text-gray-400">{formatDate(row.createdAt)}</time></div>
         <p className="mt-3 whitespace-pre-wrap rounded-xl bg-gray-50 p-3 text-sm">{row.sourceText}</p>
-        <section className="mt-3 rounded-xl border p-3 text-xs"><b>인증·구조화 확인</b><p className={identityOk ? "mt-2 text-green-700" : "mt-2 text-red-700"}>{identityOk ? `최초 인증 완료 · 학생 ID 연결 · 보호자 ${row.parentName ?? "확인"}` : "인증 또는 학생 ID 확인 필요"}</p><pre className="mt-2 overflow-auto whitespace-pre-wrap">{row.structuredJson ? JSON.stringify(row.structuredJson, null, 2) : "세부 정보 없음"}</pre></section>
+        {followup && <p className="mt-3 rounded-xl border p-3 text-sm font-bold">{followup}</p>}
+        {row.hasProcessingError && <p className="mt-2 text-xs font-bold">처리 보류·오류 기록 있음 · 학생/날짜/필수 정보와 실제 반영 이력을 확인해 주세요.</p>}
+        {isKakaoFollowupOverdue(row.status, row.createdAt, checkedAt) && <p className="mt-2 text-xs font-bold">접수 후 24시간 경과 · 후속 진행 여부 확인</p>}
+        <section className="mt-3 rounded-xl border p-3 text-xs"><b>인증·구조화 확인</b><p className={identityOk ? "mt-2 text-green-700" : "mt-2 text-red-700"}>{identityOk ? `최초 인증 완료 · 학생 ID 연결 · 보호자 ${row.parentName ?? "확인"}` : "인증 또는 학생 ID 확인 필요"}</p><details className="mt-2"><summary className="cursor-pointer">구조화 상세 보기</summary><pre className="mt-2 overflow-auto whitespace-pre-wrap">{row.structuredJson ? JSON.stringify(row.structuredJson, null, 2) : "세부 정보 없음"}</pre></details></section>
         <p className="mt-3 rounded-xl bg-blue-50 p-3 text-xs text-blue-900"><b>이관 후:</b> 검증된 운영 명령은 승인 대기(PENDING) · 외부 변경/알림은 별도 승인 전 HELD</p>
         {row.operationsRequestId && <Link href="/admin/operations-sync" className="mt-2 inline-block text-sm font-bold text-blue-700 underline">생성된 운영 원장 확인</Link>}
         {row.decidedAt && <p className="mt-2 text-xs text-gray-400">{row.decidedByName ?? "관리자"} · {formatDate(row.decidedAt)} · {row.decisionNote ?? "메모 없음"}</p>}

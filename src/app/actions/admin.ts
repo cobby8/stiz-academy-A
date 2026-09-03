@@ -3,6 +3,7 @@
 import { createHash, createHmac, timingSafeEqual } from "crypto";
 import { revalidatePath, revalidateTag } from "next/cache";
 import { prisma } from "@/lib/prisma";
+import { normalizeApprovalClassIds } from "@/lib/enrollment/approval-classes";
 import { requireAdmin, requireOwner, requireVerifiedParent } from "@/lib/auth-guard";
 import {
     createNotificationRecord,
@@ -4880,6 +4881,22 @@ export async function approveEnrollApplication(
     }
 ) {
     const admin = await requireAdmin();
+    // force는 정원 경고만 우회한다. 반 필수·유효성 검사는 항상 유지한다.
+    try {
+        data = { ...data, classIds: normalizeApprovalClassIds(data?.classIds) };
+    } catch (error) {
+        return { ok: false as const, code: "INVALID_CLASSES" as const,
+            message: error instanceof Error ? error.message : "배정할 수업을 확인해 주세요." };
+    }
+    const validClasses = await prisma.$queryRawUnsafe<{ id: string }[]>(
+        `SELECT c.id FROM "Class" c JOIN "Program" p ON p.id=c."programId"
+          WHERE c.id = ANY($1::text[]) AND c."dayOfWeek" <> 'Seasonal' AND p."deletedAt" IS NULL`,
+        data.classIds,
+    );
+    if (validClasses.length !== data.classIds.length) {
+        return { ok: false as const, code: "INVALID_CLASSES" as const,
+            message: "현재 개설된 정규 수업만 배정할 수 있습니다. 수업을 다시 선택해 주세요." };
+    }
 
     // ── A. 정원 초과 소프트 게이트 ──────────────────────────────────
     // 이유: 정원을 넘겨 배정하는 실수를 막되, 관리자 재량(대기 없이 추가)은 허용해야 한다.
@@ -4923,6 +4940,13 @@ export async function approveEnrollApplication(
 
     try {
         await prisma.$transaction(async (tx) => {
+        // 저장 직전에도 반·프로그램을 잠가 사전 조회 이후 폐강된 반을 차단한다.
+        const lockedClasses = await tx.$queryRawUnsafe<{ id: string }[]>(
+            `SELECT c.id FROM "Class" c JOIN "Program" p ON p.id=c."programId"
+              WHERE c.id = ANY($1::text[]) AND c."dayOfWeek" <> 'Seasonal' AND p."deletedAt" IS NULL
+              FOR SHARE OF c, p`, data.classIds,
+        );
+        if (lockedClasses.length !== data.classIds.length) throw new Error("배정할 수업이 변경되었습니다. 다시 선택해 주세요.");
         // 1. 신청서 조회
         const apps = await tx.$queryRawUnsafe<any[]>(
             `SELECT * FROM "EnrollmentApplication" WHERE id = $1 FOR UPDATE`,

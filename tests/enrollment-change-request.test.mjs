@@ -96,11 +96,11 @@ test("취소는 아직 결정 안 된 건만 가능하다", () => {
   assert.match(parentLib, /이미 처리된 신청은 취소할 수 없습니다/);
 });
 
-test("승인은 예약이고 적용은 적용일에 일어난다", () => {
-  assert.match(adminLib, /r\."effectiveFrom" <= \(now\(\) AT TIME ZONE 'Asia\/Seoul'\)::date/);
-  // 이미 반영한 건은 건너뛰어야 두 번 실행돼도 안전하다.
-  assert.match(adminLib, /r\."appliedAt" IS NULL/);
-  assert.match(adminLib, /SET "appliedAt" = now\(\)/);
+test("승인은 예약이고 적용일에 삼중 동기화 대기로 이관한다", () => {
+  assert.match(adminLib, /"effectiveFrom" <= \(now\(\) AT TIME ZONE 'Asia\/Seoul'\)::date/);
+  assert.match(adminLib, /"appliedAt" IS NULL/);
+  assert.doesNotMatch(adminLib, /SET "appliedAt" = now\(\)/);
+  assert.match(adminLib, /\["SHEET", "RALLYZ", "WEBSITE"\]/);
 });
 
 test("같은 결정을 두 번 눌러도 두 번 반영되지 않는다", () => {
@@ -110,12 +110,13 @@ test("같은 결정을 두 번 눌러도 두 번 반영되지 않는다", () => 
 
 test("한 건이 실패해도 나머지는 반영한다", () => {
   // 한 건 때문에 전체가 멈추면 그날 모든 변경이 밀린다.
-  assert.match(adminLib, /for \(const row of due\)[\s\S]{0,2400}catch \(error\)/);
+  assert.match(adminLib, /for \(const candidate of due\)[\s\S]*catch\s*\{/);
 });
 
 test("반 변경이 학생·반 유일 제약과 부딪히지 않는다", () => {
   // 그 반에 예전 등록 이력이 있으면 classId 를 바꾸는 UPDATE 가 충돌한다.
-  assert.match(adminLib, /SELECT id FROM "Enrollment" WHERE "studentId" = \$1 AND "classId" = \$2/);
+  assert.doesNotMatch(adminLib, /UPDATE "Enrollment"/);
+  assert.match(adminLib, /operationsCommand\.findUnique\(\{ where: \{ idempotencyKey: key \}/);
 });
 
 test("크론이 매일 돌고 아무나 부를 수 없다", () => {
@@ -126,12 +127,12 @@ test("크론이 매일 돌고 아무나 부를 수 없다", () => {
   assert.equal(job.schedule, "10 15 * * *"); // KST 00:10
 });
 
-test("신청·결정이 사람에게 전달된다", () => {
-  assert.match(parentLib, /notifyAdmins\("ENROLLMENT_CHANGE"/);
-  assert.match(adminLib, /notifyParentsOfStudents\(\[input\.studentId\]/);
+test("신청은 담당자에게 전달하고 결정 알림은 발송 승인 대기다", () => {
+  assert.match(parentLib, /notifyOperationalStaff\(/);
+  assert.doesNotMatch(adminLib, /notifyParentsOfStudents\(/);
   // 알림 실패가 신청·승인을 되돌리면 안 된다.
   assert.match(parentLib, /console\.error\("\[parent-change-request\] 원장 알림 실패/);
-  assert.match(adminLib, /console\.error\("\[admin-change-request\] 학부모 알림 실패/);
+  assert.match(adminLib, /ENROLLMENT_CHANGE_NOTIFICATION_HELD/);
 });
 
 // ── 학부모가 반 변경 시작일을 고를 수 있게 한 뒤 추가된 계약 ──────────────

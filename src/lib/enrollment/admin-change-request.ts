@@ -112,8 +112,9 @@ export async function decideEnrollmentChangeRequest(input: {
   note?: string | null;
 }) {
   const note = (input.note ?? "").trim().slice(0, 500) || null;
-  const rows = await prisma.$queryRawUnsafe<any[]>(
-    // PENDING 만 결정할 수 있다. 이미 결정된 건을 다시 눌러도 두 번 반영되지 않는다.
+  const rows = await prisma.$transaction(async (tx) => {
+  const decided = await tx.$queryRawUnsafe<any[]>(
+    // 결정과 발송 보류 기록은 함께 저장한다.
     `UPDATE "EnrollmentChangeRequest"
         SET status = $2, "decidedByUserId" = $3, "decidedAt" = now(),
             "decisionNote" = $4, "updatedAt" = now()
@@ -121,99 +122,86 @@ export async function decideEnrollmentChangeRequest(input: {
       RETURNING id, "studentId", kind, to_char("effectiveFrom",'YYYY-MM-DD') AS "effectiveFrom"`,
     input.requestId, input.approve ? "APPROVED" : "REJECTED", input.adminUserId, note,
   );
+  if (decided[0]) await tx.operationsAuditLog.create({ data: {
+    action: "ENROLLMENT_CHANGE_NOTIFICATION_HELD", actorType: "ADMIN", actorUserId: input.adminUserId,
+    detailsJson: { requestId: input.requestId, studentId: decided[0].studentId,
+      kind: decided[0].kind, approved: input.approve, effectiveFrom: decided[0].effectiveFrom,
+      notificationStatus: "HELD", reason: "정확한 수신자와 문구 미리보기 승인 필요" },
+  }});
+  return decided;
+  });
   if (!rows[0]) return { ok: false as const, message: "이미 처리된 신청입니다." };
 
-  await notifyParentOfDecision({
-    studentId: rows[0].studentId,
-    kind: rows[0].kind,
-    approved: input.approve,
-    effectiveFrom: rows[0].effectiveFrom,
-    note,
-  });
-
   // 적용일이 이미 지났으면(예: 늦게 승인) 바로 반영한다.
-  const applied = input.approve ? await applyDueEnrollmentChanges() : 0;
-  return { ok: true as const, appliedNow: applied > 0 };
+  if (input.approve) await applyDueEnrollmentChanges();
+  return { ok: true as const, appliedNow: false, notificationStatus: "HELD" as const };
 }
 
 /**
- * 적용일이 된 승인 건을 실제 수강 등록에 반영한다. 크론이 매일 부른다.
- * 이미 반영한 건(appliedAt)은 건드리지 않아 두 번 실행해도 안전하다.
+ * 적용일이 된 건은 3개 시스템 검증 대기 원장으로 옮긴다.
+ * 사이트만 변경하거나 appliedAt을 먼저 찍지 않는다.
  */
 export async function applyDueEnrollmentChanges(): Promise<number> {
-  const due = await prisma.$queryRawUnsafe<any[]>(
-    `SELECT r.id, r.kind, r."enrollmentId", r."toClassId", r."studentId"
-       FROM "EnrollmentChangeRequest" r
-      WHERE r.status = 'APPROVED'
-        AND r."appliedAt" IS NULL
-        AND r."effectiveFrom" <= (now() AT TIME ZONE 'Asia/Seoul')::date
-      ORDER BY r."effectiveFrom"
-      LIMIT 200`,
+  const due = await prisma.$queryRawUnsafe<{ id: string }[]>(
+    `SELECT id FROM "EnrollmentChangeRequest" r WHERE status = 'APPROVED'
+      AND "appliedAt" IS NULL AND "effectiveFrom" <= (now() AT TIME ZONE 'Asia/Seoul')::date
+      AND NOT EXISTS (SELECT 1 FROM "OperationsCommand" c
+        WHERE c."idempotencyKey" = 'enrollment-change:' || r.id)
+      ORDER BY "effectiveFrom" LIMIT 200`,
   );
-
-  let applied = 0;
-  for (const row of due) {
+  for (const candidate of due) {
     try {
-      if (row.kind === "PAUSE" || row.kind === "WITHDRAW") {
-        await prisma.$executeRawUnsafe(
-          `UPDATE "Enrollment" SET status = $2, "updatedAt" = now() WHERE id = $1`,
-          row.enrollmentId, row.kind === "PAUSE" ? "PAUSED" : "WITHDRAWN",
-        );
-      } else if (row.kind === "CLASS_CHANGE" && row.toClassId) {
-        // 같은 학생·반 조합은 유일해야 한다(@@unique). 그 반에 예전 등록 이력이 있으면
-        // 반을 바꾸는 UPDATE 가 충돌하므로, 그 행을 되살리고 지금 행을 접는 식으로 옮긴다.
-        const existing = await prisma.$queryRawUnsafe<any[]>(
-          `SELECT id FROM "Enrollment" WHERE "studentId" = $1 AND "classId" = $2 LIMIT 1`,
-          row.studentId, row.toClassId,
-        );
-        if (existing[0]) {
-          await prisma.$executeRawUnsafe(
-            `UPDATE "Enrollment" SET status = 'ACTIVE', "updatedAt" = now() WHERE id = $1`,
-            existing[0].id,
-          );
-          await prisma.$executeRawUnsafe(
-            `UPDATE "Enrollment" SET status = 'WITHDRAWN', "updatedAt" = now() WHERE id = $1`,
-            row.enrollmentId,
-          );
-        } else {
-          await prisma.$executeRawUnsafe(
-            `UPDATE "Enrollment" SET "classId" = $2, "updatedAt" = now() WHERE id = $1`,
-            row.enrollmentId, row.toClassId,
-          );
-        }
-      }
-      await prisma.$executeRawUnsafe(
-        `UPDATE "EnrollmentChangeRequest" SET "appliedAt" = now(), "updatedAt" = now() WHERE id = $1`,
-        row.id,
-      );
-      applied += 1;
-    } catch (error) {
-      // 한 건이 실패해도 나머지는 반영한다. 실패 건은 appliedAt 이 비어 있어 다음 날 다시 시도된다.
-      console.error("[applyDueEnrollmentChanges] 반영 실패:", row.id, error);
+    await prisma.$transaction(async (tx) => {
+      const rows = await tx.$queryRawUnsafe<any[]>(
+        `SELECT *, to_char("effectiveFrom", 'YYYY-MM-DD') AS "effectiveDate"
+         FROM "EnrollmentChangeRequest" WHERE id = $1 AND status = 'APPROVED'
+         AND "appliedAt" IS NULL FOR UPDATE`, candidate.id);
+      const row = rows[0];
+      if (!row) return;
+      const key = `enrollment-change:${row.id}`;
+      if (await tx.operationsCommand.findUnique({ where: { idempotencyKey: key } })) return;
+      const enrollment = await tx.enrollment.findUnique({ where: { id: row.enrollmentId } });
+      const student = await tx.student.findUnique({ where: { id: row.studentId }, select: { parentId: true, name: true } });
+      // 본인 자녀로 제출한 동일 요청만 학부모 확인 근거로 인정한다.
+      const parentConfirmed = Boolean(student?.parentId && student.parentId === row.requestedByUserId);
+      let reason = "시트·Rallyz 반영 및 세 시스템 재조회 승인 대기";
+      if (!enrollment || enrollment.studentId !== row.studentId ||
+          enrollment.classId !== row.fromClassId || enrollment.status !== "ACTIVE") {
+        reason = "신청 이후 현재 수강 상태가 변경됨: 관리자 재확인 필요";
+      } else if (row.kind === "CLASS_CHANGE") {
+        const target = row.toClassId ? await tx.class.findUnique({
+          where: { id: row.toClassId }, include: { program: true, _count: { select: { enrollments: { where: { status: "ACTIVE" } } } } },
+        }) : null;
+        if (!target || target.program.deletedAt || target.id === row.fromClassId) reason = "희망 반이 유효하지 않음";
+        else if (target._count.enrollments >= target.capacity) reason = "희망 반 정원 초과: 관리자 재확인 필요";
+      } else if (!["PAUSE", "WITHDRAW"].includes(row.kind)) reason = "지원되지 않는 수강 변경";
+      if (!parentConfirmed) reason = "신청 보호자와 현재 학생 연결 재확인 필요";
+      const actor = row.decidedByUserId;
+      if (!actor) throw new Error("수강 변경 승인자 누락");
+      await tx.operationsRequest.create({ data: {
+        sourceText: `수강 변경 신청 ${row.id}`, targetMonth: row.effectiveDate.slice(0, 7),
+        status: "HELD", requestedByUserId: actor,
+        commands: { create: {
+          idempotencyKey: key, sourceText: `수강 변경 신청 ${row.id}`,
+          studentId: row.studentId, studentName: student?.name ?? null, kind: row.kind, effectiveMonth: row.effectiveDate.slice(0, 7),
+          confidence: "HIGH", status: "HELD", holdReason: reason,
+          beforeJson: { enrollmentId: row.enrollmentId, classId: enrollment?.classId ?? null, status: enrollment?.status ?? null },
+          afterJson: { enrollmentChangeRequestId: row.id, fromClassId: row.fromClassId,
+            toClassId: row.toClassId, parentConfirmed, effectiveDate: row.effectiveDate },
+          billingStatus: "HELD", notificationStatus: "HELD",
+          syncAttempts: { create: ["SHEET", "RALLYZ", "WEBSITE"].map(target => ({ target, status: "PENDING" })) },
+        }},
+        auditLogs: { create: { action: "ENROLLMENT_CHANGE_SYNC_HELD", actorType: "ADMIN", actorUserId: actor,
+          detailsJson: { enrollmentChangeRequestId: row.id, reason } } },
+      }});
+    });
+    } catch {
+      // 원장은 원래 신청에서 재시도할 수 있다. 개인정보나 원문 오류는 로그에 남기지 않는다.
+      console.error("[applyDueEnrollmentChanges] 운영 원장 등록 실패", candidate.id);
     }
   }
-  return applied;
-}
-
-async function notifyParentOfDecision(input: {
-  studentId: string;
-  kind: string;
-  approved: boolean;
-  effectiveFrom: string;
-  note: string | null;
-}) {
-  try {
-    const { notifyParentsOfStudents } = await import("@/lib/notification");
-    const label = CHANGE_KIND_LABEL[input.kind as ChangeKind] ?? "수강 변경";
-    const title = input.approved ? `${label} 승인` : `${label} 신청 결과`;
-    const message = input.approved
-      ? `${label} 신청이 승인되었습니다. ${input.effectiveFrom}부터 적용됩니다.`
-      : `${label} 신청이 반려되었습니다.${input.note ? ` (${input.note})` : " 학원으로 문의해 주세요."}`;
-    await notifyParentsOfStudents([input.studentId], "ENROLLMENT_CHANGE", title, message, "/mypage/enrollment-change");
-  } catch (error) {
-    // 알림 실패가 승인을 되돌리면 안 된다. 원장은 이미 결정했다.
-    console.error("[admin-change-request] 학부모 알림 실패:", error);
-  }
+  // 대기 원장 작성은 실제 반영 건수에 포함하지 않는다.
+  return 0;
 }
 
 /**
@@ -223,7 +211,10 @@ async function notifyParentOfDecision(input: {
  * 브라우저에서 숫자를 바꿔 원하는 금액으로 청구서를 만들 수 있다.
  */
 export async function issueProrationInvoice(input: { adminUserId: string; requestId: string }) {
-  const rows = await prisma.$queryRawUnsafe<any[]>(
+  // 네트워크 일정 조회는 잠금 전에 마치고, 생성과 연결은 하나의 거래로 묶는다.
+  const planEvents = await loadAnnualPlanEvents().catch(() => []);
+  return prisma.$transaction(async (tx) => {
+  const rows = await tx.$queryRawUnsafe<any[]>(
     `SELECT r.id, r.kind, r."studentId", r."invoicedPaymentId", r.status,
             to_char(r."effectiveFrom",'YYYY-MM-DD') AS "effectiveFrom",
             fc.name AS "fromClassName", tc.name AS "toClassName",
@@ -234,7 +225,7 @@ export async function issueProrationInvoice(input: { adminUserId: string; reques
        LEFT JOIN "Class" tc ON tc.id = r."toClassId"
        LEFT JOIN "Program" fp ON fp.id = fc."programId"
        LEFT JOIN "Program" tp ON tp.id = tc."programId"
-      WHERE r.id = $1 LIMIT 1`,
+      WHERE r.id = $1 LIMIT 1 FOR UPDATE OF r`,
     input.requestId,
   );
   const row = rows[0];
@@ -243,7 +234,6 @@ export async function issueProrationInvoice(input: { adminUserId: string; reques
   // 두 번 누르면 학부모에게 같은 금액이 두 번 청구된다.
   if (row.invoicedPaymentId) return { ok: false as const, message: "이미 차액 청구서를 발행했습니다." };
 
-  const planEvents = await loadAnnualPlanEvents().catch(() => []);
   const proration = buildProration(row, planEvents);
   if (!proration) return { ok: false as const, message: "반 변경 건만 차액을 청구할 수 있습니다." };
   if (proration.scheduleUnavailable) {
@@ -258,7 +248,7 @@ export async function issueProrationInvoice(input: { adminUserId: string; reques
   const description =
     `반 변경 차액 (${proration.yearMonth} · ${row.fromClassName ?? "기존 반"} → ${row.toClassName ?? "새 반"})`;
 
-  const created = await prisma.$queryRawUnsafe<{ id: string }[]>(
+  const created = await tx.$queryRawUnsafe<{ id: string }[]>(
     // classId 는 비운다. 적용일 전까지 학생은 아직 새 반 소속이 아니라서
     // 반 기준 검증·집계에 잘못 잡힌다. 어느 반 사이인지는 description 에 남긴다.
     `INSERT INTO "Payment" (id, "studentId", "classId", amount, status, "dueDate", year, month, type, description, "createdAt", "updatedAt")
@@ -267,10 +257,12 @@ export async function issueProrationInvoice(input: { adminUserId: string; reques
     row.studentId, proration.diff, row.effectiveFrom, year, month, description,
   );
 
-  await prisma.$executeRawUnsafe(
+  await tx.$executeRawUnsafe(
     `UPDATE "EnrollmentChangeRequest" SET "invoicedPaymentId" = $2, "updatedAt" = now() WHERE id = $1`,
     input.requestId, created[0].id,
   );
 
-  return { ok: true as const, paymentId: created[0].id, amount: proration.diff };
+  return { ok: true as const, paymentId: created[0].id, amount: proration.diff,
+    invoiceStatus: "HELD" as const, notificationStatus: "HELD" as const };
+  });
 }

@@ -1,3 +1,8 @@
+## 2026-09-04 입학 점검 및 문의 입구
+- `/admin/registration-readiness`는 관리자 인증 후 최근 승인 100건의 반 배정 및 외부 완료 근거를 읽기 전용으로 표시한다. `/admin/apply`에서 연결한다.
+- `kakao-guest-entry.ts`는 공개 체험·수강신청 안내만 제공하며 기존 학생 데이터 접수는 인증 후 처리한다.
+- 수강변경 적용 크론의 결과는 HELD Operations 원장으로 연결한다. 삼중 검증 및 원 신청 확정 경로는 아직 후속 구현 대상이다.
+
 ## 2026-08-29 Codex 공용 운영 인수인계 구조
 - 저장소 루트 `AGENTS.md`는 모든 Codex가 먼저 읽는 고정 작업·승인·보안 규칙이다.
 - `.agents/skills/stiz-monthly-billing/`은 개인 PC에 종속되지 않는 시트·Rallyz·사이트 3중 동기화 절차다.

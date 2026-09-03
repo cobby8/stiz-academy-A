@@ -37,8 +37,9 @@ test("전달 대상별 상태를 구조화 결과에 남긴다", () => {
   assert.match(routing, /ADMIN_AND_VICE_ADMIN/);
   assert.match(routing, /ASSIGNED_CLASS_COACH/);
   assert.match(routing, /SHUTTLE_DRIVER/);
-  assert.match(routing, /AVAILABLE_IN_ATTENDANCE_VIEW/);
-  assert.match(routing, /AVAILABLE_IN_ROUTE_VIEW/);
+  assert.match(routing, /delivery = result\.notification/);
+  assert.match(routing, /admin: delivery\?\.admin \?\? "NOTIFICATION_FAILED"/);
+  assert.match(routing, /driver: delivery\?\.driver \?\? "NOT_FOUND"/);
 });
 
 test("cron 라우트는 CRON_SECRET 인증 뒤에만 처리한다", () => {

@@ -4,14 +4,14 @@ import KakaoRequestsClient, { type KakaoClassOption, type KakaoRequestAdminRow }
 
 export const dynamic = "force-dynamic";
 
-type DbRow = Omit<KakaoRequestAdminRow, "createdAt" | "decidedAt"> & {
+type DbRow = Omit<KakaoRequestAdminRow, "createdAt" | "decidedAt" | "commands"> & {
   createdAt: Date;
   decidedAt: Date | null;
   parentUserId: string | null;
   rawParentName: string | null;
 };
 
-const FILTER_VALUES = ["ACTION", "SUBMITTED", "HELD", "FAILED", "DONE", "ALL"] as const;
+const FILTER_VALUES = ["ACTION", "SUBMITTED", "HELD", "FAILED", "FOLLOWUP", "DONE", "ALL"] as const;
 
 function isKakaoSchemaNotReady(error: unknown) {
   if (!error || typeof error !== "object") return false;
@@ -40,11 +40,12 @@ export default async function KakaoRequestsPage({
   let rows: DbRow[] = [];
   let classes: KakaoClassOption[] = [];
   let schemaReady = true;
+  let commandsByRequest = new Map<string, KakaoRequestAdminRow["commands"]>();
 
   try {
     rows = await prisma.$queryRawUnsafe<DbRow[]>(
       `SELECT r.id,r.kind,r."sourceText",r."structuredJson",r.status,r."createdAt",
-              r."decidedAt",r."decisionNote",r."operationsRequestId",
+              r."decidedAt",r."decisionNote",r."operationsRequestId",(r."errorCode" IS NOT NULL) AS "hasProcessingError",
               r."studentId",s.name AS "studentName",s.grade AS "studentGrade",
               i."parentUserId",u.name AS "rawParentName",i.status AS "identityStatus",
               reviewer.name AS "decidedByName"
@@ -54,14 +55,25 @@ export default async function KakaoRequestsPage({
          LEFT JOIN "User" u ON u.id=i."parentUserId"
          LEFT JOIN "User" reviewer ON reviewer.id=r."decidedByUserId"
         WHERE ($1='ALL')
-           OR ($1='ACTION' AND r.status IN ('SUBMITTED','HELD','FAILED','NEEDS_DETAILS'))
-           OR ($1='DONE' AND r.status IN ('APPROVED','REJECTED','CONSULTATION','APPLIED','CANCELED'))
+           OR ($1='ACTION' AND r.status IN ('SUBMITTED','HELD','FAILED','NEEDS_DETAILS','APPROVED','CONSULTATION','PROCESSING'))
+           OR ($1='FOLLOWUP' AND r.status IN ('APPROVED','CONSULTATION','NEEDS_DETAILS','PROCESSING'))
+           OR ($1='DONE' AND r.status IN ('REJECTED','APPLIED','CANCELED'))
            OR r.status=$1
-        ORDER BY CASE WHEN r.status IN ('SUBMITTED','HELD','FAILED','NEEDS_DETAILS') THEN 0 ELSE 1 END,
+        ORDER BY CASE WHEN r.status IN ('SUBMITTED','HELD','FAILED','NEEDS_DETAILS','PROCESSING') THEN 0 ELSE 1 END,
                  r."createdAt" DESC
         LIMIT 200`,
       status,
     );
+    const requestIds = rows.flatMap(row => row.operationsRequestId ? [row.operationsRequestId] : []);
+    if (requestIds.length) {
+      const commands = await prisma.$queryRawUnsafe<Array<KakaoRequestAdminRow["commands"][number] & { requestId: string }>>(
+        `SELECT "requestId",status,"holdReason",
+                COALESCE("afterJson"->'parentConfirmed' = 'true'::jsonb,false) AS "parentConfirmed",
+                COALESCE("afterJson"->'parentReconfirmationRequired' = 'true'::jsonb,false) AS "parentReconfirmationRequired"
+           FROM "OperationsCommand" WHERE "requestId" = ANY($1::text[])`, requestIds,
+      );
+      commandsByRequest = new Map(requestIds.map(id => [id, commands.filter(command => command.requestId === id)]));
+    }
     const studentIds = rows.flatMap((row) => row.studentId ? [row.studentId] : []);
     const parentUserIds = [...new Set(rows.flatMap((row) => row.parentUserId ? [row.parentUserId] : []))];
     const [classRows, enrollmentRows, linkedStudentRows] = await Promise.all([
@@ -104,6 +116,8 @@ export default async function KakaoRequestsPage({
         parentName:row.parentName, linkedStudents:row.linkedStudents, identityStatus:row.identityStatus,
         operationsRequestId:row.operationsRequestId, decisionNote:row.decisionNote, decidedByName:row.decidedByName,
         currentClassIds:row.currentClassIds,
+        hasProcessingError:row.hasProcessingError,
+        commands:row.operationsRequestId ? commandsByRequest.get(row.operationsRequestId) ?? [] : [],
         createdAt: row.createdAt.toISOString(),
         decidedAt: row.decidedAt?.toISOString() ?? null,
       }))}

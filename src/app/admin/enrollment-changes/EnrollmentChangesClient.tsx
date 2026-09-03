@@ -55,7 +55,7 @@ export default function EnrollmentChangesClient({
         <h1 className="text-xl font-black text-brand-navy-900 dark:text-white">수강 변경 신청</h1>
         {/* 승인이 곧 반영이 아니라는 점을 먼저 알린다. 안 그러면 "승인했는데 왜 그대로냐"가 된다. */}
         <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-          승인하면 적용일에 자동으로 반이 바뀝니다. 적용일이 지난 신청은 승인 즉시 반영됩니다.
+          승인은 변경 접수 승인입니다. 적용일이 되면 시트·랠리즈·사이트 동기화 검토 대기로 등록되며, 세 시스템 확인 전에는 반이 바뀌거나 적용 완료로 표시되지 않습니다. 학부모 알림은 별도 승인 후 발송합니다.
         </p>
       </div>
 
@@ -132,7 +132,7 @@ export default function EnrollmentChangesClient({
                   )}
                   {row.status === "APPROVED" && row.proration.diff > 0 && !row.proration.scheduleUnavailable && (
                     row.invoicedPaymentId ? (
-                      <p className="mt-2 text-xs font-bold text-green-700">차액 청구서 발행됨</p>
+                      <p className="mt-2 text-xs font-bold text-amber-700">사이트 차액 기록 생성됨 · 외부 청구서 발행과 알림은 별도 확인 필요</p>
                     ) : (
                       <button
                         type="button"
@@ -140,7 +140,7 @@ export default function EnrollmentChangesClient({
                         onClick={() => issueInvoice(row.id)}
                         className="mt-2 min-h-11 w-full rounded-xl bg-brand-navy-900 text-sm font-black text-white disabled:opacity-50 dark:bg-brand-neon-lime dark:text-brand-navy-900"
                       >
-                        차액 {row.proration.diff.toLocaleString()}원 청구서 만들기
+                        차액 {row.proration.diff.toLocaleString()}원 사이트 기록 생성
                       </button>
                     )
                   )}

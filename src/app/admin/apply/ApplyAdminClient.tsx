@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
 import dynamic from "next/dynamic";
+import Link from "next/link";
 import { recordApplicationContact, sendManualSms } from "@/app/actions/admin";
 import AdminModal from "@/components/admin/AdminModal";
 import ManualSmsModal from "./ManualSmsModal";
@@ -981,6 +982,7 @@ export default function ApplyAdminClient({
                     체험/수강신청 관리
                 </h1>
                 <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">체험 문의와 수강신청을 한 화면에서 확인하고 처리합니다.</p>
+                <Link href="/admin/registration-readiness" className="mt-2 inline-block text-sm underline" prefetch={false}>입학 완료 확인 · 등록·청구·초대 체크리스트</Link>
             </div>
 
             <div className="flex gap-1 rounded-xl bg-gray-100 p-1 dark:bg-gray-800">

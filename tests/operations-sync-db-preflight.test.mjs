@@ -33,6 +33,7 @@ test("운영 요청과 랠리즈 출석 화면의 필수 테이블 및 컬럼을
   assert.ok(REQUIRED_OPERATIONS_SYNC_COLUMNS.OperationsSyncAttempt.includes("processingToken"));
   assert.ok(REQUIRED_OPERATIONS_SYNC_COLUMNS.OperationsCommand.includes("notificationStatus"));
   assert.ok(REQUIRED_OPERATIONS_SYNC_COLUMNS.ParentOperationsRequestLink.includes("tokenHash"));
+  assert.ok(REQUIRED_OPERATIONS_SYNC_COLUMNS.ParentOperationsRequestLink.includes("purpose"));
 });
 
 test("운영 동기화 DB 조회는 information_schema 읽기 전용 transaction만 사용한다", async () => {
@@ -104,7 +105,7 @@ test("Vercel build는 필수 DB 검사를 모두 통과한 뒤에만 시작한�
   const vercel = JSON.parse(readFileSync(new URL("../vercel.json", import.meta.url), "utf8"));
   assert.equal(
     packageJson.scripts["build:vercel"],
-    "node scripts/regular-shuttle-db-preflight.mjs && node scripts/operations-sync-db-preflight.mjs && node scripts/uniform-order-db-preflight.mjs && npm run build",
+    "node scripts/regular-shuttle-db-preflight.mjs && node scripts/operations-sync-db-preflight.mjs && node scripts/uniform-order-db-preflight.mjs && node scripts/kakao-parent-db-preflight.mjs && npm run build",
   );
   assert.equal(vercel.buildCommand, "npm run build:vercel");
 });

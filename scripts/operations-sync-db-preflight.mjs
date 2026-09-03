@@ -25,7 +25,7 @@ export const REQUIRED_OPERATIONS_SYNC_COLUMNS = {
     "attendanceId", "status", "holdReason", "createdAt", "updatedAt",
   ],
   ParentOperationsRequestLink: [
-    "id", "studentId", "tokenHash", "expiresAt", "revokedAt", "lastUsedAt", "createdByUserId",
+    "id", "studentId", "tokenHash", "purpose", "expiresAt", "revokedAt", "lastUsedAt", "createdByUserId",
     "createdAt", "updatedAt",
   ],
   OperationsAuditLog: [

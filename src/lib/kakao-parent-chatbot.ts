@@ -1,6 +1,11 @@
 import { createHash, createHmac, randomBytes, randomUUID, timingSafeEqual } from "crypto";
 import { prisma } from "@/lib/prisma";
 import {
+  buildKakaoReconfirmationPayload,
+  kakaoReconfirmationPayloadHash,
+  type KakaoReconfirmationClassSnapshot,
+} from "@/lib/kakao-parent-reconfirmation";
+import {
   classifyParentUtterance,
   type ParentRequestKind,
 } from "@/lib/kakao-chatbot-contract";
@@ -9,6 +14,7 @@ export { classifyParentUtterance, getKakaoUserKey } from "@/lib/kakao-chatbot-co
 export type { KakaoSkillPayload, ParentRequestKind } from "@/lib/kakao-chatbot-contract";
 
 const LINK_TTL_MS = 15 * 60_000;
+const RECONFIRM_LINK_TTL_MS = 24 * 60 * 60_000;
 const CONFIRM_WORDS = /^(접수|접수할게요|확인|네|예|맞아요|진행)$/;
 const CANCEL_WORDS = /^(취소|아니요|다시|접수 취소)$/;
 
@@ -56,6 +62,102 @@ function digest(value: string): string {
 
 function tokenDigest(value: string): string {
   return createHash("sha256").update(value).digest("hex");
+}
+
+type ReconfirmationCandidate = {
+  intakeId: string;
+  requestId: string;
+  commandId: string;
+  studentId: string;
+  studentName: string;
+  kind: string;
+  afterJson: Record<string, unknown> | null;
+  createdByUserId: string;
+  fromClassId: string | null;
+  fromProgramName: string | null;
+  fromClassName: string | null;
+  fromDayOfWeek: string | null;
+  fromStartTime: string | null;
+  fromEndTime: string | null;
+  toClassId: string | null;
+  toProgramName: string | null;
+  toClassName: string | null;
+  toDayOfWeek: string | null;
+  toStartTime: string | null;
+  toEndTime: string | null;
+};
+
+function classSnapshot(row: ReconfirmationCandidate, side: "from" | "to"): KakaoReconfirmationClassSnapshot | null {
+  const id = side === "from" ? row.fromClassId : row.toClassId;
+  const programName = side === "from" ? row.fromProgramName : row.toProgramName;
+  const className = side === "from" ? row.fromClassName : row.toClassName;
+  const dayOfWeek = side === "from" ? row.fromDayOfWeek : row.toDayOfWeek;
+  const startTime = side === "from" ? row.fromStartTime : row.toStartTime;
+  const endTime = side === "from" ? row.fromEndTime : row.toEndTime;
+  return id && programName && className && dayOfWeek && startTime && endTime
+    ? { id, programName, className, dayOfWeek, startTime, endTime } : null;
+}
+
+async function issuePendingReconfirmationLink(identity: IdentityRow) {
+  if (!identity.parentUserId || identity.status !== "ACTIVE") return null;
+  return prisma.$transaction(async (tx) => {
+    await tx.$queryRawUnsafe(`SELECT pg_advisory_xact_lock(hashtext($1))`, `kakao-reconfirm:${identity.id}`);
+    const rows = await tx.$queryRawUnsafe<ReconfirmationCandidate[]>(
+      `SELECT i.id AS "intakeId",r.id AS "requestId",c.id AS "commandId",c."studentId",s.name AS "studentName",
+              c.kind,c."afterJson",r."requestedByUserId" AS "createdByUserId",
+              fc.id AS "fromClassId",fp.name AS "fromProgramName",fc.name AS "fromClassName",fc."dayOfWeek" AS "fromDayOfWeek",fc."startTime" AS "fromStartTime",fc."endTime" AS "fromEndTime",
+              tc.id AS "toClassId",tp.name AS "toProgramName",tc.name AS "toClassName",tc."dayOfWeek" AS "toDayOfWeek",tc."startTime" AS "toStartTime",tc."endTime" AS "toEndTime"
+         FROM "KakaoParentIntake" i
+         JOIN "OperationsRequest" r ON r.id=i."operationsRequestId"
+         JOIN "OperationsCommand" c ON c."requestId"=r.id AND c."studentId"=i."studentId"
+         JOIN "Student" s ON s.id=c."studentId" AND s."parentId"=$2 AND s."mergedIntoStudentId" IS NULL
+         LEFT JOIN "Class" fc ON fc.id=c."afterJson"->>'fromClassId'
+         LEFT JOIN "Program" fp ON fp.id=fc."programId"
+         LEFT JOIN "Class" tc ON tc.id=c."afterJson"->>'toClassId'
+         LEFT JOIN "Program" tp ON tp.id=tc."programId"
+        WHERE i."identityId"=$1 AND i.status='APPROVED'
+          AND r.status IN ('DRAFT','HELD') AND c.status IN ('PENDING','HELD')
+          AND c."afterJson"->>'parentReconfirmationRequired'='true'
+          AND COALESCE(c."afterJson"->>'parentConfirmed','false')<>'true'
+        ORDER BY i."decidedAt" ASC,c."createdAt" ASC LIMIT 1 FOR UPDATE OF c`,
+      identity.id, identity.parentUserId,
+    );
+    const candidate = rows[0];
+    if (!candidate) return null;
+    const payload = buildKakaoReconfirmationPayload({
+      ...candidate, fromClass: classSnapshot(candidate, "from"), toClass: classSnapshot(candidate, "to"),
+    });
+    if (!payload) return null;
+
+    const token = randomBytes(32).toString("base64url");
+    const linkId = randomUUID();
+    const expiresAt = new Date(Date.now() + RECONFIRM_LINK_TTL_MS);
+    const payloadHash = kakaoReconfirmationPayloadHash(payload);
+    // 같은 명령에 발급된 과거 미사용 링크는 새 링크를 만들 때 회수한다.
+    await tx.$executeRawUnsafe(
+      `UPDATE "ParentOperationsRequestLink" l SET "revokedAt"=now(),"updatedAt"=now()
+        WHERE l."revokedAt" IS NULL AND EXISTS (
+          SELECT 1 FROM "OperationsAuditLog" a
+           WHERE a."linkId"=l.id AND a.action='KAKAO_RECONFIRMATION_LINK_ISSUED'
+             AND a."detailsJson"->>'commandId'=$1
+        )`, candidate.commandId,
+    );
+    await tx.$executeRawUnsafe(
+      `INSERT INTO "ParentOperationsRequestLink" (id,"studentId","tokenHash",purpose,"expiresAt","createdByUserId")
+       VALUES ($1,$2,$3,'KAKAO_RECONFIRMATION',$4,$5)`,
+      linkId, candidate.studentId, tokenDigest(token), expiresAt, candidate.createdByUserId,
+    );
+    await tx.$executeRawUnsafe(
+      `INSERT INTO "OperationsAuditLog" (id,"requestId","linkId",action,"actorType","detailsJson")
+       VALUES ($1,$2,$3,'KAKAO_RECONFIRMATION_LINK_ISSUED','SYSTEM',$4::jsonb)`,
+      randomUUID(), candidate.requestId, linkId,
+      JSON.stringify({ intakeId: candidate.intakeId, commandId: candidate.commandId, payloadHash, expiresAt: expiresAt.toISOString() }),
+    );
+    return {
+      studentName: candidate.studentName,
+      url: siteUrl(`/request/reconfirm/${encodeURIComponent(token)}`),
+    };
+  });
 }
 
 export function verifySkillSecret(received: string | null): boolean {
@@ -169,6 +271,15 @@ export async function handleLinkedMessage(identity: IdentityRow, utterance: stri
   const children = await childrenOf(identity.parentUserId);
   if (children.length === 0) return kakaoText("연결된 수강생을 찾지 못했어요. 학원으로 문의해 주세요.", ["상담원 연결"]);
   const parentDisplayName = formatKakaoParentDisplayName(children);
+
+  const reconfirmation = await issuePendingReconfirmationLink(identity);
+  if (reconfirmation) {
+    return kakaoText(
+      `${reconfirmation.studentName} 학생 요청에서 원장님이 날짜·수업·셔틀 정보를 보완했어요. 변경된 내용을 확인해 주세요. 확인만으로 시트·랠리즈·사이트 반영이나 알림 발송이 실행되지는 않아요.`,
+      ["메뉴", "상담원 연결"],
+      { label: "보완된 요청 확인하기", url: reconfirmation.url },
+    );
+  }
 
   const draft = await latestDraft(identity.id);
   if (draft && (CANCEL_WORDS.test(text) || text === "다시 말할게요")) {

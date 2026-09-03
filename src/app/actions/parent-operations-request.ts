@@ -44,7 +44,8 @@ async function getValidParentLink(token: string): Promise<ValidParentLink> {
   const links = await prisma.$queryRawUnsafe<ValidParentLink[]>(
     `SELECT l.id,l."studentId",s.name AS "studentName",l."createdByUserId" FROM "ParentOperationsRequestLink" l
       JOIN "Student" s ON s.id=l."studentId"
-     WHERE l."tokenHash"=$1 AND l."revokedAt" IS NULL AND l."expiresAt">now() LIMIT 1`, tokenHash(token),
+     WHERE l."tokenHash"=$1 AND l.purpose='GENERAL' AND l."revokedAt" IS NULL AND l."expiresAt">now()
+     LIMIT 1`, tokenHash(token),
   );
   if (!links[0]) throw new Error("요청 링크가 만료되었거나 취소되었습니다.");
   return links[0];
@@ -94,7 +95,7 @@ export async function createParentOperationsRequestLink(studentId: string, expir
   const expiresAt = new Date(Date.now() + expiresInDays * 86_400_000);
   await prisma.$transaction(async (tx) => {
     await tx.$executeRawUnsafe(
-      `INSERT INTO "ParentOperationsRequestLink" (id,"studentId","tokenHash","expiresAt","createdByUserId") VALUES ($1,$2,$3,$4,$5)`,
+      `INSERT INTO "ParentOperationsRequestLink" (id,"studentId","tokenHash",purpose,"expiresAt","createdByUserId") VALUES ($1,$2,$3,'GENERAL',$4,$5)`,
       id, studentId, tokenHash(token), expiresAt, admin.appUserId,
     );
     await tx.$executeRawUnsafe(
@@ -111,7 +112,7 @@ export async function getActiveParentOperationsRequestLinks(studentId: string): 
   const rows = await prisma.$queryRawUnsafe<Array<{ id: string; studentId: string; studentName: string; expiresAt: Date; createdAt: Date }>>(
     `SELECT l.id,l."studentId",s.name AS "studentName",l."expiresAt",l."createdAt"
        FROM "ParentOperationsRequestLink" l JOIN "Student" s ON s.id=l."studentId"
-      WHERE l."studentId"=$1 AND l."revokedAt" IS NULL AND l."expiresAt">now()
+      WHERE l."studentId"=$1 AND l.purpose='GENERAL' AND l."revokedAt" IS NULL AND l."expiresAt">now()
       ORDER BY l."createdAt" DESC LIMIT 100`, studentId,
   );
   return rows.map((row) => ({ ...row, expiresAt: row.expiresAt.toISOString(), createdAt: row.createdAt.toISOString() }));
@@ -123,7 +124,8 @@ export async function getParentOperationsLinkPreview(token: string): Promise<Par
   const rows = await prisma.$queryRawUnsafe<Array<{ studentName: string; expiresAt: Date; revokedAt: Date | null; lastUsedAt: Date | null }>>(
     `SELECT s.name AS "studentName", l."expiresAt", l."revokedAt", l."lastUsedAt" FROM "ParentOperationsRequestLink" l
       JOIN "Student" s ON s.id=l."studentId"
-     WHERE l."tokenHash"=$1 LIMIT 1`, tokenHash(token),
+     WHERE l."tokenHash"=$1 AND l.purpose='GENERAL'
+     LIMIT 1`, tokenHash(token),
   );
   const row = rows[0];
   if (!row) return { status: "INVALID" };

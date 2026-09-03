@@ -25,7 +25,7 @@ const adminShell = readFileSync("src/app/admin/AdminShellClient.tsx", "utf8");
 test("공개 토큰은 원문 대신 SHA-256 해시만 DB에 저장한다", () => {
   assert.match(action, /createHash\("sha256"\)/);
   assert.match(action, /randomBytes\(32\)\.toString\("base64url"\)/);
-  assert.match(action, /VALUES \(\$1,\$2,\$3,\$4,\$5\)/);
+  assert.match(action, /VALUES \(\$1,\$2,\$3,'GENERAL',\$4,\$5\)/);
   assert.match(action, /id, studentId, tokenHash\(token\), expiresAt/);
   assert.doesNotMatch(migration, /\btoken\s+TEXT/i);
   assert.match(schema, /tokenHash\s+String\s+@unique/);
@@ -90,7 +90,7 @@ test("관리자용 활성 링크 조회와 취소 서버 기능은 화면 폐기
   const listBody = action.slice(listStart, listStart + 1200);
   assert.match(listBody, /getActiveParentOperationsRequestLinks\(studentId: string\)/);
   assert.match(listBody, /requireAdmin\(\)/);
-  assert.match(listBody, /WHERE l\."studentId"=\$1 AND l\."revokedAt" IS NULL AND l\."expiresAt">now\(\)/);
+  assert.match(listBody, /WHERE l\."studentId"=\$1 AND l\.purpose='GENERAL' AND l\."revokedAt" IS NULL AND l\."expiresAt">now\(\)/);
   assert.match(listBody, /ORDER BY l\."createdAt" DESC LIMIT 100`, studentId/);
   assert.match(listBody, /l\."studentId"/);
   assert.match(action, /type ActiveParentOperationsLink = \{[\s\S]*studentId: string/);

@@ -227,3 +227,8 @@ STIZ 농구교실 다산점의 홈페이지와 학원관리 플랫폼이다. 일
 - `UniformOrderItem`은 `design`, `initials`, `backNumber`, `topSize`, `bottomSize`를 구조화 필드로 저장한다. 본사 전송 payload의 옵션도 같은 값을 사용한다.
 - 중복 판단은 주문자 연락처와 학생 이름뿐 아니라 디자인, 이니셜, 등번호, 사이즈 조합까지 포함한다. 같은 이름의 다른 디자인 주문을 덮어쓰지 않기 위해서다.
 - 본사 전송은 `STIZ_PARTNER_SECRET` HMAC 서명이 양쪽 서버에 모두 설정된 뒤에만 정상 실행한다. 주문 재전송은 기존 `partnerRequestId`를 재사용한다.
+## 2026-09-04 카카오 관리자 보완 요청 재확인 구조
+- 인증된 학부모가 다음 카카오 메시지를 보내면 `src/lib/kakao-parent-chatbot.ts`가 재확인 필요 명령을 찾아 24시간 일회용 링크를 발급한다.
+- `/request/reconfirm/[token]`은 관리자 보완 내용을 읽기 전용으로 표시하고 `src/app/actions/kakao-parent-reconfirmation.ts`가 학생·보호자·접수·운영 요청·명령 관계와 payload 해시를 다시 검증한다.
+- `ParentOperationsRequestLink.purpose`는 `GENERAL`과 `KAKAO_RECONFIRMATION`을 DB 제약으로 구분해 링크 경로 혼용을 차단한다.
+- 학부모 확정은 `parentConfirmed`와 감사로그만 갱신하며 시트·Rallyz·사이트 실행, 청구, 알림은 수행하지 않는다.

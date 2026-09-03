@@ -11,8 +11,8 @@ import { buildPublicMetadata } from "@/lib/publicMetadata";
 // 프로그램 필터는 ScheduleClient(클라이언트)에서 useSearchParams()로 처리
 export const revalidate = 300;
 export const metadata = buildPublicMetadata({
-    title: "수업시간표 | STIZ 농구교실 다산점",
-    description: "스티즈 농구교실 다산점 요일별 수업 시간표와 프로그램별 클래스 시간을 확인하세요.",
+    title: "수업시간표 | STIZ 농구교실 다산2호점",
+    description: "스티즈 농구교실 다산2호점 요일별 수업 시간표와 프로그램별 클래스 시간을 확인하세요.",
     path: "/schedule",
 });
 

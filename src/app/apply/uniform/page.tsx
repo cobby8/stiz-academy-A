@@ -6,10 +6,10 @@ import UniformApplicationForm from "./UniformApplicationForm";
 export const revalidate = 60;
 
 export const metadata = buildPublicMetadata({
-  title: "유니폼 추가주문 신청 | STIZ 농구교실 다산점",
-  description: "스티즈 농구교실 다산점 유니폼 추가주문을 신청하세요. 형제·자매도 한 번에 접수할 수 있습니다.",
+  title: "유니폼 추가주문 신청 | STIZ 농구교실 다산2호점",
+  description: "스티즈 농구교실 다산2호점 유니폼 추가주문을 신청하세요. 형제·자매도 한 번에 접수할 수 있습니다.",
   path: "/apply/uniform",
-  imageAlt: "STIZ 농구교실 다산점 유니폼 추가주문 신청 미리보기",
+  imageAlt: "STIZ 농구교실 다산2호점 유니폼 추가주문 신청 미리보기",
 });
 
 export default function UniformApplyPage() {

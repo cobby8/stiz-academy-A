@@ -12,7 +12,7 @@ import StandaloneBackButton from "@/components/StandaloneBackButton";
 
 export const metadata: Metadata = {
     ...buildPublicMetadata({
-        title: "STIZ 농구교실 다산점 | 다산신도시 No.1 농구 전문 학원",
+        title: "STIZ 농구교실 다산2호점 | 다산신도시 No.1 농구 전문 학원",
         description: "유아·초등·중등 수준별 맞춤 농구 수업, 전문 코치진, 셔틀 안내와 체험수업 신청까지 한 번에 확인하세요.",
         path: "/",
     }),

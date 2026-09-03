@@ -10,8 +10,8 @@ import { buildPublicMetadata } from "@/lib/publicMetadata";
 
 export const revalidate = 60;
 export const metadata = buildPublicMetadata({
-    title: "공지사항 | STIZ 농구교실 다산점",
-    description: "스티즈 농구교실 다산점의 공지사항과 학원 소식을 확인하세요.",
+    title: "공지사항 | STIZ 농구교실 다산2호점",
+    description: "스티즈 농구교실 다산2호점의 공지사항과 학원 소식을 확인하세요.",
     path: "/notices",
 });
 

@@ -2804,7 +2804,7 @@ function ClassForm({ seasonId, initial, coaches, onClose, onSubmit }: { seasonId
       <ClassInput name="code" label="반 코드" required defaultValue={initial?.code} placeholder="예: MON-1" />
       <ClassInput name="title" label="반 이름" required defaultValue={initial?.name} placeholder="예: 초등 고학년 1교시" />
       <ClassInput name="targetGrades" label="대상" required defaultValue={initial?.targetGrades ?? initial?.targetGrade} placeholder="예: 초등 4~6학년" />
-      <ClassInput name="location" label="기본 수업 장소" defaultValue={initial?.location} placeholder="예: 다산점" />
+      <ClassInput name="location" label="기본 수업 장소" defaultValue={initial?.location} placeholder="예: 다산2호점" />
       <ClassInput name="capacity" label="정원 (미확정 가능)" type="number" defaultValue={initial?.capacity} />
       <ClassInput name="price" label="기본 수강료" type="number" required defaultValue={initial?.price} />
       <ClassInput name="newApplicantPrice" label="신규 회원 수강료" type="number" defaultValue={initial?.newApplicantPrice} />

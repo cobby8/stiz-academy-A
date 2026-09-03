@@ -67,7 +67,7 @@ export default async function MyPageLayout({
                     <Link href="/mypage" className="flex min-w-0 items-center gap-2">
                         <Image src="/stiz-logo.png" alt="STIZ" width={140} height={35} className="h-9 w-auto object-contain" />
                         <span className="font-extrabold text-xl text-brand-navy-900">
-                            스티즈농구교실 <span className="text-brand-orange-500 dark:text-brand-neon-lime">다산점</span>
+                            스티즈농구교실 <span className="text-brand-orange-500 dark:text-brand-neon-lime">다산2호점</span>
                         </span>
                     </Link>
                 </div>

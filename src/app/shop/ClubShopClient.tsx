@@ -44,7 +44,7 @@ function shopMessage(state: ShopLoadState): { icon: FontFreeIconName; title: str
     return {
       icon: "auto_fix_high",
       title: "클럽샵 준비 중입니다",
-      body: "본사에서 다산점 진열대를 연결하면 상품이 자동으로 표시됩니다.",
+      body: "본사에서 다산2호점 진열대를 연결하면 상품이 자동으로 표시됩니다.",
     };
   }
 
@@ -52,7 +52,7 @@ function shopMessage(state: ShopLoadState): { icon: FontFreeIconName; title: str
     return {
       icon: "image",
       title: "클럽샵 상품을 준비 중입니다",
-      body: "현재 다산점에 노출할 상품을 본사에서 확인하고 있습니다. 준비되면 이 화면에 바로 나타납니다.",
+      body: "현재 다산2호점에 노출할 상품을 본사에서 확인하고 있습니다. 준비되면 이 화면에 바로 나타납니다.",
     };
   }
 

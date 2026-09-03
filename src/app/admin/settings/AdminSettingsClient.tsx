@@ -257,7 +257,7 @@ export default function AdminSettingsClient({
                         {/* 폰트 미리보기 */}
                         <div className="bg-gray-900 rounded-xl p-5 mb-6 text-white space-y-1">
                             <p className="text-xs text-gray-400 mb-2 font-mono">PREVIEW</p>
-                            <p style={{ fontFamily: headingFontCss }} className="text-2xl font-black">STIZ 농구교실 다산점</p>
+                            <p style={{ fontFamily: headingFontCss }} className="text-2xl font-black">STIZ 농구교실 다산2호점</p>
                             <p style={{ fontFamily: bodyFontCss }} className="text-sm text-gray-300 leading-relaxed">
                                 아이들의 가능성을 이끌어드립니다. 전문 코치진의 체계적인 지도로 농구의 즐거움을 경험하세요.
                             </p>
@@ -315,7 +315,7 @@ export default function AdminSettingsClient({
                                 <LazyRichTextEditor
                                     value={introText}
                                     onChange={setIntroText}
-                                    placeholder={"안녕하세요, 스티즈 농구교실 다산점입니다.\n\n아이들이 농구를 통해 협동심과 건강한 체력을 기를 수 있도록 최선을 다해 지도합니다."}
+                                    placeholder={"안녕하세요, 스티즈 농구교실 다산2호점입니다.\n\n아이들이 농구를 통해 협동심과 건강한 체력을 기를 수 있도록 최선을 다해 지도합니다."}
                                 />
                             </div>
                         </div>

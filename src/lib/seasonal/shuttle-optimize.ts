@@ -90,6 +90,8 @@ type StopStudent = { name: string; grade: string | null; parentPhone: string | n
 type Stop = { lat: number; lng: number; label: string; students: StopStudent[]; approx: boolean; isHub?: boolean; etaLabel?: string; etaMinutes?: number; etaManual?: number | null };
 type Run = {
   index: number; vehicleName: string; plate: string | null; capacity: number; tripLabel: string | null;
+  /** 정규 배차에서만 쓰는 담당 기사 계정. 방학특강 노선에는 별도 관계형 필드가 있어 선택값이다. */
+  driverUserId?: string | null;
   /** 정규 셔틀은 한 요일 안에서도 수업시간별 실행이 다르다. 저장·재계산 때 이 실행의 앵커를 보존한다. */
   classStart?: string | null; classEnd?: string | null; timeGroupLabel?: string | null;
   passengers: number; stops: Stop[]; over: boolean;

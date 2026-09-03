@@ -15,7 +15,7 @@ const DOW_LABEL: Record<string, string> = {
   Mon: "월요일", Tue: "화요일", Wed: "수요일", Thu: "목요일", Fri: "금요일", Sat: "토요일", Sun: "일요일",
 };
 
-export default function RegularDispatchClient({ weekdays, initialDay, initialPickup, initialDropoff, serviceMonth, months, classTimeMismatches }: {
+export default function RegularDispatchClient({ weekdays, initialDay, initialPickup, initialDropoff, serviceMonth, months, classTimeMismatches, drivers }: {
   weekdays: string[];            // 셔틀 학생이 있는 요일 목록("Mon" 등, 월→일 정렬)
   initialDay: string;            // 최초 표시 요일
   initialPickup: DispatchSuggestion;
@@ -23,6 +23,7 @@ export default function RegularDispatchClient({ weekdays, initialDay, initialPic
   serviceMonth: string;
   months: string[];
   classTimeMismatches: { dayOfWeek: string; studentName: string; pickupClassTime: string | null; dropoffClassTime: string | null }[];
+  drivers: { id: string; name: string }[];
 }) {
   const router = useRouter();
   const [day, setDay] = useState<string>(initialDay);
@@ -132,8 +133,8 @@ export default function RegularDispatchClient({ weekdays, initialDay, initialPic
           <summary className="cursor-pointer text-sm font-black text-gray-800 dark:text-gray-100">방향별 세부 조정 열기</summary>
           <p className="mt-1 text-[12px] text-gray-500 dark:text-gray-400">자동 제안, 저장, 경로 재계산은 아직 등원/하원 저장본을 나눠 관리합니다. 위 시간순 노선은 실제 운행 흐름 확인용입니다.</p>
           <div className="mt-3 space-y-3">
-            <RouteSection initial={initialPickup} date={day} refreshKey={0} apiBase={REGULAR_API} rosterEditable={false} serviceMonth={serviceMonth} />
-            <RouteSection initial={initialDropoff} date={day} refreshKey={0} apiBase={REGULAR_API} rosterEditable={false} serviceMonth={serviceMonth} />
+            <RouteSection initial={initialPickup} date={day} refreshKey={0} apiBase={REGULAR_API} rosterEditable={false} serviceMonth={serviceMonth} drivers={drivers} />
+            <RouteSection initial={initialDropoff} date={day} refreshKey={0} apiBase={REGULAR_API} rosterEditable={false} serviceMonth={serviceMonth} drivers={drivers} />
           </div>
         </details>
       </div>

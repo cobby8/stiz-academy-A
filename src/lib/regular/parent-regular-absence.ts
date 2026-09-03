@@ -188,6 +188,7 @@ async function notifyAdminsOfAbsenceChange(input: {
   studentName: string;
   className: string;
   classId: string;
+  studentId: string;
   date: string;
   reason?: string;
 }) {
@@ -208,6 +209,7 @@ async function notifyAdminsOfAbsenceChange(input: {
       classId: input.classId,
       includeCoach: true,
       includeDriver: true,
+      driverContext: { studentId: input.studentId, serviceDate: input.date },
     });
   } catch (error) {
     console.error("[parent-regular-absence] 원장 알림 실패:", error);
@@ -256,6 +258,7 @@ export async function reportRegularAbsence(
     studentName: owned.studentName,
     className: owned.className,
     classId,
+    studentId,
     date,
     reason,
   });
@@ -277,9 +280,9 @@ export async function cancelRegularAbsence(
 
   // RETURNING 으로 지운 건의 학생·반 이름을 함께 받는다. 원장 알림 문구에 필요한데,
   // 지운 뒤에 다시 조회하면 이미 사라져서 찾을 수 없다.
-  const returning = `RETURNING s.name AS "studentName", c.name AS "className", c.id AS "classId",
+  const returning = `RETURNING s.name AS "studentName", c.name AS "className", c.id AS "classId", ra."studentId" AS "studentId",
                               to_char(ra.date,'YYYY-MM-DD') AS "date"`;
-  type CanceledRow = { studentName: string; className: string; classId: string; date: string };
+  type CanceledRow = { studentName: string; className: string; classId: string; studentId: string; date: string };
   let canceled: CanceledRow[];
   if (id) {
     // id 로 지목: 그 결석이 이 부모 자녀의 것이고 REPORTED 인 경우만 삭제(IDOR 방어).
@@ -318,6 +321,7 @@ export async function cancelRegularAbsence(
     studentName: canceled[0].studentName,
     className: canceled[0].className,
     classId: canceled[0].classId,
+    studentId: canceled[0].studentId,
     date: canceled[0].date,
   });
 

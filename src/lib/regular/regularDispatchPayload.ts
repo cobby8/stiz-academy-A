@@ -15,6 +15,11 @@ export function validateRegularDispatchVehicles(value: unknown): unknown[] {
     if (!isPlainObject(vehicle) || !Array.isArray(vehicle.stops) || vehicle.stops.length > 100) {
       throw new Error("차량 또는 정차 목록 형식이 올바르지 않습니다.");
     }
+    if (vehicle.driverUserId != null
+      && (typeof vehicle.driverUserId !== "string" || !vehicle.driverUserId.trim()
+        || vehicle.driverUserId !== vehicle.driverUserId.trim() || vehicle.driverUserId.length > 120)) {
+      throw new Error("담당 기사 식별값이 올바르지 않습니다.");
+    }
     if (!timeOrMissing(vehicle.classStart) || !timeOrMissing(vehicle.classEnd)) throw new Error("차량 실행의 수업시간 형식이 올바르지 않습니다.");
     for (const stop of vehicle.stops) {
       if (!isPlainObject(stop) || typeof stop.label !== "string" || stop.label.trim().length === 0 || stop.label.length > 200) {

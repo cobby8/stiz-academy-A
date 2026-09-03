@@ -6,6 +6,7 @@ import { getRegularDispatchForView } from "@/lib/regular/regularDispatchRoute";
 import { getRegularShuttleStops, getRegularStopsWithoutCoords } from "@/lib/shuttle/regularImport";
 import RegularStopGeocodePanel from "@/components/shuttle/RegularStopGeocodePanel";
 import { getRegularShuttleMonths } from "@/lib/shuttle/regularImport";
+import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
 
@@ -19,9 +20,12 @@ export default async function RegularDispatchPage({ searchParams }: { searchPara
   const initialDay = weekdays[0] ?? "Mon";
 
   // 좌표 없는 정류장(1회용 좌표 채우기 패널용). 배차 조회와 병렬.
-  const [missingStops, regularStops, [pickup, dropoff]] = await Promise.all([
+  const [missingStops, regularStops, drivers, [pickup, dropoff]] = await Promise.all([
     getRegularStopsWithoutCoords(serviceMonth),
     getRegularShuttleStops(serviceMonth),
+    prisma.$queryRawUnsafe<{ id: string; name: string }[]>(
+      `SELECT id, name FROM "User" WHERE role='DRIVER' ORDER BY name`,
+    ),
     // 저장본이 있으면 T맵 없이 그대로(제공량 절약). 없을 때만 T맵으로 초안 계산.
     Promise.all([
       getRegularDispatchForView(initialDay, "PICKUP", true, serviceMonth),
@@ -61,6 +65,7 @@ export default async function RegularDispatchPage({ searchParams }: { searchPara
         serviceMonth={serviceMonth}
         months={months}
         classTimeMismatches={classTimeMismatches}
+        drivers={drivers}
       />
     </>
   );

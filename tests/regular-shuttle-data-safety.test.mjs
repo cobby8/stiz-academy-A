@@ -64,13 +64,17 @@ test("한국시간 월 경계는 UTC 월과 달라도 한국 월을 반환한다
 });
 
 test("확정 배차 payload는 최소 구조와 학생 중복을 검증한다", () => {
-  const valid = [{ stops: [{ label: "정문", lat: 37.6, lng: 127.1, students: [{ requestId: "student-1" }] }] }];
+  const valid = [{ driverUserId: "driver-1", stops: [{ label: "정문", lat: 37.6, lng: 127.1, students: [{ requestId: "student-1" }] }] }];
   assert.equal(validateRegularDispatchVehicles(valid), valid);
   assert.throws(() => validateRegularDispatchVehicles([{ stops: [{ label: "", students: [] }] }]));
   assert.throws(() => validateRegularDispatchVehicles([{ stops: [{ label: "정문", students: [{ requestId: "a" }, { requestId: "a" }] }] }]));
   assert.throws(() => validateRegularDispatchVehicles(new Array(21).fill({ stops: [] })));
   assert.throws(() => validateRegularDispatchVehicles([{ stops: [{ label: "정문", lat: 91, lng: 127, students: [] }] }]));
   assert.throws(() => validateRegularDispatchVehicles([{ stops: [{ label: "정문", etaMinutes: -1, students: [] }] }]));
+  assert.throws(() => validateRegularDispatchVehicles([{ driverUserId: "", stops: [] }]));
+  assert.throws(() => validateRegularDispatchVehicles([{ driverUserId: " driver-1 ", stops: [] }]));
+  assert.match(route, /role='DRIVER'/);
+  assert.match(route, /drivers\.length !== driverIds\.length/);
 });
 
 test("정차 순서 저장은 월과 모든 행을 fail-closed 검증한다", () => {

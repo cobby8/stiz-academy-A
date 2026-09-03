@@ -139,6 +139,7 @@ export async function submitShuttleException(parentUserId: string, input: Submit
 
   const notification = await notifyAdminsOfShuttleException({
     studentName: owned[0].name,
+    studentId,
     serviceDate,
     direction,
     kind,
@@ -152,18 +153,34 @@ export async function cancelShuttleException(parentUserId: string, exceptionId: 
   const id = exceptionId?.trim();
   if (!id) return { ok: false as const, message: "취소할 신청을 찾을 수 없습니다." };
 
-  const canceled = Number(
-    await prisma.$executeRawUnsafe(
+  type CanceledException = {
+    studentId: string; studentName: string; serviceDate: string;
+    direction: string; kind: string; location: string | null;
+  };
+  // 취소 UPDATE와 알림에 필요한 원본 확보를 한 문장으로 처리해 IDOR·경합 틈을 만들지 않는다.
+  const canceled = await prisma.$queryRawUnsafe<CanceledException[]>(
       `UPDATE "ShuttleDayException" x
           SET "canceledAt" = now(), "updatedAt" = now()
          FROM "Student" s
         WHERE x."studentId" = s.id AND s."parentId" = $1
-          AND x.id = $2 AND x."canceledAt" IS NULL`,
+          AND x.id = $2 AND x."canceledAt" IS NULL
+        RETURNING x."studentId" AS "studentId", s.name AS "studentName",
+                  to_char(x."serviceDate",'YYYY-MM-DD') AS "serviceDate",
+                  x.direction, x.kind, x.location`,
       parentUserId, id,
-    ),
   );
-  if (canceled === 0) return { ok: false as const, message: "이미 취소된 신청입니다." };
-  return { ok: true as const };
+  if (canceled.length === 0) return { ok: false as const, message: "이미 취소된 신청입니다." };
+  const row = canceled[0];
+  const notification = await notifyAdminsOfShuttleException({
+    action: "CANCELED",
+    studentName: row.studentName,
+    studentId: row.studentId,
+    serviceDate: row.serviceDate,
+    direction: row.direction,
+    kind: row.kind,
+    location: row.location,
+  });
+  return { ok: true as const, notification };
 }
 
 /**
@@ -201,7 +218,9 @@ export async function getShuttleExceptionsForDate(date: string): Promise<
 }
 
 async function notifyAdminsOfShuttleException(input: {
+  action?: "SUBMITTED" | "CANCELED";
   studentName: string;
+  studentId: string;
   serviceDate: string;
   direction: string;
   kind: string;
@@ -217,11 +236,16 @@ async function notifyAdminsOfShuttleException(input: {
       : `${SHUTTLE_EXCEPTION_KIND_LABEL.LOCATION} (${input.location ?? "-"})`;
     return await notifyOperationalStaff({
       type: "SHUTTLE_EXCEPTION",
-      title: "셔틀 당일 변경",
-      message: `${input.studentName} · ${input.serviceDate} · ${SHUTTLE_DIRECTION_LABEL[input.direction as ShuttleDirection] ?? input.direction} · ${what}`,
+      title: input.action === "CANCELED" ? "셔틀 당일 변경 취소" : "셔틀 당일 변경",
+      message: `${input.studentName} · ${input.serviceDate} · ${SHUTTLE_DIRECTION_LABEL[input.direction as ShuttleDirection] ?? input.direction} · ${what}${input.action === "CANCELED" ? " · 취소" : ""}`,
       linkUrl: "/admin/shuttle",
       staffLinkUrl: "/staff/shuttle",
       includeDriver: true,
+      driverContext: {
+        studentId: input.studentId,
+        serviceDate: input.serviceDate,
+        direction: input.direction as ShuttleDirection,
+      },
     });
   } catch (error) {
     console.error("[parent-shuttle-exception] 원장 알림 실패:", error);

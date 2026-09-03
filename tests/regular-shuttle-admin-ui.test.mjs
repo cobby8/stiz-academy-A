@@ -100,3 +100,11 @@ test("정규 배차 화면은 등원과 하원을 시간순 타임라인으로 �
   assert.match(regularDispatchClient, /buildTimelineRows/);
   assert.match(regularDispatchClient, /방향별 세부 조정 열기/);
 });
+
+test("정규 배차는 차량별 담당 기사를 선택해 저장한다", () => {
+  assert.match(dispatchPage, /WHERE role='DRIVER'/);
+  assert.match(dispatchPage, /drivers=\{drivers\}/);
+  assert.match(regularDispatchClient, /drivers=\{drivers\}/);
+  assert.match(seasonalRouteSection, /담당 기사/);
+  assert.match(seasonalRouteSection, /driverUserId/);
+});

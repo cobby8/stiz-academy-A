@@ -128,7 +128,7 @@ function relocateInPlace(
 //   정규 셔틀은 "/api/admin/regular/dispatch" 를 주입해 같은 UI 를 재사용한다.
 // rosterEditable: 명단 편집(무료탑승 드래그·학생 상세 모달) 허용 여부. 방학특강만 true(기본).
 //   정규는 명단 편집 엔드포인트/상세 모달이 방학특강 전용이라 false 로 끈다(회귀 방지).
-export default function RouteSection({ initial, date, refreshKey, apiBase = "/api/admin/seasonal/dispatch", rosterEditable = true, serviceMonth }: { initial: DispatchSuggestion; date: string; refreshKey: number; apiBase?: string; rosterEditable?: boolean; serviceMonth?: string }) {
+export default function RouteSection({ initial, date, refreshKey, apiBase = "/api/admin/seasonal/dispatch", rosterEditable = true, serviceMonth, drivers }: { initial: DispatchSuggestion; date: string; refreshKey: number; apiBase?: string; rosterEditable?: boolean; serviceMonth?: string; drivers?: { id: string; name: string }[] }) {
   const direction = initial.direction;
   const isPickup = direction === "PICKUP";
   const [sug, setSug] = useState<DispatchSuggestion>(initial);
@@ -167,7 +167,16 @@ export default function RouteSection({ initial, date, refreshKey, apiBase = "/ap
       if (!r.ok) throw new Error(j?.error || "실패");
       // 서버는 자동값만 계산한다 → 기존 화면의 수동 확정값(etaManual)을 키 매칭으로 다시 얹는다(확정 유지).
       const prior = sugRef.current.vehicles;
-      setSug({ ...j, vehicles: reapplyManualEtaVehicles(j.vehicles, prior, direction) }); setDepartPinned({}); setRelocatedCount(0);
+      const recalculated = reapplyManualEtaVehicles<Run>(j.vehicles as Run[], prior, direction);
+      // 정규 배차 재계산 시 같은 차량·회차의 담당 기사 선택은 유지한다.
+      const vehicles = recalculated.map((vehicle: Run) => {
+        const previous = prior.find((candidate) => candidate.vehicleName === vehicle.vehicleName
+          && candidate.tripLabel === vehicle.tripLabel
+          && candidate.classStart === vehicle.classStart
+          && candidate.classEnd === vehicle.classEnd);
+        return previous?.driverUserId ? { ...vehicle, driverUserId: previous.driverUserId } : vehicle;
+      });
+      setSug({ ...j, vehicles }); setDepartPinned({}); setRelocatedCount(0);
     } catch (e: any) { setErr(e?.message || "실패"); }
     finally { setLoading(false); }
   }
@@ -222,6 +231,16 @@ export default function RouteSection({ initial, date, refreshKey, apiBase = "/ap
       setSavedAt(j.savedAt ?? null); setLoadedFromSaved(true); setSaveMsg("저장했습니다"); setRelocatedCount(0);
     } catch (e: any) { setErr(e?.message || "노선을 저장하지 못했습니다."); }
     finally { setSaving(false); }
+  }
+
+  function setDriver(vIdx: number, driverUserId: string) {
+    setSug((current) => ({
+      ...current,
+      vehicles: current.vehicles.map((vehicle, index) => index === vIdx
+        ? { ...vehicle, driverUserId: driverUserId || null }
+        : vehicle),
+    }));
+    setSaveMsg(null);
   }
 
   // 저장된 노선 삭제 — 그 요일/방향 저장본을 지우고 자동 제안으로 되돌린다.
@@ -529,6 +548,12 @@ export default function RouteSection({ initial, date, refreshKey, apiBase = "/ap
                   ? <span className="rounded bg-blue-100 px-1.5 py-0.5 text-blue-700 dark:bg-blue-900/50 dark:text-blue-200">T맵 실도로</span>
                   : <span className="rounded bg-gray-200 px-1.5 py-0.5 text-gray-600 dark:bg-gray-700 dark:text-gray-300">직선 추정</span>}
                 {v.tmapMinutes != null && <span className="text-gray-500">약 {v.tmapMinutes}분{v.tmapKm != null ? ` · ${v.tmapKm}km` : ""}</span>}
+                {drivers && <label className="ml-auto flex items-center gap-1 print:hidden">담당 기사
+                  <select value={v.driverUserId ?? ""} onChange={(event) => setDriver(vIdx, event.target.value)} className="rounded-md border border-gray-200 bg-white px-1.5 py-1 text-[11px] font-bold text-gray-700 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100">
+                    <option value="">미배정</option>
+                    {drivers.map((driver) => <option key={driver.id} value={driver.id}>{driver.name}</option>)}
+                  </select>
+                </label>}
               </div>
               <ol className="divide-y divide-gray-100 dark:divide-gray-700">
                 <li className="flex items-center gap-2.5 bg-gray-50/60 px-3 py-2 dark:bg-gray-900/40">

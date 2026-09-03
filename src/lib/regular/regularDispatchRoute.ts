@@ -221,6 +221,19 @@ export async function saveRegularDispatchRoute(input: {
   const dow = normDow(input.dayOfWeek), dir = normDir(input.direction);
   if (!dow || !dir) throw new Error("요일 또는 방향이 올바르지 않습니다.");
   const vehicles = validateRegularDispatchVehicles(input.vehicles);
+  const driverIds = [...new Set(vehicles.flatMap((vehicle) => {
+    if (vehicle == null || typeof vehicle !== "object" || Array.isArray(vehicle)) return [];
+    const id = (vehicle as Record<string, unknown>).driverUserId;
+    return typeof id === "string" && id.trim() ? [id.trim()] : [];
+  }))];
+  if (driverIds.length > 0) {
+    // 클라이언트가 임의 사용자 ID를 넣어도 기사 계정만 배차에 저장되도록 서버에서 다시 검증한다.
+    const drivers = await prisma.$queryRawUnsafe<{ id: string }[]>(
+      `SELECT id FROM "User" WHERE id = ANY($1::text[]) AND role='DRIVER'`,
+      driverIds,
+    );
+    if (drivers.length !== driverIds.length) throw new Error("담당 기사 계정을 다시 선택해 주세요.");
+  }
   const payloadJson = JSON.stringify({ vehicles });
   const serviceMonth = input.serviceMonth ?? koreaServiceMonth();
   if (!isServiceMonth(serviceMonth)) throw new Error("적용 월은 YYYY-MM 형식이어야 합니다.");

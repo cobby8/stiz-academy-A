@@ -1,4 +1,5 @@
 "use server";
+import { finalizeEnrollmentChangeSync, hasVerifiedSyncTargets } from "@/lib/enrollment/finalize-change-sync";
 
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
@@ -533,14 +534,14 @@ async function refreshOperationsStatuses(commandId: string) {
     const command = commands[0];
     if (!command) return null;
     await tx.$queryRawUnsafe(`SELECT id FROM "OperationsRequest" WHERE id=$1 FOR UPDATE`, command.requestId);
-    const attempts = await tx.$queryRawUnsafe<Array<{ status: string }>>(
-      `SELECT status FROM "OperationsSyncAttempt" WHERE "commandId"=$1 ORDER BY target`, commandId,
+    const attempts = await tx.$queryRawUnsafe<Array<{ target: string; status: string; verifiedAt: Date | null }>>(
+      `SELECT target,status,"verifiedAt" FROM "OperationsSyncAttempt" WHERE "commandId"=$1 ORDER BY target FOR SHARE`, commandId,
     );
     // 사람이 다시 검토해야 하는 HELD는 단순 상태 집계가 덮어쓰면 안 된다.
     const commandStatus = command.commandStatus === "HELD"
       ? "HELD"
       : attempts.some((item) => item.status === "FAILED") ? "PARTIAL"
-        : attempts.length > 0 && attempts.every((item) => item.status === "SUCCEEDED") ? "SYNCED" : "PENDING";
+        : hasVerifiedSyncTargets(attempts) ? "SYNCED" : "PENDING";
     if (commandStatus !== command.commandStatus) {
       await tx.$executeRawUnsafe(`UPDATE "OperationsCommand" SET status=$2, "updatedAt"=now() WHERE id=$1`, commandId, commandStatus);
     }
@@ -560,6 +561,7 @@ async function refreshOperationsStatuses(commandId: string) {
         `UPDATE "OperationsRequest" SET status=$2, "updatedAt"=now() WHERE id=$1`, command.requestId, requestStatus,
       );
     }
+    if (commandStatus === "SYNCED") await finalizeEnrollmentChangeSync(tx, commandId);
     return {
       requestId: command.requestId,
       commandChange: commandStatus !== command.commandStatus ? { from: command.commandStatus, to: commandStatus } : null,
@@ -567,6 +569,7 @@ async function refreshOperationsStatuses(commandId: string) {
     };
   });
   if (!changes) return;
+  revalidatePath("/admin/enrollment-changes");
 
   // 집계 상태를 먼저 커밋한 뒤 감사로그를 남겨 기록 장애가 핵심 상태를 롤백하지 못하게 한다.
   if (changes.commandChange) await recordOperationsAuditBestEffort(

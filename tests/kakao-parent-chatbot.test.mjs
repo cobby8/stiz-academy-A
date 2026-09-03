@@ -48,3 +48,18 @@ test("카카오 키 원문 비저장과 승인 경계를 유지한다", async ()
   assert.match(route, /시작한 쓰기를 시간 제한 경주로 버리지 않는다/);
   assert.match(source, /15 \* 60_000/);
 });
+
+test("검증이 끝난 전용 업무는 기존 학부모 화면으로 바로 연결한다", async () => {
+  const source = await readFile("src/lib/kakao-parent-chatbot.ts", "utf8");
+  for (const path of [
+    "/mypage/regular-absence",
+    "/mypage/seasonal",
+    "/mypage/makeup",
+    "/mypage/shuttle",
+    "/mypage/payments",
+    "/mypage/enrollment-change",
+  ]) assert.match(source, new RegExp(path.replaceAll("/", "\\/")));
+  assert.match(source, /기사님 운행 화면에 바로 표시/);
+  assert.match(source, /최초 인증 때 연결한 학부모 계정/);
+  assert.match(source, /DIRECT_KIND_LINKS\[kind\]/);
+});

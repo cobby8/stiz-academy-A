@@ -6,7 +6,7 @@ import { PrismaClient } from "@prisma/client";
 const prisma = new PrismaClient();
 
 const NOTICE_URL = "https://www.stiz-dasan.kr/driver/857ab62da09ccba8c832cc2415f2f09c";
-const STABLE_EVENT_KEY = "internal:driver-notice:regular-shuttle-editor:2026-09-03:v1";
+const STABLE_EVENT_KEY = "internal:driver-notice:regular-shuttle-editor:2026-09-03:v2";
 const NOTICE_BODY = `[STIZ] 정규 셔틀 운행표가 업데이트되었습니다.
 
 아래 링크에서 확정 운행 순서를 확인하실 수 있고,
@@ -220,8 +220,33 @@ async function sendSms(to, body) {
   }
 }
 
+async function checkSolapiAuthOnly() {
+  requireSmsConfig("SOLAPI");
+  const date = new Date().toISOString();
+  const salt = crypto.randomBytes(16).toString("hex");
+  const signature = crypto
+    .createHmac("sha256", process.env.SOLAPI_API_SECRET || "")
+    .update(date + salt)
+    .digest("hex");
+  const response = await fetch("https://api.solapi.com/messages/v4/list?limit=1", {
+    headers: {
+      Authorization: `HMAC-SHA256 apiKey=${process.env.SOLAPI_API_KEY}, date=${date}, salt=${salt}, signature=${signature}`,
+    },
+  });
+  const json = await readJsonSafely(response);
+  return {
+    ok: response.ok,
+    status: response.status,
+    message: json?.errorMessage || json?.message || json?.statusCode || null,
+  };
+}
+
 async function main() {
   const dryRun = process.argv.includes("--dry-run");
+  if (process.argv.includes("--auth-check")) {
+    console.log(JSON.stringify(await checkSolapiAuthOnly(), null, 2));
+    return;
+  }
   const drivers = await prisma.user.findMany({
     where: { role: "DRIVER" },
     select: { id: true, name: true, phone: true },

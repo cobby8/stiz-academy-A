@@ -14,6 +14,34 @@ const LINK_TTL_MS = 15 * 60_000;
 const CONFIRM_WORDS = /^(접수|접수할게요|확인|네|예|맞아요|진행)$/;
 const CANCEL_WORDS = /^(취소|아니요|다시|접수 취소)$/;
 
+const DIRECT_REQUEST_LINKS: Record<string, { label: string; path: string; description: string }> = {
+  "정규수업 결석": { label: "결석 날짜 선택하기", path: "/mypage/regular-absence", description: "다가오는 실제 수업일과 반을 선택하면 결석과 해당일 셔틀 제외가 함께 접수돼요." },
+  "방학특강 결석": { label: "특강 결석 접수하기", path: "/mypage/seasonal", description: "신청한 특강 회차를 선택해 결석을 알려주세요." },
+  "보강 예약": { label: "보강 예약하기", path: "/mypage/makeup", description: "사용 가능한 보강권과 정원이 맞는 수업을 확인해 예약할 수 있어요." },
+  "오늘 셔틀 안 타요": { label: "오늘 셔틀 변경하기", path: "/mypage/shuttle", description: "수업은 참석하고 셔틀만 이용하지 않는 경우에 선택해주세요. 기사님 운행 화면에 바로 표시돼요." },
+  "오늘 다른 곳에서 타요": { label: "탑승 장소 변경하기", path: "/mypage/shuttle", description: "날짜·등하원 방향·오늘 탈 장소를 확인해 기사님 운행 화면에 바로 전달해요." },
+  "입금했어요": { label: "입금 알리기", path: "/mypage/payments", description: "해당 청구서와 입금일을 선택하면 원장님 확인함에 접수돼요." },
+  "영수증 요청": { label: "영수증 요청하기", path: "/mypage/payments", description: "납부 완료된 청구서를 선택해 영수증을 요청할 수 있어요." },
+};
+
+const DIRECT_KIND_LINKS: Partial<Record<ParentRequestKind, { label: string; path: string; description: string }>> = {
+  REGULAR_ABSENCE: DIRECT_REQUEST_LINKS["정규수업 결석"],
+  SEASONAL_ABSENCE: DIRECT_REQUEST_LINKS["방학특강 결석"],
+  MAKEUP: DIRECT_REQUEST_LINKS["보강 예약"],
+  SHUTTLE_SKIP: DIRECT_REQUEST_LINKS["오늘 셔틀 안 타요"],
+  SHUTTLE_LOCATION: DIRECT_REQUEST_LINKS["오늘 다른 곳에서 타요"],
+  PAYMENT_CONFIRM: DIRECT_REQUEST_LINKS["입금했어요"],
+  RECEIPT: DIRECT_REQUEST_LINKS["영수증 요청"],
+  CLASS_CHANGE: { label: "수강 변경 신청하기", path: "/mypage/enrollment-change", description: "현재 등록 반과 실제 개설 반을 확인해 변경을 신청할 수 있어요. 원장님 승인 후 반영됩니다." },
+  PAUSE: { label: "휴원 신청하기", path: "/mypage/enrollment-change", description: "현재 수강 정보를 확인해 휴원을 신청할 수 있어요. 원장님 승인 후 반영됩니다." },
+  WITHDRAW: { label: "퇴원 신청하기", path: "/mypage/enrollment-change", description: "현재 수강 정보를 확인해 퇴원을 신청할 수 있어요. 원장님 승인 후 반영됩니다." },
+};
+
+function siteUrl(path: string): string {
+  const origin = (process.env.NEXT_PUBLIC_SITE_URL || "https://www.stiz-dasan.kr").replace(/\/+$/, "");
+  return `${origin}${path}`;
+}
+
 type IdentityRow = { id: string; parentUserId: string | null; status: string };
 type ChildRow = { id: string; name: string; grade: string | null };
 type IntakeRow = { id: string; kind: ParentRequestKind; sourceText: string; studentId: string | null; status: string };
@@ -178,9 +206,26 @@ export async function handleLinkedMessage(identity: IdentityRow, utterance: stri
   };
   if (submenu[text]) return kakaoText("원하시는 업무를 골라주세요. 직접 문장으로 말씀하셔도 돼요.", submenu[text]);
 
+  const direct = DIRECT_REQUEST_LINKS[text];
+  if (direct) {
+    return kakaoText(
+      `${direct.description}\n\n최초 인증 때 연결한 학부모 계정으로 안전하게 확인합니다.`,
+      ["메뉴", "상담원 연결"],
+      { label: direct.label, url: siteUrl(direct.path) },
+    );
+  }
+
   const kind = classifyParentUtterance(text);
   if (kind === "UNKNOWN" && /^(메뉴|처음|시작)$/.test(text)) {
     return kakaoText("무엇을 도와드릴까요? 평소처럼 문장으로 말씀하셔도 알아들을게요.", ["결석·보강", "셔틀", "청구·영수증", "수강 변경", "정보·상담"]);
+  }
+  const directKind = DIRECT_KIND_LINKS[kind];
+  if (directKind) {
+    return kakaoText(
+      `${directKind.description}\n\n“${text}” 요청을 정확한 정보로 접수하려면 아래 버튼을 눌러 확인해주세요.`,
+      ["메뉴", "상담원 연결"],
+      { label: directKind.label, url: siteUrl(directKind.path) },
+    );
   }
   const child = selectChild(children, text);
   const intakeId = randomUUID();

@@ -24,8 +24,11 @@ export default async function KakaoConnectPage({ searchParams }: { searchParams:
         <div className="rounded-3xl border border-emerald-200 bg-white p-7 text-center shadow-sm">
           <div className="text-4xl">✅</div>
           <h1 className="mt-4 text-xl font-black text-gray-950">카카오 학부모 인증 완료</h1>
-          <p className="mt-3 text-sm leading-6 text-gray-600">이제 카카오 채널에서 평소처럼 말씀하시면 연결된 자녀를 자동으로 확인해 접수합니다.</p>
-          <Link href="/mypage" className="mt-6 inline-flex rounded-xl bg-gray-950 px-5 py-3 text-sm font-bold text-white">마이페이지로 이동</Link>
+          <p className="mt-3 text-sm leading-6 text-gray-600">이제 카카오 채널에서 평소처럼 말씀하시면 연결된 자녀를 자동으로 확인합니다. 결석·당일 셔틀·입금·영수증은 실제 수업과 청구서를 고르는 전용 화면으로 바로 접수할 수 있어요.</p>
+          <div className="mt-6 grid gap-2">
+            <a href="https://pf.kakao.com/_HhaQG/chat" className="inline-flex justify-center rounded-xl bg-yellow-400 px-5 py-3 text-sm font-black text-gray-950">카카오 채널로 돌아가기</a>
+            <Link href="/mypage" className="inline-flex justify-center rounded-xl bg-gray-950 px-5 py-3 text-sm font-bold text-white">학부모 마이페이지 보기</Link>
+          </div>
         </div>
       </main>
     );

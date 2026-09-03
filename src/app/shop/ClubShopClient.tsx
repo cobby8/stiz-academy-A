@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import FontFreeIcon, { type FontFreeIconName } from "@/components/ui/FontFreeIcon";
 
@@ -134,10 +135,17 @@ export default function ClubShopClient() {
 function ProductCard({ product }: { product: ClubShopProduct }) {
   const disabled = !product.purchasable || !product.url;
   const stateLabel = product.state.trim();
+  const detailHref = `/shop/product/${product.productNo}`;
 
   return (
     <article className="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-md dark:border-gray-700 dark:bg-gray-800">
-      <ProductImage src={product.image} name={product.name} />
+      {disabled ? (
+        <ProductImage src={product.image} name={product.name} />
+      ) : (
+        <Link href={detailHref} aria-label={`${product.name} 상품 보기`}>
+          <ProductImage src={product.image} name={product.name} />
+        </Link>
+      )}
       <div className="space-y-3 p-4">
         <div className="flex items-start justify-between gap-3">
           <div>
@@ -157,13 +165,13 @@ function ProductCard({ product }: { product: ClubShopProduct }) {
             구매 불가
           </span>
         ) : (
-          <a
-            href={product.url}
+          <Link
+            href={detailHref}
             className="flex min-h-11 items-center justify-center gap-2 rounded-lg bg-brand-orange-500 text-sm font-black text-white transition hover:bg-brand-orange-600 dark:bg-brand-neon-lime dark:text-brand-navy-900 dark:hover:bg-lime-400"
           >
-            구매하기
+            상품 보기
             <FontFreeIcon name="arrow_forward" size={18} />
-          </a>
+          </Link>
         )}
       </div>
     </article>

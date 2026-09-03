@@ -1,11 +1,11 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import type { PointerEvent } from "react";
 import { tmapNavigationCoordinateUrl } from "@/lib/maps/coordinate-links";
 import DriverDateNav from "@/components/shuttle/DriverDateNav";
 import GpsShareBar from "@/components/shuttle/GpsShareBar";
 import { useGpsShare } from "@/hooks/useGpsShare";
-import DriverRequestModal from "@/components/shuttle/DriverRequestModal";
 import { countProgress, type UnifiedRider, type UnifiedRow } from "@/lib/shuttle/unifiedDriverRunLogic";
 
 // 기사님 통합 운행 화면 — 그날 방학특강·정규를 **가리지 않고 출발 시각 순서대로 한 줄씩** 나열한다.
@@ -18,7 +18,6 @@ interface BeforeInstallPromptEvent extends Event { prompt(): Promise<void> }
 
 // SELF = 자차(부모 차) 등·하원. 셔틀엔 안 탔지만 결석(안 옴)과는 구분한다.
 type Status = "BOARDED" | "NOSHOW" | "SELF";
-type ReqModal = { targetId?: string; targetName?: string; defaultType?: "REMOVE" | "LOCATION" | "ORDER" | "OTHER"; orderPayload?: unknown };
 /** 순서 편집 중에만 쓰는 정렬 덮어쓰기(원본 rows 는 건드리지 않는다). */
 type SortKey = { minutes: number | null; seq: number };
 
@@ -46,12 +45,15 @@ export default function UnifiedDriverClient({
   const [busy, setBusy] = useState<Record<string, boolean>>({});
   const [menuKey, setMenuKey] = useState<string | null>(null);
   const [runState, setRunState] = useState<"idle" | "running" | "ended">("idle");
-  const [reqModal, setReqModal] = useState<ReqModal | null>(null);
 
-  // 순서 편집 — 같은 노선(그룹) 안에서 위/아래로 옮긴다. 옮기면 정렬키(시각)까지 서로 맞바꿔
-  // 시각순 목록이 어긋나지 않게 한다. 서버에는 "순서 고정 요청"으로만 전달된다(즉시 저장 아님).
+  // 순서 편집 — 기사님이 실제 운행 현장에서 카드 순서와 시간을 조정해 바로 저장한다.
+  // 기존 탑승 체크 키(rowId)는 그대로 두고 RegularShuttleStop.sortOrder/arriveTime 만 바꾼다.
   const [editing, setEditing] = useState(false);
   const [sortOverride, setSortOverride] = useState<Record<string, SortKey>>({});
+  const [timeOverride, setTimeOverride] = useState<Record<string, string>>({});
+  const [dragKey, setDragKey] = useState<string | null>(null);
+  const [savingOrder, setSavingOrder] = useState(false);
+  const [saveMessage, setSaveMessage] = useState<string | null>(null);
 
   const { state: gpsState, lastSentAt, accuracy, start: gpsStart, stop: gpsStop } = useGpsShare(token, driverLabel);
   function handleRunStart() { setRunState("running"); gpsStart(); }
@@ -97,18 +99,60 @@ export default function UnifiedDriverClient({
     setSortOverride((o) => ({ ...o, [row.key]: b, [other.key]: a }));
   }
 
-  /** 순서 고정 요청에 실어 보낼 현재 순서(노선별 정차 목록). */
-  function orderPayload() {
-    const groups: Record<string, { group: string; kind: string; direction: string; stops: { label: string; time: string | null }[] }> = {};
-    for (const r of ordered) {
-      if (r.isTerminal) continue;
-      const g = groups[r.groupKey] ?? (groups[r.groupKey] = {
-        group: r.groupLabel ?? (r.kind === "SEASONAL" ? "방학특강" : "정규"),
-        kind: r.kind, direction: r.direction, stops: [],
+  function moveDraggedRow(target: UnifiedRow) {
+    if (!dragKey || dragKey === target.key) return;
+    const from = ordered.find((r) => r.key === dragKey);
+    if (!from || from.groupKey !== target.groupKey || from.isTerminal || target.isTerminal) return;
+    const sameGroup = ordered.filter((r) => r.groupKey === target.groupKey && !r.isTerminal);
+    const fromIdx = sameGroup.findIndex((r) => r.key === from.key);
+    const toIdx = sameGroup.findIndex((r) => r.key === target.key);
+    if (fromIdx < 0 || toIdx < 0) return;
+    const next = [...sameGroup];
+    next.splice(fromIdx, 1);
+    next.splice(toIdx, 0, from);
+    const nextOverride: Record<string, SortKey> = {};
+    sameGroup.forEach((row, index) => {
+      const targetOrder = next[index];
+      nextOverride[targetOrder.key] = sortOverride[row.key] ?? { minutes: row.minutes, seq: row.seq };
+    });
+    setSortOverride((current) => ({ ...current, ...nextOverride }));
+  }
+
+  function startCardDrag(event: PointerEvent, row: UnifiedRow) {
+    if (!editing || row.kind !== "REGULAR" || row.isTerminal) return;
+    const target = event.target as HTMLElement | null;
+    if (target?.closest("button,input,a")) return;
+    setDragKey(row.key);
+  }
+
+  function displayTime(row: UnifiedRow): string | null {
+    return timeOverride[row.key] ?? row.time;
+  }
+
+  async function saveRegularOrder() {
+    const regularRows = ordered.filter((r) => r.kind === "REGULAR" && !r.isTerminal);
+    const updates = regularRows.flatMap((row, index) => {
+      const rowIds = [...new Set(row.riders.map((r) => r.checkId).filter((id) => /^[0-9a-f-]{20,}$/i.test(id)))];
+      return rowIds.length > 0 ? [{ rowIds, sortOrder: index, arriveTime: displayTime(row) }] : [];
+    });
+    if (updates.length === 0 || savingOrder) return;
+    setSavingOrder(true);
+    setSaveMessage(null);
+    try {
+      const res = await fetch("/api/shuttle/regular-order", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token, date, updates }),
       });
-      g.stops.push({ label: r.label, time: r.time });
+      const json = await res.json().catch(() => null) as { updated?: number; error?: string } | null;
+      if (!res.ok) throw new Error(json?.error || "저장하지 못했습니다.");
+      setSaveMessage(`저장 완료 · ${json?.updated ?? 0}개 행 반영`);
+      setEditing(false);
+    } catch (error) {
+      setSaveMessage(error instanceof Error ? error.message : "저장하지 못했습니다.");
+    } finally {
+      setSavingOrder(false);
     }
-    return Object.values(groups);
   }
 
   async function setStatus(rider: UnifiedRider, next: Status) {
@@ -195,25 +239,27 @@ export default function UnifiedDriverClient({
 
       {/* 순서 편집 */}
       {stopRows.length > 0 && (
-        <div className="mb-2 flex items-center justify-end gap-2">
+        <div className="mb-2 flex items-center justify-between gap-2">
+          <p className="text-[14px] font-black text-gray-600">확정 운행 순서</p>
           {!editing ? (
             <button type="button" onClick={() => setEditing(true)}
               className="rounded-xl border-2 border-gray-300 px-3 py-1.5 text-[13px] font-black text-gray-600 active:bg-gray-100">
-              ↕ 순서 편집
+              ↕ 순서·시간 수정
             </button>
           ) : (
             <>
-              <button type="button" onClick={() => { setReqModal({ defaultType: "ORDER", targetName: "운행 순서", orderPayload: orderPayload() }); setEditing(false); }}
+              <button type="button" disabled={savingOrder} onClick={saveRegularOrder}
                 className="rounded-xl bg-blue-600 px-3 py-1.5 text-[13px] font-black text-white active:bg-blue-700">
-                📨 순서 고정 요청
+                {savingOrder ? "저장 중..." : "💾 저장"}
               </button>
-              <button type="button" onClick={() => { setEditing(false); setSortOverride({}); }}
+              <button type="button" onClick={() => { setEditing(false); setSortOverride({}); setTimeOverride({}); }}
                 className="rounded-xl border-2 border-gray-300 px-3 py-1.5 text-[13px] font-black text-gray-600">취소</button>
             </>
           )}
         </div>
       )}
-      {editing && <p className="mb-2 rounded-xl bg-blue-50 px-3 py-2 text-[13px] font-bold text-blue-700">↕ 버튼으로 순서를 바꾼 뒤 &quot;순서 고정 요청&quot;을 눌러주세요</p>}
+      {editing && <p className="mb-2 rounded-xl bg-blue-50 px-3 py-2 text-[13px] font-bold text-blue-700">카드를 끌어서 순서를 바꾸고, 시간을 눌러 수정한 뒤 저장하세요. 정규 셔틀만 저장됩니다.</p>}
+      {saveMessage && <p className="mb-2 rounded-xl bg-gray-100 px-3 py-2 text-[13px] font-black text-gray-700">{saveMessage}</p>}
 
       {stopRows.length === 0 && (
         <p className="rounded-2xl bg-gray-50 px-4 py-6 text-center text-[16px] font-bold text-gray-400">오늘은 운행이 없습니다.</p>
@@ -234,13 +280,27 @@ export default function UnifiedDriverClient({
           seq += 1;
           const isPickup = row.direction === "PICKUP";
           const url = tmapNavigationCoordinateUrl({ latitude: row.lat, longitude: row.lng, name: row.label });
+          const editable = editing && row.kind === "REGULAR";
           return (
-            <li key={row.key} className={`rounded-2xl border-2 p-3.5 ${
+            <li
+              key={row.key}
+              draggable={editable}
+              onDragStart={() => editable && setDragKey(row.key)}
+              onDragOver={(event) => {
+                if (editable) event.preventDefault();
+              }}
+              onDrop={() => editable && moveDraggedRow(row)}
+              onDragEnd={() => setDragKey(null)}
+              onPointerDown={(event) => startCardDrag(event, row)}
+              onPointerEnter={() => editable && dragKey && moveDraggedRow(row)}
+              onPointerUp={() => setDragKey(null)}
+              onPointerCancel={() => setDragKey(null)}
+              className={`rounded-2xl border-2 p-3.5 ${editable ? "touch-none cursor-grab active:cursor-grabbing" : ""} ${dragKey === row.key ? "opacity-60" : ""} ${
               editing ? "border-blue-200 bg-blue-50" : row.warn ? "border-amber-300 bg-amber-50" : row.isHub ? "border-green-300 bg-green-50" : "border-gray-200 bg-white"
             }`}>
               <div className="flex items-center gap-2.5">
-                {editing ? (
-                  <div className="flex shrink-0 flex-col gap-0.5">
+                {editable ? (
+                  <div className="flex shrink-0 flex-col gap-0.5" aria-label="순서 변경">
                     <button type="button" onClick={() => moveRow(row, -1)}
                       className="h-7 w-7 rounded-lg border border-gray-300 text-[16px] font-black text-gray-600">▲</button>
                     <button type="button" onClick={() => moveRow(row, 1)}
@@ -252,7 +312,17 @@ export default function UnifiedDriverClient({
                   </span>
                 )}
                 <span className="min-w-0 flex-1 text-[18px] font-black leading-tight text-gray-900">{row.label}</span>
-                <span className={`shrink-0 text-[16px] font-black ${row.time ? "text-blue-600" : "text-gray-400"}`}>{row.time ?? "시간 미정"}</span>
+                {editable ? (
+                  <input
+                    type="time"
+                    value={displayTime(row) ?? ""}
+                    onChange={(event) => setTimeOverride((current) => ({ ...current, [row.key]: event.target.value }))}
+                    className="h-12 w-[118px] shrink-0 rounded-xl border-2 border-blue-200 bg-white px-2 text-[24px] font-black text-blue-700"
+                    aria-label={`${row.label} 정차 시간`}
+                  />
+                ) : (
+                  <span className={`shrink-0 text-[28px] font-black leading-none ${displayTime(row) ? "text-blue-600" : "text-gray-400"}`}>{displayTime(row) ?? "시간 미정"}</span>
+                )}
               </div>
 
               {/* 종류·방향 배지 + 노선 이름 */}
@@ -264,14 +334,7 @@ export default function UnifiedDriverClient({
                   {isPickup ? "⬆ 등원" : "⬇ 하원"}
                 </span>
                 {row.groupLabel && <span className="text-[13px] font-bold text-gray-500">{row.groupLabel}</span>}
-                {/* 원장이 아직 노선을 확정하지 않은 요일 — 시트 명단 순서라는 걸 기사님께 알린다 */}
-                {row.pending && <span className="rounded-md bg-amber-100 px-1.5 py-0.5 text-[12px] font-black text-amber-700">임시 순서 · 확정 전</span>}
-                {!editing && (
-                  <button type="button" onClick={() => setReqModal({ targetName: row.label, defaultType: "LOCATION" })}
-                    className="ml-auto rounded-lg border border-gray-300 px-2 py-1 text-[12px] font-black text-gray-500 active:bg-gray-100">
-                    요청
-                  </button>
-                )}
+                {row.pending && <span className="rounded-md bg-green-100 px-1.5 py-0.5 text-[12px] font-black text-green-700">확정 순서</span>}
               </div>
 
               {!editing && url && (
@@ -317,10 +380,6 @@ export default function UnifiedDriverClient({
                             <span className="rounded-xl border-2 border-red-300 px-3 py-2 text-[15px] font-black text-red-500">미{isPickup ? "탑승" : "하차"}(결석)</span>
                           ) : (
                             <>
-                              <button type="button" onClick={() => setReqModal({ targetId: rider.checkId, targetName: rider.name, defaultType: "REMOVE" })}
-                                className="h-14 min-w-[48px] rounded-xl border-2 border-gray-200 text-[13px] font-black text-gray-500 active:bg-gray-100">
-                                요청
-                              </button>
                               <button type="button" disabled={isBusy} onClick={() => { setMenuKey(null); setStatus(rider, "BOARDED"); }}
                                 className={`h-14 min-w-[68px] rounded-xl text-[16px] font-black ${status === "BOARDED" ? "bg-green-600 text-white" : "border-2 border-green-400 text-green-700"}`}>
                                 {isPickup ? "탑승" : "하차"}
@@ -351,21 +410,6 @@ export default function UnifiedDriverClient({
       </ol>
 
       <p className="mt-3 text-center text-[14px] font-semibold text-gray-400">탭 한 번으로 저장됩니다 · 다시 누르면 대기로 돌아갑니다</p>
-
-      {/* 관리자 요청 모달 */}
-      {reqModal && (
-        <div className="fixed inset-0 z-50 flex flex-col justify-end">
-          <DriverRequestModal
-            token={token}
-            serviceDate={date}
-            targetId={reqModal.targetId}
-            targetName={reqModal.targetName}
-            defaultType={reqModal.defaultType}
-            orderPayload={reqModal.orderPayload}
-            onClose={() => setReqModal(null)}
-          />
-        </div>
-      )}
     </div>
   );
 }

@@ -109,7 +109,10 @@ export default function ClubShopClient() {
     };
   }, []);
 
-  const products = useMemo(() => state.data?.products ?? [], [state.data?.products]);
+  const products = useMemo(
+    () => (state.data?.products ?? []).filter((product) => product.purchasable && Boolean(product.url)),
+    [state.data?.products],
+  );
 
   return (
     <section aria-label="클럽샵 상품 목록">
@@ -120,7 +123,16 @@ export default function ClubShopClient() {
           <ShopNotice {...shopMessage(state)} onRetry={() => window.location.reload()} />
         )}
 
-        {state.status === "ready" && (
+        {state.status === "ready" && products.length === 0 && (
+          <ShopNotice
+            icon="sports_basketball"
+            title="판매 가능한 상품을 준비 중입니다"
+            body="구매 가능한 상품이 등록되면 이 화면에 바로 표시됩니다."
+            onRetry={() => window.location.reload()}
+          />
+        )}
+
+        {state.status === "ready" && products.length > 0 && (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {products.map((product) => (
               <ProductCard key={product.productNo} product={product} />

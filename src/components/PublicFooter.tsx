@@ -32,6 +32,7 @@ const QUICK_LINKS = [
   { href: "/annual", label: "연간일정표" },
   { href: "/gallery", label: "포토갤러리" },
   { href: "/notices", label: "공지사항" },
+  { href: "/shop", label: "SHOP" },
   { href: "/apply", label: "체험/수강신청" },
 ];
 

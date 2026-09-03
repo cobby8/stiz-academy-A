@@ -2,9 +2,6 @@
 
 import { useEffect, useMemo, useState } from "react";
 import FontFreeIcon, { type FontFreeIconName } from "@/components/ui/FontFreeIcon";
-import UniformApplicationForm from "./UniformApplicationForm";
-
-type ActiveTab = "club" | "uniform";
 
 type ClubShopProduct = {
   productNo: number;
@@ -33,26 +30,6 @@ type ShopLoadState = {
   statusCode: number | null;
   data: ClubShopResponse | null;
 };
-
-const TABS: Array<{
-  id: ActiveTab;
-  label: string;
-  description: string;
-  icon: FontFreeIconName;
-}> = [
-  {
-    id: "club",
-    label: "클럽샵",
-    description: "기성품 진열 · 카페24 결제",
-    icon: "sports_basketball",
-  },
-  {
-    id: "uniform",
-    label: "유니폼 추가주문",
-    description: "학생별 맞춤 접수",
-    icon: "checkroom",
-  },
-];
 
 function formatPrice(price: number) {
   return `${price.toLocaleString("ko-KR")}원`;
@@ -85,53 +62,7 @@ function shopMessage(state: ShopLoadState): { icon: FontFreeIconName; title: str
   };
 }
 
-export default function UniformShopTabs() {
-  const [activeTab, setActiveTab] = useState<ActiveTab>("uniform");
-
-  return (
-    <div className="space-y-4">
-      <div className="rounded-2xl border border-gray-200 bg-white p-2 shadow-sm dark:border-gray-700 dark:bg-gray-800">
-        <div className="grid gap-2 sm:grid-cols-2">
-          {TABS.map((tab) => {
-            const active = activeTab === tab.id;
-            return (
-              <button
-                key={tab.id}
-                type="button"
-                onClick={() => setActiveTab(tab.id)}
-                className={[
-                  "flex min-h-16 items-center gap-3 rounded-xl px-4 py-3 text-left transition",
-                  active
-                    ? "bg-brand-navy-900 text-white shadow-sm dark:bg-brand-neon-lime dark:text-brand-navy-900"
-                    : "bg-gray-50 text-gray-700 hover:bg-gray-100 dark:bg-gray-900 dark:text-gray-200 dark:hover:bg-gray-950",
-                ].join(" ")}
-              >
-                <span
-                  className={[
-                    "flex h-10 w-10 shrink-0 items-center justify-center rounded-full",
-                    active ? "bg-white/15 dark:bg-brand-navy-900/10" : "bg-white dark:bg-gray-800",
-                  ].join(" ")}
-                >
-                  <FontFreeIcon name={tab.icon} size={22} />
-                </span>
-                <span>
-                  <span className="block text-base font-black">{tab.label}</span>
-                  <span className={["mt-0.5 block text-xs font-bold", active ? "opacity-80" : "text-gray-500 dark:text-gray-400"].join(" ")}>
-                    {tab.description}
-                  </span>
-                </span>
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
-      {activeTab === "club" ? <ClubShopPanel /> : <UniformApplicationForm />}
-    </div>
-  );
-}
-
-function ClubShopPanel() {
+export default function ClubShopClient() {
   const [state, setState] = useState<ShopLoadState>({
     status: "loading",
     statusCode: null,
@@ -184,7 +115,7 @@ function ClubShopPanel() {
       <div className="grid gap-0 border-b border-gray-100 bg-gray-950 text-white dark:border-gray-700 md:grid-cols-[1.05fr_0.95fr]">
         <div className="px-6 py-7 md:px-8">
           <p className="mb-2 text-xs font-black uppercase tracking-widest text-brand-orange-400 dark:text-brand-neon-lime">
-            CLUB SHOP
+            SHOP
           </p>
           <h2 className="break-keep text-2xl font-black md:text-3xl">스티즈 클럽샵</h2>
           <p className="mt-3 max-w-xl break-keep text-sm leading-6 text-gray-300">

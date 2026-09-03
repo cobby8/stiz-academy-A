@@ -8,7 +8,7 @@
  * - 모바일(md 미만): 카테고리 라벨 + 구분선으로 시각 그룹핑
  *
  * 메뉴 구조:
- *   학원 소개 | 수업 안내 v | 소식/안내 v | 수업찾기 | [신청하기]
+ *   학원 소개 | 수업 안내 v | 소식/안내 v | SHOP | 수업찾기 | [신청하기]
  *   + FAQ, 이용약관은 "소식/안내" 드롭다운 하위에 배치
  */
 
@@ -74,9 +74,10 @@ const NAV_GROUPS = [
   },
 ];
 
-// 독립 메뉴 — 드롭다운 없이 바로 링크 (학원 소개: 맨 앞, 수업찾기: 맨 뒤)
+// 독립 메뉴 — 드롭다운 없이 바로 링크
 const NAV_STANDALONE = [
   { href: "/about", label: "학원 소개" },
+  { href: "/shop", label: "SHOP" },
   { href: "/simulator", label: "수업찾기" },
 ];
 
@@ -236,7 +237,7 @@ export default function PublicHeader({
           </div>
 
           {/* ===== 데스크탑 네비게이션 ===== */}
-          {/* 순서: 학원 소개 | 수업 안내 v | 소식/안내 v | 수업찾기 | [신청하기] */}
+          {/* 순서: 학원 소개 | 수업 안내 v | 소식/안내 v | SHOP | 수업찾기 | [신청하기] */}
           <nav className="hidden md:flex items-center gap-1 font-bold text-sm text-gray-700 dark:text-gray-300">
             {/* 학원 소개 — 독립 링크, 맨 앞 배치 */}
             <Link
@@ -277,6 +278,14 @@ export default function PublicHeader({
                 </div>
               </div>
             ))}
+
+            <Link
+              href="/shop"
+              data-tour-target="nav-shop"
+              className="relative px-3 py-2 rounded-lg hover:text-brand-orange-500 dark:text-brand-neon-lime dark:hover:text-brand-neon-lime hover:bg-brand-orange-50 dark:bg-brand-neon-lime/10  dark:hover:bg-brand-neon-lime/10 transition-colors"
+            >
+              SHOP
+            </Link>
 
             {/* 수업찾기 — 독립 링크, 드롭다운 뒤 배치 */}
             <Link
@@ -361,7 +370,7 @@ export default function PublicHeader({
           </button>
         </div>
 
-        {/* 사이드바 메뉴 — 순서: 학원 소개 → 수업 안내 → 소식/안내 → 수업찾기 */}
+        {/* 사이드바 메뉴 — 순서: 학원 소개 → 수업 안내 → 소식/안내 → SHOP → 수업찾기 */}
         <nav className="min-h-0 flex-1 overflow-y-auto overscroll-contain py-2">
           {/* 학원 소개 — 독립 링크, 맨 앞 배치 */}
           <Link
@@ -402,6 +411,16 @@ export default function PublicHeader({
               )}
             </div>
           ))}
+
+          <div className="mx-4 my-2 border-t border-gray-100 dark:border-gray-800" />
+          <Link
+            href="/shop"
+            data-tour-target="mobile-nav-shop"
+            onClick={() => setIsMobileMenuOpen(false)}
+            className="block px-6 py-3 text-gray-700 dark:text-gray-300 font-semibold hover:bg-brand-orange-50 dark:bg-brand-neon-lime/10  dark:hover:bg-gray-800 hover:text-brand-orange-500 dark:text-brand-neon-lime dark:hover:text-brand-neon-lime transition-colors"
+          >
+            SHOP
+          </Link>
 
           {/* 수업찾기 — 독립 링크, 맨 뒤 배치 */}
           <div className="mx-4 my-2 border-t border-gray-100 dark:border-gray-800" />

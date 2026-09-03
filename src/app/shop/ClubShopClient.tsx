@@ -111,40 +111,8 @@ export default function ClubShopClient() {
   const products = useMemo(() => state.data?.products ?? [], [state.data?.products]);
 
   return (
-    <section className="overflow-hidden rounded-2xl bg-white shadow-lg dark:bg-gray-800">
-      <div className="grid gap-0 border-b border-gray-100 bg-gray-950 text-white dark:border-gray-700 md:grid-cols-[1.05fr_0.95fr]">
-        <div className="px-6 py-7 md:px-8">
-          <p className="mb-2 text-xs font-black uppercase tracking-widest text-brand-orange-400 dark:text-brand-neon-lime">
-            SHOP
-          </p>
-          <h2 className="break-keep text-2xl font-black md:text-3xl">스티즈 클럽샵</h2>
-          <p className="mt-3 max-w-xl break-keep text-sm leading-6 text-gray-300">
-            농구공, 훈련 용품, 키즈 제품을 보고 카페24 본사 쇼핑몰에서 바로 결제합니다.
-            상품 가격과 구매 링크는 본사 진열대 기준 그대로 표시됩니다.
-          </p>
-        </div>
-        <div className="relative min-h-56 overflow-hidden bg-[radial-gradient(circle_at_20%_20%,rgba(204,255,0,0.26),transparent_30%),linear-gradient(135deg,#111827,#020617)] px-6 py-7">
-          <div className="absolute right-5 top-5 rounded-full border border-white/15 px-3 py-1 text-xs font-black text-white/80">
-            카페24 결제
-          </div>
-          <div className="flex h-full items-end">
-            <div className="w-full rounded-2xl border border-white/15 bg-white/10 p-4 backdrop-blur">
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <p className="text-xs font-bold text-gray-300">구매 방식</p>
-                  <p className="mt-1 text-lg font-black">상품 하나씩 바로 이동</p>
-                </div>
-                <FontFreeIcon name="open_in_new" size={32} className="text-brand-neon-lime" />
-              </div>
-              <p className="mt-3 text-xs leading-5 text-gray-300">
-                학원 화면은 그대로 남고, 결제는 새 창에서 진행됩니다.
-              </p>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div className="space-y-5 p-5 md:p-6">
+    <section aria-label="클럽샵 상품 목록">
+      <div>
         {state.status === "loading" && <ShopSkeleton />}
 
         {state.status === "unavailable" && (
@@ -152,27 +120,11 @@ export default function ClubShopClient() {
         )}
 
         {state.status === "ready" && (
-          <>
-            <div className="flex flex-wrap items-end justify-between gap-3">
-              <div>
-                <p className="text-sm font-black text-gray-900 dark:text-white">
-                  {state.data?.label || "스티즈농구교실 다산점"} 추천 상품
-                </p>
-                <p className="mt-1 text-xs font-bold text-gray-500 dark:text-gray-400">
-                  가격과 판매 상태는 본사 쇼핑몰 기준입니다.
-                </p>
-              </div>
-              <span className="rounded-full bg-gray-100 px-3 py-1 text-xs font-black text-gray-600 dark:bg-gray-900 dark:text-gray-300">
-                {products.length}개 상품
-              </span>
-            </div>
-
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {products.map((product) => (
-                <ProductCard key={product.productNo} product={product} />
-              ))}
-            </div>
-          </>
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {products.map((product) => (
+              <ProductCard key={product.productNo} product={product} />
+            ))}
+          </div>
         )}
       </div>
     </section>
@@ -184,13 +136,12 @@ function ProductCard({ product }: { product: ClubShopProduct }) {
   const stateLabel = product.state.trim();
 
   return (
-    <article className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-md dark:border-gray-700 dark:bg-gray-900">
+    <article className="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-md dark:border-gray-700 dark:bg-gray-800">
       <ProductImage src={product.image} name={product.name} />
       <div className="space-y-3 p-4">
         <div className="flex items-start justify-between gap-3">
           <div>
             <h3 className="break-keep text-base font-black text-gray-950 dark:text-white">{product.name}</h3>
-            <p className="mt-1 text-xs font-bold text-gray-500 dark:text-gray-400">상품번호 {product.productNo}</p>
           </div>
           {stateLabel && (
             <span className="shrink-0 rounded-full bg-gray-100 px-2.5 py-1 text-xs font-black text-gray-600 dark:bg-gray-800 dark:text-gray-300">
@@ -208,12 +159,10 @@ function ProductCard({ product }: { product: ClubShopProduct }) {
         ) : (
           <a
             href={product.url}
-            target="_blank"
-            rel="noreferrer"
-            className="flex min-h-11 items-center justify-center gap-2 rounded-xl bg-brand-orange-500 text-sm font-black text-white transition hover:bg-brand-orange-600 dark:bg-brand-neon-lime dark:text-brand-navy-900 dark:hover:bg-lime-400"
+            className="flex min-h-11 items-center justify-center gap-2 rounded-lg bg-brand-orange-500 text-sm font-black text-white transition hover:bg-brand-orange-600 dark:bg-brand-neon-lime dark:text-brand-navy-900 dark:hover:bg-lime-400"
           >
-            구매하러 가기
-            <FontFreeIcon name="open_in_new" size={18} />
+            구매하기
+            <FontFreeIcon name="arrow_forward" size={18} />
           </a>
         )}
       </div>

@@ -23,15 +23,12 @@ export default function ShopPage() {
         <div className="relative mx-auto max-w-5xl px-6">
           <AnimateOnScroll>
             <p className="mb-3 text-sm font-bold uppercase tracking-widest text-brand-orange-500 dark:text-brand-neon-lime">SHOP</p>
-            <h1 className="mb-3 break-keep text-3xl font-black md:text-4xl">스티즈 클럽샵</h1>
-            <p className="max-w-xl text-base text-blue-200">
-              다산점 학부모님을 위한 클럽 상품을 둘러보고, 카페24 본사 쇼핑몰에서 바로 구매하세요.
-            </p>
+            <h1 className="break-keep text-3xl font-black md:text-4xl">스티즈 클럽샵</h1>
           </AnimateOnScroll>
         </div>
       </section>
 
-      <section className="bg-gray-50 py-8 dark:bg-gray-900 md:py-12">
+      <section className="bg-gray-50 py-6 dark:bg-gray-900 md:py-8">
         <div className="mx-auto max-w-5xl px-4">
           <ClubShopClient />
         </div>

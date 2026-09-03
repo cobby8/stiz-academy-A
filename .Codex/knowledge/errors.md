@@ -1,5 +1,11 @@
 # Errors And Traps
 
+## Next 개발서버 직후 Prisma generate가 Windows 파일 잠금으로 실패함 (2026-09-03)
+- **현상**: 로컬 개발서버를 종료한 직후 `npm run build`를 실행하면 Prisma 엔진 DLL의 임시 파일 rename이 `EPERM`으로 실패할 수 있다.
+- **원인**: `next dev`의 자식 프로세스가 종료되기 전에 Prisma 엔진 파일을 잡고 있어 Windows가 교체를 막는다.
+- **해결**: 포트와 명령행을 확인해 해당 저장소의 `next dev` PID와 자식 PID만 종료한 뒤 빌드를 다시 실행한다.
+- **예방**: 개발서버 종료 후 해당 포트가 닫혔는지 확인하고, 전역 Node 종료 명령은 사용하지 않는다.
+
 ## 정규반 청구액이 "첫 행 1건"만 읽혀 510만원 과소 청구됨 (2026-07-26)
 - **분류**: architecture
 - **발견자**: developer

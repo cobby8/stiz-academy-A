@@ -2,8 +2,6 @@ import { createHash, createHmac, randomBytes, randomUUID, timingSafeEqual } from
 import { prisma } from "@/lib/prisma";
 import {
   classifyParentUtterance,
-  getKakaoUserKey,
-  type KakaoSkillPayload,
   type ParentRequestKind,
 } from "@/lib/kakao-chatbot-contract";
 
@@ -132,6 +130,14 @@ async function childrenOf(parentUserId: string): Promise<ChildRow[]> {
   );
 }
 
+/** 보호자 실명·전화번호 없이, 인증 계정에 실제 연결된 자녀 이름만으로 부르는 이름을 만든다. */
+export function formatKakaoParentDisplayName(children: Array<Pick<ChildRow, "name">>): string {
+  const names = [...new Set(children.map((child) => child.name.replace(/\s+/g, " ").trim()).filter(Boolean))];
+  if (names.length === 0) return "학부모님";
+  if (names.length === 1) return `${names[0]} 학생 학부모님`;
+  return `${names.join("·")} 학생 보호자`;
+}
+
 function selectChild(children: ChildRow[], text: string): ChildRow | null {
   if (children.length === 1) return children[0];
   const matches = children.filter((child) => text.includes(child.name));
@@ -162,6 +168,7 @@ export async function handleLinkedMessage(identity: IdentityRow, utterance: stri
   if (!identity.parentUserId) throw new Error("IDENTITY_NOT_LINKED");
   const children = await childrenOf(identity.parentUserId);
   if (children.length === 0) return kakaoText("연결된 수강생을 찾지 못했어요. 학원으로 문의해 주세요.", ["상담원 연결"]);
+  const parentDisplayName = formatKakaoParentDisplayName(children);
 
   const draft = await latestDraft(identity.id);
   if (draft && (CANCEL_WORDS.test(text) || text === "다시 말할게요")) {
@@ -217,7 +224,7 @@ export async function handleLinkedMessage(identity: IdentityRow, utterance: stri
 
   const kind = classifyParentUtterance(text);
   if (kind === "UNKNOWN" && /^(메뉴|처음|시작)$/.test(text)) {
-    return kakaoText("무엇을 도와드릴까요? 평소처럼 문장으로 말씀하셔도 알아들을게요.", ["결석·보강", "셔틀", "청구·영수증", "수강 변경", "정보·상담"]);
+    return kakaoText(`${parentDisplayName}, 무엇을 도와드릴까요? 평소처럼 문장으로 말씀하셔도 알아들을게요.`, ["결석·보강", "셔틀", "청구·영수증", "수강 변경", "정보·상담"]);
   }
   const directKind = DIRECT_KIND_LINKS[kind];
   if (directKind) {

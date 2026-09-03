@@ -48,3 +48,12 @@ test("접수함은 처리 필터와 안전 경계를 보여준다", () => {
   assert.match(client, /검토 정보 저장 및 운영 원장 이관/);
   assert.match(client, /외부 변경\/알림은 별도 승인 전 HELD/);
 });
+
+test("접수함은 학생을 중심으로 표시하고 보호자 개인정보를 줄인다", () => {
+  assert.match(client, /text-xl font-black[^>]*>\{row\.studentName/);
+  assert.match(client, /연결 자녀/);
+  assert.match(page, /function maskName/);
+  assert.match(page, /parentName:maskName\(row\.rawParentName\)/);
+  assert.match(page, /mergedIntoStudentId:null/);
+  assert.doesNotMatch(client, /rawParentName|parentUserId/);
+});

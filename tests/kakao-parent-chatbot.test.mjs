@@ -63,3 +63,13 @@ test("검증이 끝난 전용 업무는 기존 학부모 화면으로 바로 연
   assert.match(source, /최초 인증 때 연결한 학부모 계정/);
   assert.match(source, /DIRECT_KIND_LINKS\[kind\]/);
 });
+
+test("인증 보호자는 연결 자녀만으로 안전한 표시명을 만든다", async () => {
+  const source = await readFile("src/lib/kakao-parent-chatbot.ts", "utf8");
+  assert.match(source, /export function formatKakaoParentDisplayName/);
+  assert.match(source, /return `\$\{names\[0\]\} 학생 학부모님`/);
+  assert.match(source, /return `\$\{names\.join\("·"\)\} 학생 보호자`/);
+  assert.match(source, /formatKakaoParentDisplayName\(children\)/);
+  assert.match(source, /WHERE "parentId"=\$1 AND "mergedIntoStudentId" IS NULL/);
+  assert.doesNotMatch(source, /SELECT[^`]*(?:phone|"User"|parent\.name)/i);
+});

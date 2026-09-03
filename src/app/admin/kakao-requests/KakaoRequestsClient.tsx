@@ -8,6 +8,7 @@ import { decideKakaoParentIntake, type KakaoIntakeDecision } from "@/app/actions
 export type KakaoRequestAdminRow = {
   id: string; kind: string; sourceText: string; structuredJson: Record<string, unknown> | null; status: string;
   studentId: string | null; studentName: string | null; studentGrade: string | null; parentName: string | null;
+  linkedStudents: Array<{ id:string; name:string; grade:string | null }>;
   identityStatus: string; operationsRequestId: string | null; decisionNote: string | null; decidedByName: string | null;
   createdAt: string; decidedAt: string | null;
   currentClassIds: string[];
@@ -77,7 +78,7 @@ export default function KakaoRequestsClient({ rows, classes, status, schemaReady
       const updateDetail = (key: keyof ReviewDetails, value: string) => setReviewDetails(current => ({ ...current, [row.id]: { ...(current[row.id] ?? EMPTY_DETAILS), [key]:value } }));
       const currentClasses = classes.filter(option => row.currentClassIds.includes(option.id));
       return <li key={row.id} className="rounded-2xl border bg-white p-5 shadow-sm dark:bg-gray-900">
-        <div className="flex flex-wrap gap-2"><span className="rounded-full bg-yellow-100 px-2 py-1 text-xs font-black text-yellow-800">{LABEL[row.status] ?? row.status}</span><strong>{row.studentName ?? "학생 확인 필요"}</strong><span className="text-xs text-gray-500">{row.studentGrade} · {row.kind}</span><time className="ml-auto text-xs text-gray-400">{formatDate(row.createdAt)}</time></div>
+        <div className="flex items-start gap-3"><div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-2"><span className="rounded-full bg-yellow-100 px-2 py-1 text-xs font-black text-yellow-800">{LABEL[row.status] ?? row.status}</span><span className="text-xs font-bold text-gray-500">{row.kind}</span></div><h2 className="mt-2 text-xl font-black text-gray-950 dark:text-white">{row.studentName ?? "학생 확인 필요"}</h2><p className="mt-1 text-xs text-gray-500">{row.studentGrade ?? "학년 미확인"} · 보호자 {row.parentName ?? "확인 필요"}</p>{row.linkedStudents.length > 1 && <p className="mt-2 rounded-lg bg-violet-50 px-3 py-2 text-xs text-violet-900"><b>연결 자녀</b> · {row.linkedStudents.map(student => `${student.name}${student.grade ? ` (${student.grade})` : ""}`).join(" · ")}</p>}</div><time className="shrink-0 text-xs text-gray-400">{formatDate(row.createdAt)}</time></div>
         <p className="mt-3 whitespace-pre-wrap rounded-xl bg-gray-50 p-3 text-sm">{row.sourceText}</p>
         <section className="mt-3 rounded-xl border p-3 text-xs"><b>인증·구조화 확인</b><p className={identityOk ? "mt-2 text-green-700" : "mt-2 text-red-700"}>{identityOk ? `최초 인증 완료 · 학생 ID 연결 · 보호자 ${row.parentName ?? "확인"}` : "인증 또는 학생 ID 확인 필요"}</p><pre className="mt-2 overflow-auto whitespace-pre-wrap">{row.structuredJson ? JSON.stringify(row.structuredJson, null, 2) : "세부 정보 없음"}</pre></section>
         <p className="mt-3 rounded-xl bg-blue-50 p-3 text-xs text-blue-900"><b>이관 후:</b> 검증된 운영 명령은 승인 대기(PENDING) · 외부 변경/알림은 별도 승인 전 HELD</p>

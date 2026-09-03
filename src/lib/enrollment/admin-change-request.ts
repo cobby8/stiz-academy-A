@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { createHash } from "node:crypto";
 import { CHANGE_KIND_LABEL, type ChangeKind } from "@/lib/enrollment/changeRequestRules";
 import { computeClassChangeProration, describeProration, type ProrationResult } from "@/lib/enrollment/proration";
 import { getMonthlyClassDates, loadAnnualPlanEvents } from "@/lib/enrollment/monthlyClassDates";
@@ -28,17 +29,18 @@ export type AdminChangeRequestRow = {
   proration: (ProrationResult & { lines: string[] }) | null;
   /** 이미 발행한 차액 청구서가 있으면 그 id. 두 번 발행을 막는다. */
   invoicedPaymentId: string | null;
+  invoicePreviewKey: string;
 };
 
 export async function getEnrollmentChangeRequests(status = "PENDING"): Promise<AdminChangeRequestRow[]> {
   const rows = await prisma.$queryRawUnsafe<any[]>(
     // 정원은 신청 당시가 아니라 **지금** 기준으로 다시 센다. 그 사이 자리가 났을 수 있다.
-    `SELECT r.id, s.name AS "studentName", r.kind,
+    `SELECT r.id, s.name AS "studentName", s."parentId", r.kind,
             fc.name AS "fromClassName", tc.name AS "toClassName",
             to_char(r."effectiveFrom",'YYYY-MM-DD') AS "effectiveFrom",
             to_char(r."resumeOn",'YYYY-MM-DD') AS "resumeOn",
             r.reason, r.status, r.waitlisted, r."decisionNote", r."invoicedPaymentId",
-            r."toClassId", fc."dayOfWeek" AS "fromDay", tc."dayOfWeek" AS "toDay",
+            r."studentId", r."fromClassId", r."toClassId", fc."dayOfWeek" AS "fromDay", tc."dayOfWeek" AS "toDay",
             fp.price AS "fromFee", tp.price AS "toFee",
             to_char(r."createdAt" AT TIME ZONE 'Asia/Seoul','YYYY-MM-DD HH24:MI') AS "createdAt",
             to_char(r."appliedAt" AT TIME ZONE 'Asia/Seoul','YYYY-MM-DD HH24:MI') AS "appliedAt",
@@ -77,8 +79,16 @@ export async function getEnrollmentChangeRequests(status = "PENDING"): Promise<A
     appliedAt: row.appliedAt ?? null,
     decisionNote: row.decisionNote ?? null,
     invoicedPaymentId: row.invoicedPaymentId ?? null,
+    invoicePreviewKey: invoicePreviewKey(row, buildProration(row, planEvents)),
     proration: buildProration(row, planEvents),
   }));
+}
+
+function invoicePreviewKey(row: any, proration: unknown) {
+  return createHash("sha256").update(JSON.stringify({
+    requestId: row.id, studentId: row.studentId, parentId: row.parentId, fromClassId: row.fromClassId,
+    toClassId: row.toClassId, effectiveFrom: row.effectiveFrom, proration,
+  })).digest("hex");
 }
 
 /** 반 변경 건의 일할 계산. 계획표를 못 읽었으면 계산 불가로 표시된다(추측하지 않는다). */
@@ -210,22 +220,23 @@ export async function applyDueEnrollmentChanges(): Promise<number> {
  * 금액은 화면이 보낸 값을 쓰지 않고 **여기서 다시 계산한다.** 화면 값을 믿으면
  * 브라우저에서 숫자를 바꿔 원하는 금액으로 청구서를 만들 수 있다.
  */
-export async function issueProrationInvoice(input: { adminUserId: string; requestId: string }) {
+export async function issueProrationInvoice(input: { adminUserId: string; requestId: string; expectedPreviewKey: string }) {
   // 네트워크 일정 조회는 잠금 전에 마치고, 생성과 연결은 하나의 거래로 묶는다.
   const planEvents = await loadAnnualPlanEvents().catch(() => []);
   return prisma.$transaction(async (tx) => {
   const rows = await tx.$queryRawUnsafe<any[]>(
-    `SELECT r.id, r.kind, r."studentId", r."invoicedPaymentId", r.status,
+    `SELECT r.id, r.kind, r."studentId", s."parentId", r."fromClassId", r."toClassId", r."invoicedPaymentId", r.status,
             to_char(r."effectiveFrom",'YYYY-MM-DD') AS "effectiveFrom",
             fc.name AS "fromClassName", tc.name AS "toClassName",
             fc."dayOfWeek" AS "fromDay", tc."dayOfWeek" AS "toDay",
             fp.price AS "fromFee", tp.price AS "toFee"
        FROM "EnrollmentChangeRequest" r
+       JOIN "Student" s ON s.id = r."studentId"
        LEFT JOIN "Class" fc ON fc.id = r."fromClassId"
        LEFT JOIN "Class" tc ON tc.id = r."toClassId"
        LEFT JOIN "Program" fp ON fp.id = fc."programId"
        LEFT JOIN "Program" tp ON tp.id = tc."programId"
-      WHERE r.id = $1 LIMIT 1 FOR UPDATE OF r`,
+      WHERE r.id = $1 LIMIT 1 FOR UPDATE OF r, s`,
     input.requestId,
   );
   const row = rows[0];
@@ -235,6 +246,9 @@ export async function issueProrationInvoice(input: { adminUserId: string; reques
   if (row.invoicedPaymentId) return { ok: false as const, message: "이미 차액 청구서를 발행했습니다." };
 
   const proration = buildProration(row, planEvents);
+  if (!input.expectedPreviewKey || input.expectedPreviewKey !== invoicePreviewKey(row, proration)) {
+    return { ok: false as const, message: "미리보기 이후 금액·일정·대상이 변경되었습니다. 새로고침 후 다시 확인해 주세요." };
+  }
   if (!proration) return { ok: false as const, message: "반 변경 건만 차액을 청구할 수 있습니다." };
   if (proration.scheduleUnavailable) {
     return { ok: false as const, message: "연간 계획표에 그달 수업일이 없어 자동 계산할 수 없습니다." };
@@ -262,7 +276,21 @@ export async function issueProrationInvoice(input: { adminUserId: string; reques
     input.requestId, created[0].id,
   );
 
+  const invoice = await tx.paymentInvoice.create({ data: {
+    paymentId: created[0].id, studentId: row.studentId, parentId: row.parentId,
+    invoiceNo: `STIZ-CHANGE-${row.id}`, status: "ISSUED", amount: proration.diff,
+    title: description, description,
+    dueDate: new Date(`${row.effectiveFrom}T00:00:00+09:00`),
+  }});
+  await tx.paymentAuditLog.create({ data: {
+    paymentId: created[0].id, invoiceId: invoice.id, actorType: "ADMIN", actorId: input.adminUserId,
+    action: "ENROLLMENT_PRORATION_INVOICE_ISSUED",
+    message: "승인된 미리보기 기준 사이트 차액 청구서 생성. 외부 동기화 및 알림 별도 승인 대기",
+    metadata: { requestId: row.id, previewKey: input.expectedPreviewKey, amount: proration.diff,
+      notificationStatus: "HELD", sheetStatus: "PENDING", rallyzStatus: "PENDING" },
+  }});
+
   return { ok: true as const, paymentId: created[0].id, amount: proration.diff,
-    invoiceStatus: "HELD" as const, notificationStatus: "HELD" as const };
+    invoiceId: invoice.id, invoiceStatus: "ISSUED" as const, notificationStatus: "HELD" as const };
   });
 }

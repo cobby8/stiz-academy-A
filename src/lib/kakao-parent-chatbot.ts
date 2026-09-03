@@ -98,7 +98,7 @@ function classSnapshot(row: ReconfirmationCandidate, side: "from" | "to"): Kakao
     ? { id, programName, className, dayOfWeek, startTime, endTime } : null;
 }
 
-async function issuePendingReconfirmationLink(identity: IdentityRow) {
+export async function issuePendingReconfirmationLink(identity: IdentityRow, intakeId: string | null = null, preparedByAdminId: string | null = null) {
   if (!identity.parentUserId || identity.status !== "ACTIVE") return null;
   return prisma.$transaction(async (tx) => {
     await tx.$queryRawUnsafe(`SELECT pg_advisory_xact_lock(hashtext($1))`, `kakao-reconfirm:${identity.id}`);
@@ -108,6 +108,7 @@ async function issuePendingReconfirmationLink(identity: IdentityRow) {
               fc.id AS "fromClassId",fp.name AS "fromProgramName",fc.name AS "fromClassName",fc."dayOfWeek" AS "fromDayOfWeek",fc."startTime" AS "fromStartTime",fc."endTime" AS "fromEndTime",
               tc.id AS "toClassId",tp.name AS "toProgramName",tc.name AS "toClassName",tc."dayOfWeek" AS "toDayOfWeek",tc."startTime" AS "toStartTime",tc."endTime" AS "toEndTime"
          FROM "KakaoParentIntake" i
+         JOIN "KakaoParentIdentity" ki ON ki.id=i."identityId" AND ki.status='ACTIVE' AND ki."parentUserId"=$2
          JOIN "OperationsRequest" r ON r.id=i."operationsRequestId"
          JOIN "OperationsCommand" c ON c."requestId"=r.id AND c."studentId"=i."studentId"
          JOIN "Student" s ON s.id=c."studentId" AND s."parentId"=$2 AND s."mergedIntoStudentId" IS NULL
@@ -116,11 +117,12 @@ async function issuePendingReconfirmationLink(identity: IdentityRow) {
          LEFT JOIN "Class" tc ON tc.id=c."afterJson"->>'toClassId'
          LEFT JOIN "Program" tp ON tp.id=tc."programId"
         WHERE i."identityId"=$1 AND i.status='APPROVED'
+          AND ($3::text IS NULL OR i.id=$3)
           AND r.status IN ('DRAFT','HELD') AND c.status IN ('PENDING','HELD')
           AND c."afterJson"->>'parentReconfirmationRequired'='true'
           AND COALESCE(c."afterJson"->>'parentConfirmed','false')<>'true'
         ORDER BY i."decidedAt" ASC,c."createdAt" ASC LIMIT 1 FOR UPDATE OF c`,
-      identity.id, identity.parentUserId,
+      identity.id, identity.parentUserId, intakeId,
     );
     const candidate = rows[0];
     if (!candidate) return null;
@@ -151,10 +153,13 @@ async function issuePendingReconfirmationLink(identity: IdentityRow) {
       `INSERT INTO "OperationsAuditLog" (id,"requestId","linkId",action,"actorType","detailsJson")
        VALUES ($1,$2,$3,'KAKAO_RECONFIRMATION_LINK_ISSUED','SYSTEM',$4::jsonb)`,
       randomUUID(), candidate.requestId, linkId,
-      JSON.stringify({ intakeId: candidate.intakeId, commandId: candidate.commandId, payloadHash, expiresAt: expiresAt.toISOString() }),
+      JSON.stringify({ intakeId: candidate.intakeId, commandId: candidate.commandId, payloadHash, expiresAt: expiresAt.toISOString(), preparedByAdminId, deliveryStatus: "HELD" }),
     );
     return {
       studentName: candidate.studentName,
+      studentId: candidate.studentId,
+      intakeId: candidate.intakeId,
+      expiresAt: expiresAt.toISOString(),
       url: siteUrl(`/request/reconfirm/${encodeURIComponent(token)}`),
     };
   });

@@ -26,14 +26,20 @@ export default function EnrollmentChangesClient({
   const [error, setError] = useState("");
 
   function issueInvoice(requestId: string) {
+    const row = rows.find(item => item.id === requestId);
+    if (!row?.proration || !window.confirm(`${row.studentName} · ${row.effectiveFrom}\n${row.fromClassName} → ${row.toClassName}\n차액 ${row.proration.diff.toLocaleString()}원 사이트 청구서 1건을 생성할까요?\n문자·알림 발송과 시트·랠리즈 반영은 포함되지 않습니다.`)) return;
     setError("");
     startTransition(async () => {
-      const result = await issueEnrollmentChangeInvoice(requestId);
+      try {
+      const result = await issueEnrollmentChangeInvoice(requestId, row.invoicePreviewKey);
       if (!result.ok) {
         setError(result.message);
         return;
       }
       router.refresh();
+      } catch {
+        setError("청구 처리 결과를 확인하지 못했습니다. 새로고침하여 생성 여부를 확인한 뒤 다시 시도해 주세요.");
+      }
     });
   }
 
@@ -132,7 +138,7 @@ export default function EnrollmentChangesClient({
                   )}
                   {row.status === "APPROVED" && row.proration.diff > 0 && !row.proration.scheduleUnavailable && (
                     row.invoicedPaymentId ? (
-                      <p className="mt-2 text-xs font-bold text-amber-700">사이트 차액 기록 생성됨 · 외부 청구서 발행과 알림은 별도 확인 필요</p>
+                      <p className="mt-2 text-xs font-bold text-amber-700">차액 기록 있음 · 청구서 연결 및 시트·랠리즈 반영·알림은 별도 확인 필요</p>
                     ) : (
                       <button
                         type="button"
@@ -140,7 +146,7 @@ export default function EnrollmentChangesClient({
                         onClick={() => issueInvoice(row.id)}
                         className="mt-2 min-h-11 w-full rounded-xl bg-brand-navy-900 text-sm font-black text-white disabled:opacity-50 dark:bg-brand-neon-lime dark:text-brand-navy-900"
                       >
-                        차액 {row.proration.diff.toLocaleString()}원 사이트 기록 생성
+                        차액 {row.proration.diff.toLocaleString()}원 사이트 청구서 생성
                       </button>
                     )
                   )}

@@ -33,4 +33,8 @@ test('proration locks request and atomically creates and links payment', () => {
   assert.match(invoice, /tx\.\$queryRawUnsafe/);
   assert.match(invoice, /tx\.\$executeRawUnsafe/);
   assert.match(invoice, /if \(row\.invoicedPaymentId\)/);
+  assert.match(invoice, /tx\.paymentInvoice\.create/);
+  assert.match(invoice, /tx\.paymentAuditLog\.create/);
+  assert.match(invoice, /input\.expectedPreviewKey !== invoicePreviewKey/);
+  assert.match(invoice, /invoiceNo: `STIZ-CHANGE-/);
 });

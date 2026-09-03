@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { decideKakaoParentIntake, type KakaoIntakeDecision } from "@/app/actions/kakao-parent-intake-admin";
+import { prepareKakaoReconfirmationNotice } from "@/app/actions/kakao-reconfirmation-notice";
 import { kakaoFollowupSummary, isKakaoFollowupOverdue, type KakaoFollowupCommand } from "@/lib/kakaoIntakeFollowup";
 
 export type KakaoRequestAdminRow = {
@@ -59,6 +60,15 @@ export default function KakaoRequestsClient({ rows, classes, status, schemaReady
   const [notes, setNotes] = useState<Record<string,string>>({});
   const [reviewDetails, setReviewDetails] = useState<Record<string,ReviewDetails>>(() => Object.fromEntries(rows.map(row => [row.id, initialDetails(row)])));
   const [error, setError] = useState("");
+  const [notice, setNotice] = useState<Awaited<ReturnType<typeof prepareKakaoReconfirmationNotice>> | null>(null);
+  function prepareNotice(id: string) {
+    setError("");
+    setNotice(null);
+    startTransition(async () => {
+      try { setNotice(await prepareKakaoReconfirmationNotice(id)); }
+      catch (caught) { setError(caught instanceof Error ? caught.message : "안내 준비에 실패했습니다."); }
+    });
+  }
   const [checkedAt] = useState(() => Date.now());
   function decide(id: string, decision: KakaoIntakeDecision) {
     setError("");
@@ -78,6 +88,13 @@ export default function KakaoRequestsClient({ rows, classes, status, schemaReady
     <p className="text-sm">현재 목록 {rows.length}건(최대 200건) · 접수 후 24시간 이상 후속 대상 {rows.filter(row => isKakaoFollowupOverdue(row.status, row.createdAt, checkedAt)).length}건 · 접수/동기화 실패 {rows.filter(row => row.status === "FAILED" || row.commands.some(command => ["FAILED", "PARTIAL"].includes(command.status))).length}건</p>
     <p className="text-xs text-gray-500">상담 전환·운영 원장 이관은 업무 완료가 아닙니다. 접수 종결도 청구·알림 발송 완료를 뜻하지 않습니다.</p>
     {error && <p role="alert" className="rounded-xl bg-red-50 p-3 text-sm font-bold text-red-700">{error}</p>}
+    {notice && <section aria-label="재확인 안내 미리보기" className="rounded-xl border p-4 space-y-2">
+      <h2 className="font-bold">{notice.studentName} 학생 보호자 · 재확인 안내 미발송</h2>
+      <p className="text-sm">만료: {formatDate(notice.expiresAt)} · 발송 승인 대기</p>
+      <p className="text-sm">해당 보호자 대화방을 확인한 뒤 사용하세요. 다시 생성하면 이전 링크는 무효가 됩니다. 이 화면은 안내 준비만 하며 자동 발송하지 않습니다.</p>
+      <textarea aria-label="재확인 안내 문구" readOnly value={notice.message} className="w-full min-h-40 rounded border p-2" />
+      <button type="button" onClick={() => setNotice(null)} className="min-h-11 underline">미리보기 닫기</button>
+    </section>}
     {!schemaReady || rows.length===0 ? <p className="rounded-2xl border bg-white p-8 text-center text-sm text-gray-500">{schemaReady ? "해당 요청이 없습니다." : "DB 준비 후 표시됩니다."}</p> : <ul className="space-y-4">{rows.map(row => {
       const identityOk = row.identityStatus==="ACTIVE" && Boolean(row.studentId);
       const detail = reviewDetails[row.id] ?? EMPTY_DETAILS;
@@ -94,6 +111,7 @@ export default function KakaoRequestsClient({ rows, classes, status, schemaReady
         <p className="mt-3 rounded-xl bg-blue-50 p-3 text-xs text-blue-900"><b>이관 후:</b> 검증된 운영 명령은 승인 대기(PENDING) · 외부 변경/알림은 별도 승인 전 HELD</p>
         {row.operationsRequestId && <Link href="/admin/operations-sync" className="mt-2 inline-block text-sm font-bold text-blue-700 underline">생성된 운영 원장 확인</Link>}
         {row.decidedAt && <p className="mt-2 text-xs text-gray-400">{row.decidedByName ?? "관리자"} · {formatDate(row.decidedAt)} · {row.decisionNote ?? "메모 없음"}</p>}
+        {row.status === "APPROVED" && row.commands.some(command => command.parentReconfirmationRequired && !command.parentConfirmed) && <button type="button" disabled={pending || !identityOk} onClick={() => prepareNotice(row.id)} className="mt-3 min-h-11 rounded-xl border px-3 disabled:opacity-40">재확인 링크·안내 준비 (미발송)</button>}
         {REVIEWABLE.has(row.status) && <div className="mt-4 space-y-3">
           {TRANSFERABLE.has(row.kind) && <section className="space-y-3 rounded-xl border border-blue-200 bg-blue-50/50 p-3">
             <div><b className="text-sm text-blue-950">관리자 검토 정보</b><p className="mt-1 text-xs text-blue-800">여기서 저장한 내용은 운영 원장 검토안에만 들어갑니다. 시트·랠리즈·사이트 변경이나 알림 발송은 실행되지 않습니다.</p></div>

@@ -1,3 +1,8 @@
+## 2026-09-04 월별·반별 장부 점검
+- `/admin/finance/monthly-ledger`는 관리자 전용 읽기 화면이며 수납/청구 화면에서 연결된다.
+- `/api/admin/finance/monthly-ledger?month=YYYY-MM`는 관리자 인증 뒤 RepeatableRead + READ ONLY 거래로 현재 수강/지정월 Payment만 읽는다. 각각 5,000건 초과면 부분 합계를 반환하지 않는다. 개인정보 응답은 no-store, 연락처/생년월일/결제키는 SELECT하지 않는다.
+- `billing/monthly-class-ledger.ts`는 무입출력 계산 모델이며 미지정 반·과거 청구를 보존하고 취소/미확정/이상 금액을 분리한다. 영구 월 원장 쓰기·청구 생성·알림은 없는 점검 단계다.
+
 ## 2026-09-04 입학 점검 및 문의 입구
 - `/admin/registration-readiness`는 관리자 인증 후 최근 승인 100건의 반 배정 및 외부 완료 근거를 읽기 전용으로 표시한다. `/admin/apply`에서 연결한다.
 - `kakao-guest-entry.ts`는 공개 체험·수강신청 안내만 제공하며 기존 학생 데이터 접수는 인증 후 처리한다.

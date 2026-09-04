@@ -1,4 +1,5 @@
 import FinanceClient from "./FinanceClient";
+import Link from "next/link";
 import { getCachedAdminFinancePayload } from "@/lib/adminReadPayloads";
 import { requireAdmin } from "@/lib/auth-guard";
 
@@ -16,13 +17,20 @@ export default async function AdminFinancePage() {
     const { payments, summary, paymentProvider } = payload;
 
     return (
-        <FinanceClient
-            initialPayments={payments}
-            initialYear={initialYear}
-            initialMonth={initialMonth}
-            initialSummary={summary}
-            initialPaymentProvider={paymentProvider}
-            currentAdminRole={adminUser.appUserRole}
-        />
+        <>
+            <div className="mb-4">
+                <Link href="/admin/finance/monthly-ledger" className="underline">
+                    월별·반별 장부 점검 (조회 전용)
+                </Link>
+            </div>
+            <FinanceClient
+                initialPayments={payments}
+                initialYear={initialYear}
+                initialMonth={initialMonth}
+                initialSummary={summary}
+                initialPaymentProvider={paymentProvider}
+                currentAdminRole={adminUser.appUserRole}
+            />
+        </>
     );
 }

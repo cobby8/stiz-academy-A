@@ -129,12 +129,15 @@ type MonthlyInvoicePreview = {
     targetStudentCount: number;
     createCount: number;
     skipCount: number;
+    reviewCount: number;
     createAmount: number;
     skipAmount: number;
     samples: {
         studentId: string;
         studentName: string;
         className: string | null;
+        classCount: number;
+        classNames: string[];
         parentName: string | null;
         parentPhone: string | null;
         parentEmail: string | null;
@@ -150,12 +153,14 @@ type MonthlyInvoicePreview = {
         existingInvoiceStatus: string | null;
         existingSentAt: string | null;
         issueReason: string | null;
-        action: "CREATE" | "SKIP";
+        action: "CREATE" | "SKIP" | "REVIEW";
     }[];
     items: {
         studentId: string;
         studentName: string;
         className: string | null;
+        classCount: number;
+        classNames: string[];
         parentName: string | null;
         parentPhone: string | null;
         parentEmail: string | null;
@@ -171,7 +176,7 @@ type MonthlyInvoicePreview = {
         existingInvoiceStatus: string | null;
         existingSentAt: string | null;
         issueReason: string | null;
-        action: "CREATE" | "SKIP";
+        action: "CREATE" | "SKIP" | "REVIEW";
     }[];
 };
 
@@ -272,6 +277,7 @@ function toAbsoluteHref(href: string) {
 }
 
 function needsInvoiceAttention(item: MonthlyInvoicePreviewItem) {
+    if (item.action === "REVIEW") return true;
     if (item.existingAmount != null && item.existingAmount !== item.amount) return true;
     if (!item.issueReason) return false;
     return !item.issueReason.includes("이미 같은 유형");
@@ -619,7 +625,7 @@ export default function FinanceClient({
             setInvoicePreview(preview);
             const attentionCount = preview.items.filter(needsInvoiceAttention).length;
             setInvoiceFilter(attentionCount > 0 ? "ATTENTION" : preview.createCount > 0 ? "CREATE" : "ALL");
-            setFinanceNotice(`${year}년 ${month}월 청구 대상 ${preview.targetStudentCount}명, 생성 예정 ${preview.createCount}건을 확인했습니다.`);
+            setFinanceNotice(`${year}년 ${month}월 청구 대상 ${preview.targetStudentCount}명, 생성 예정 ${preview.createCount}건, 다반 확인 필요 ${preview.reviewCount}건을 확인했습니다.`);
         } catch (err: unknown) {
             setInvoiceError(getErrorMessage(err, "청구 대상 확인 실패"));
             setInvoicePreview(null);
@@ -1231,6 +1237,12 @@ export default function FinanceClient({
                         </p>
                     )}
 
+                    {invoicePreview.reviewCount > 0 && (
+                        <p className="px-4 py-3 text-sm text-[var(--color-brand-orange-700)] dark:text-[var(--color-brand-neon-lime)]">
+                            다반 확인 필요 {invoicePreview.reviewCount}건은 발행에서 제외됩니다. 반별 수강료·할인·기존 납부를 확인해 주세요. 템플릿 금액을 반 수만큼 곱하지 않습니다.
+                        </p>
+                    )}
+
                     {/* 필터 탭 */}
                     {invoiceItems.length > 0 && (
                         <div className="flex flex-wrap gap-2 border-b border-gray-100 px-4 py-2 dark:border-gray-800">
@@ -1259,7 +1271,7 @@ export default function FinanceClient({
                         // 반별 그룹핑 → 학생별 그룹핑
                         const classMap = new Map<string, MonthlyInvoicePreviewItem[]>();
                         for (const item of filteredInvoiceItems) {
-                            const key = item.className ?? "수업 미지정";
+                            const key = item.action === "REVIEW" ? "다반 수강 · 확인 필요" : item.className ?? "수업 미지정";
                             const arr = classMap.get(key) ?? [];
                             arr.push(item);
                             classMap.set(key, arr);
@@ -1279,7 +1291,7 @@ export default function FinanceClient({
                                         a[0].studentName.localeCompare(b[0].studentName, "ko"),
                                     );
                                     const classCreateStudents = students.filter(([, items]) => items.some((i) => i.action === "CREATE"));
-                                    const classTotalAmount = classItems.reduce((sum, item) => sum + item.amount, 0);
+                                    const classTotalAmount = classItems.reduce((sum, item) => sum + (item.action === "REVIEW" ? 0 : item.amount), 0);
                                     const classExcluded = classCreateStudents.every(([sid]) => excludedStudentIds.has(sid));
                                     const classAllSelected = classCreateStudents.length > 0 && classCreateStudents.every(([sid]) => !excludedStudentIds.has(sid));
 
@@ -1311,7 +1323,7 @@ export default function FinanceClient({
                                                     )}
                                                     <div>
                                                         <span className="text-sm font-extrabold text-gray-900 dark:text-white">{className}</span>
-                                                        <span className="ml-2 text-xs text-gray-500 dark:text-gray-400">{students.length}명 · {formatAmount(classTotalAmount)}</span>
+                                                        <span className="ml-2 text-xs text-gray-500 dark:text-gray-400">{students.length}명 · {classItems.every((item) => item.action === "REVIEW") ? "금액 산정 보류" : formatAmount(classTotalAmount)}</span>
                                                     </div>
                                                 </div>
                                                 {classCreateStudents.length > 0 && (
@@ -1335,8 +1347,9 @@ export default function FinanceClient({
                                                 {students.map(([studentId, studentItems]) => {
                                                     const first = studentItems[0];
                                                     const hasCreate = studentItems.some((i) => i.action === "CREATE");
+                                                    const hasReview = studentItems.some((i) => i.action === "REVIEW");
                                                     const isExcluded = excludedStudentIds.has(studentId);
-                                                    const totalAmount = studentItems.reduce((sum, i) => sum + i.amount, 0);
+                                                    const totalAmount = studentItems.reduce((sum, i) => sum + (i.action === "REVIEW" ? 0 : i.amount), 0);
                                                     const hasAttention = studentItems.some(needsInvoiceAttention);
                                                     const existingStatus = first.existingStatus ? STATUS_LABELS[first.existingStatus] : null;
 
@@ -1370,6 +1383,9 @@ export default function FinanceClient({
                                                             {/* 학생 정보 */}
                                                             <div className="min-w-[100px] flex-1">
                                                                 <p className="font-bold text-gray-900 dark:text-white">{first.studentName}</p>
+                                                                {hasReview && (
+                                                                    <p className="mt-0.5 text-xs">{first.classCount}개 반: {first.classNames.join(" · ")}</p>
+                                                                )}
                                                                 <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
                                                                     {first.parentName ?? "학부모 미지정"} · {first.parentPhone || first.parentEmail || "연락처 확인 필요"}
                                                                 </p>
@@ -1383,11 +1399,11 @@ export default function FinanceClient({
                                                                             {TYPE_LABELS[item.type] ?? item.type}
                                                                         </span>
                                                                         <span className="font-mono font-semibold text-gray-800 dark:text-gray-100">
-                                                                            {formatAmount(item.amount)}
+                                                                            {item.action === "REVIEW" ? "금액 산정 보류" : formatAmount(item.amount)}
                                                                         </span>
                                                                     </div>
                                                                 ))}
-                                                                {studentItems.length > 1 && (
+                                                                {studentItems.length > 1 && !hasReview && (
                                                                     <div className="mt-1 flex items-center justify-between gap-2 border-t border-gray-200 pt-1 text-sm dark:border-gray-700">
                                                                         <span className="font-bold text-gray-700 dark:text-gray-200">합계</span>
                                                                         <span className="font-mono font-extrabold text-gray-900 dark:text-white">{formatAmount(totalAmount)}</span>
@@ -1401,6 +1417,10 @@ export default function FinanceClient({
                                                                 {hasCreate ? (
                                                                     <span className="rounded-full bg-green-100 px-2 py-0.5 text-xs font-bold text-green-700 dark:bg-green-950/40 dark:text-green-200">
                                                                         발행 예정
+                                                                    </span>
+                                                                ) : hasReview ? (
+                                                                    <span className="rounded-full px-2 py-0.5 text-xs font-bold text-[var(--color-brand-orange-700)] dark:text-[var(--color-brand-neon-lime)]">
+                                                                        확인 필요 · 발행 제외
                                                                     </span>
                                                                 ) : (
                                                                     <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs font-bold text-gray-600 dark:bg-gray-800 dark:text-gray-300">

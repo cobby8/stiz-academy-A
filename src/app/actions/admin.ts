@@ -3143,6 +3143,8 @@ type MonthlyInvoicePreviewSample = {
     studentId: string;
     studentName: string;
     className: string | null;
+    classCount: number;
+    classNames: string[];
     parentName: string | null;
     parentPhone: string | null;
     parentEmail: string | null;
@@ -3160,7 +3162,7 @@ type MonthlyInvoicePreviewSample = {
     existingInvoiceStatus: string | null;
     existingSentAt: string | null;
     issueReason: string | null;
-    action: "CREATE" | "SKIP";
+    action: "CREATE" | "SKIP" | "REVIEW";
 };
 
 type MonthlyInvoicePreview = {
@@ -3170,6 +3172,7 @@ type MonthlyInvoicePreview = {
     targetStudentCount: number;
     createCount: number;
     skipCount: number;
+    reviewCount: number;
     createAmount: number;
     skipAmount: number;
     samples: MonthlyInvoicePreviewSample[];
@@ -3201,6 +3204,13 @@ const MONTHLY_INVOICE_TARGETS_SQL = `
         -- 흡수된 중복 학생에게 새 청구가 또 만들어지면 같은 아이에게 두 번 청구된다.
         WHERE e.status = 'ACTIVE' AND ${notMergedStudent("s")}
     ),
+    student_class_totals AS (
+        -- 프로그램별 템플릿으로 나누기 전에 학생의 전체 활성 반을 확인한다.
+        SELECT "studentId", COUNT(DISTINCT "classId")::int AS "totalClassCount",
+               ARRAY_AGG(DISTINCT "className" ORDER BY "className") AS "classNames"
+        FROM active_enrollments
+        GROUP BY "studentId"
+    ),
     target_pairs AS (
         SELECT
             t.id AS "templateId",
@@ -3216,14 +3226,17 @@ const MONTHLY_INVOICE_TARGETS_SQL = `
             a."parentEmail",
             MIN(a."classId") AS "classId",
             MIN(a."className") AS "className",
-            COUNT(DISTINCT a."classId")::int AS "classCount"
+            sc."classNames",
+            sc."totalClassCount" AS "classCount",
+            sc."totalClassCount"
         FROM templates t
         JOIN active_enrollments a
           ON t."programId" IS NULL OR t."programId" = a."programId"
+        JOIN student_class_totals sc ON sc."studentId" = a."studentId"
         GROUP BY
             t.id, t.name, t.amount, t.type, t.description, t."dueDay",
-            a."studentId", a."studentName", a."parentName", a."parentPhone", a."parentEmail"
-        HAVING COUNT(DISTINCT a."classId") = 1
+            a."studentId", a."studentName", a."parentName", a."parentPhone", a."parentEmail",
+            sc."classNames", sc."totalClassCount"
     ),
     actions AS (
         SELECT
@@ -3235,18 +3248,22 @@ const MONTHLY_INVOICE_TARGETS_SQL = `
             i.status AS "existingInvoiceStatus",
             TO_CHAR(i."sentAt", 'YYYY-MM-DD') AS "existingSentAt",
             CASE
+                WHEN tp."totalClassCount" > 1 THEN '여러 반 수강: 반별 수강료·할인·기존 납부를 확인해야 하므로 발행에서 제외합니다.'
                 WHEN NULLIF(tp."parentEmail", '') IS NULL THEN '학부모 이메일 확인 필요'
                 WHEN NULLIF(tp."parentPhone", '') IS NULL THEN '학부모 연락처 확인 권장'
                 WHEN p.id IS NOT NULL THEN '이미 같은 유형의 청구가 있어 유지'
                 ELSE NULL
             END AS "issueReason",
-            CASE WHEN p.id IS NULL THEN 'CREATE' ELSE 'SKIP' END AS action
+            CASE WHEN tp."totalClassCount" > 1 THEN 'REVIEW'
+                 WHEN p.id IS NULL THEN 'CREATE' ELSE 'SKIP' END AS action
         FROM target_pairs tp
         LEFT JOIN "Payment" p
           ON p."studentId" = tp."studentId"
          AND p.year = $1
          AND p.month = $2
          AND p.type = tp.type
+         -- 다반 확인필요 행은 납부 건수만큼 복제되지 않도록 기존 납부와 합치지 않는다.
+         AND tp."totalClassCount" = 1
         LEFT JOIN "PaymentInvoice" i ON i."paymentId" = p.id
     )
 `;
@@ -3263,6 +3280,7 @@ export async function previewMonthlyInvoices(year: number, month: number): Promi
                 targetStudentCount: number;
                 createCount: number;
                 skipCount: number;
+                reviewCount: number;
                 createAmount: number;
                 skipAmount: number;
             }[]>(
@@ -3273,6 +3291,7 @@ export async function previewMonthlyInvoices(year: number, month: number): Promi
                     (SELECT COUNT(DISTINCT "studentId")::int FROM target_pairs) AS "targetStudentCount",
                     COUNT(CASE WHEN action = 'CREATE' THEN 1 END)::int AS "createCount",
                     COUNT(CASE WHEN action = 'SKIP' THEN 1 END)::int AS "skipCount",
+                    COUNT(CASE WHEN action = 'REVIEW' THEN 1 END)::int AS "reviewCount",
                     COALESCE(SUM(CASE WHEN action = 'CREATE' THEN amount ELSE 0 END), 0)::int AS "createAmount",
                     COALESCE(SUM(CASE WHEN action = 'SKIP' THEN amount ELSE 0 END), 0)::int AS "skipAmount"
                 FROM actions
@@ -3287,6 +3306,8 @@ export async function previewMonthlyInvoices(year: number, month: number): Promi
                     "studentId",
                     "studentName",
                     "className",
+                    "classCount",
+                    "classNames",
                     "parentName",
                     "parentPhone",
                     "parentEmail",
@@ -3304,7 +3325,7 @@ export async function previewMonthlyInvoices(year: number, month: number): Promi
                     action
                 FROM actions
                 ORDER BY
-                    CASE action WHEN 'CREATE' THEN 1 ELSE 2 END,
+                    CASE action WHEN 'REVIEW' THEN 0 WHEN 'CREATE' THEN 1 ELSE 2 END,
                     "studentName",
                     "templateName"
                 `,
@@ -3318,6 +3339,7 @@ export async function previewMonthlyInvoices(year: number, month: number): Promi
             targetStudentCount: 0,
             createCount: 0,
             skipCount: 0,
+            reviewCount: 0,
             createAmount: 0,
             skipAmount: 0,
         };
@@ -3329,6 +3351,7 @@ export async function previewMonthlyInvoices(year: number, month: number): Promi
             targetStudentCount: Number(summary.targetStudentCount ?? 0),
             createCount: Number(summary.createCount ?? 0),
             skipCount: Number(summary.skipCount ?? 0),
+            reviewCount: Number(summary.reviewCount ?? 0),
             createAmount: Number(summary.createAmount ?? 0),
             skipAmount: Number(summary.skipAmount ?? 0),
             samples: items.slice(0, 20).map((sample) => ({
@@ -3373,46 +3396,58 @@ export async function generateMonthlyInvoices(year: number, month: number, exclu
             ? `AND "studentId" NOT IN (${excluded.map((_, i) => `$${i + 4}`).join(",")})`
             : "";
 
-        const insertResult = await prisma.$executeRawUnsafe(
-            `
-            ${MONTHLY_INVOICE_TARGETS_SQL}
-            INSERT INTO "Payment" (
-                id, "studentId", "classId", amount, status, "dueDate", type, description,
-                month, year, "autoGenerated", "createdAt", "updatedAt"
-            )
-            SELECT
-                gen_random_uuid()::text,
-                "studentId",
-                "classId",
-                amount,
-                'PENDING',
-                $3::timestamp,
-                type,
-                description,
-                $2,
-                $1,
-                true,
-                NOW(),
-                NOW()
-            FROM actions
-            WHERE action = 'CREATE'
-            ${excludeClause}
-            `,
-            year,
-            month,
-            monthlyBillingDueDate(year, month),
-            ...(excluded ?? []),
-        );
+        // 구조 보강은 거래 밖에서 마치고, 납부와 청구서는 함께 성공하거나 함께 취소한다.
+        await ensurePaymentInfrastructure();
+        const { insertedRows, invoiceResult } = await prisma.$transaction(async (tx) => {
+            // 이 월청구 경로의 같은 연월 실행만 순서대로 처리한다(다른 수납 경로의 전체 잠금은 아님).
+            await tx.$executeRawUnsafe(
+                `SELECT pg_advisory_xact_lock(hashtextextended($1, 0))`,
+                `monthly-invoice:${year}:${month}`,
+            );
+            const insertedRows = await tx.$queryRawUnsafe<{ id: string }[]>(
+                `
+                ${MONTHLY_INVOICE_TARGETS_SQL}
+                INSERT INTO "Payment" (
+                    id, "studentId", "classId", amount, status, "dueDate", type, description,
+                    month, year, "autoGenerated", "createdAt", "updatedAt"
+                )
+                SELECT
+                    gen_random_uuid()::text,
+                    "studentId",
+                    "classId",
+                    amount,
+                    'PENDING',
+                    $3::timestamp,
+                    type,
+                    description,
+                    $2,
+                    $1,
+                    true,
+                    NOW(),
+                    NOW()
+                FROM actions
+                WHERE action = 'CREATE'
+                ${excludeClause}
+                RETURNING id
+                `,
+                year,
+                month,
+                monthlyBillingDueDate(year, month),
+                ...(excluded ?? []),
+            );
 
-        const invoiceResult = await ensureInvoicesForMonth(year, month);
+            // 이번 승인으로 새로 생성된 납부만 발행하고, 같은 달의 보류·기존 기록은 건드리지 않는다.
+            const invoiceResult = await ensureInvoicesForMonth(year, month, insertedRows.map((row) => row.id), tx);
+            return { insertedRows, invoiceResult };
+        });
 
         revalidateFinanceCaches();
 
         return {
-            created: Number(insertResult ?? 0),
+            created: insertedRows.length,
             skipped: preview.skipCount,
             invoices: invoiceResult.invoiceCount,
-            message: `${Number(insertResult ?? 0)}건 생성, ${preview.skipCount}건 기존 청구서 유지`,
+            message: `${insertedRows.length}건 생성, ${preview.skipCount}건 기존 청구서 유지`,
         };
     } catch (e) {
         console.error("Failed to generate monthly invoices:", e);

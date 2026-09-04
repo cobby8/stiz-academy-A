@@ -348,15 +348,24 @@ export async function recordPaymentAudit(input: {
     );
 }
 
-export async function ensureInvoicesForMonth(year: number, month: number) {
-    await ensurePaymentInfrastructure();
+export async function ensureInvoicesForMonth(
+    year: number,
+    month: number,
+    paymentIds?: string[],
+    transaction?: Pick<typeof prisma, "$executeRawUnsafe" | "$queryRawUnsafe">,
+) {
+    // 선택 발행은 새로 생성된 정확한 Payment ID만 대상으로 한다. 빈 선택을 월 전체로 확대하지 않는다.
+    if (paymentIds && paymentIds.length === 0) return { invoiceCount: 0 };
+    // 거래 호출자는 시작 전에 인프라를 준비한다. 거래 안에서 전역 연결/DDL을 호출하지 않는다.
+    if (!transaction) await ensurePaymentInfrastructure();
+    const db = transaction ?? prisma;
 
     const dueStart = `${year}-${String(month).padStart(2, "0")}-01`;
     const nextMonth = month === 12 ? 1 : month + 1;
     const nextYear = month === 12 ? year + 1 : year;
     const dueEnd = `${nextYear}-${String(nextMonth).padStart(2, "0")}-01`;
 
-    await prisma.$executeRawUnsafe(
+    await db.$executeRawUnsafe(
         `
         INSERT INTO "PaymentInvoice" (
             id, "paymentId", "studentId", "classId", "parentId", "invoiceNo", status,
@@ -396,6 +405,7 @@ export async function ensureInvoicesForMonth(year: number, month: number) {
             (p.year = $1 AND p.month = $2)
             OR (p."dueDate" >= $3::timestamp AND p."dueDate" < $4::timestamp)
         )
+        AND ($5::text[] IS NULL OR p.id = ANY($5::text[]))
         ON CONFLICT ("paymentId") DO UPDATE SET
             "studentId" = EXCLUDED."studentId",
             "classId" = EXCLUDED."classId",
@@ -415,9 +425,10 @@ export async function ensureInvoicesForMonth(year: number, month: number) {
         month,
         dueStart,
         dueEnd,
+        paymentIds ?? null,
     );
 
-    await prisma.$executeRawUnsafe(
+    await db.$executeRawUnsafe(
         `
         UPDATE "Payment" p
         SET
@@ -431,14 +442,16 @@ export async function ensureInvoicesForMonth(year: number, month: number) {
             (p.year = $1 AND p.month = $2)
             OR (p."dueDate" >= $3::timestamp AND p."dueDate" < $4::timestamp)
           )
+          AND ($5::text[] IS NULL OR p.id = ANY($5::text[]))
         `,
         year,
         month,
         dueStart,
         dueEnd,
+        paymentIds ?? null,
     );
 
-    const rows = await prisma.$queryRawUnsafe<{ count: number }[]>(
+    const rows = await db.$queryRawUnsafe<{ count: number }[]>(
         `
         SELECT COUNT(*)::int AS count
         FROM "PaymentInvoice" i
@@ -447,11 +460,13 @@ export async function ensureInvoicesForMonth(year: number, month: number) {
             (p.year = $1 AND p.month = $2)
             OR (p."dueDate" >= $3::timestamp AND p."dueDate" < $4::timestamp)
         )
+        AND ($5::text[] IS NULL OR p.id = ANY($5::text[]))
         `,
         year,
         month,
         dueStart,
         dueEnd,
+        paymentIds ?? null,
     );
 
     return { invoiceCount: Number(rows[0]?.count ?? 0) };

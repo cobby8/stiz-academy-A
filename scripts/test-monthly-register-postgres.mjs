@@ -45,10 +45,15 @@ async function assertFreePort() {
 }
 
 function databaseFor(pool) {
-  return { async $transaction(work) {
+  return {
+    $queryRawUnsafe: async (sql, ...values) => (await pool.query(sql, values)).rows,
+    $executeRawUnsafe: async (sql, ...values) => (await pool.query(sql, values)).rowCount,
+    async $transaction(work, options = {}) {
+    // 실제 GET 라우트가 요청하는 반복 읽기 격리 수준도 시험 DB에 그대로 적용합니다.
+    assert.ok(options.isolationLevel === undefined || options.isolationLevel === 'RepeatableRead');
     const client = await pool.connect();
     try {
-      await client.query('BEGIN');
+      await client.query(options.isolationLevel === 'RepeatableRead' ? 'BEGIN ISOLATION LEVEL REPEATABLE READ' : 'BEGIN');
       await client.query("SET LOCAL statement_timeout = '10s'");
       await client.query("SET LOCAL lock_timeout = '5s'");
       const tx = {
@@ -77,17 +82,23 @@ async function assertOwnedConnection(pool, expectedDatabase, dataDir) {
 
 async function snapshot(pool) {
   const result = {};
-  for (const table of ['Student', 'Class', 'Enrollment', 'MonthlyEnrollmentRegister', 'MonthlyEnrollmentRegisterRevision']) {
+  const tables = ['Student', 'Class', 'Enrollment', 'MonthlyEnrollmentRegister', 'MonthlyEnrollmentRegisterRevision'];
+  if ((await pool.query("SELECT to_regclass('public.\"User\"') AS users")).rows[0].users) tables.push('User');
+  for (const table of tables) {
     result[table] = (await pool.query(`SELECT * FROM "${table}" ORDER BY id`)).rows;
   }
-  result.security = (await pool.query(`SELECT relname, relrowsecurity, relacl::text
-    FROM pg_class WHERE relname IN ('MonthlyEnrollmentRegister', 'MonthlyEnrollmentRegisterRevision') ORDER BY relname`)).rows;
+  // 복원기는 기본 소유자 권한을 NULL ACL로 생략할 수 있다. 문자열 표기 대신
+  // 기본 ACL을 펼친 실효 권한을 비교해 공개 권한이 추가된 경우는 계속 잡는다.
+  result.security = (await pool.query(`SELECT relname, relrowsecurity,
+    COALESCE(relacl, acldefault('r', relowner))::text AS relacl
+    FROM pg_class WHERE relname IN ('MonthlyEnrollmentRegister', 'MonthlyEnrollmentRegisterRevision', 'User') ORDER BY relname`)).rows;
   return result;
 }
 
 async function main() {
-  if (process.platform !== 'win32' || process.argv.length !== 2) {
-    throw new Error('Windows local-only runner; arguments and connection URLs are not accepted.');
+  const withApiBrowser = process.argv.length === 3 && process.argv[2] === '--with-api-browser';
+  if (process.platform !== 'win32' || (process.argv.length !== 2 && !withApiBrowser)) {
+    throw new Error('Windows local-only runner; only --with-api-browser is accepted, never connection URLs.');
   }
   for (const name of ['initdb', 'pg_ctl', 'pg_dump', 'pg_restore']) await access(path.join(bin, `${name}.exe`));
   await assertFreePort(); // 다른 프로그램이 사용 중이면 시작하지 않습니다.
@@ -191,6 +202,14 @@ async function main() {
     const fixtureBefore = await snapshot(pool);
     const result = await runMonthlyRegisterPostgresTests({ pool, database: databaseFor(pool) });
     for (const check of result.checks) console.log(`PASS ${check}`);
+    if (withApiBrowser) {
+      // 같은 소유권 검사를 통과한 임시 DB만 실제 API·화면 통합 검사에 전달합니다.
+      assertContinuing();
+      await assertOwnedConnection(pool, dbName, dataDir);
+      const { runMonthlyRegisterApiBrowserTests } = await import('../tests/monthly-register-api-browser.integration.mjs');
+      const integrated = await runMonthlyRegisterApiBrowserTests({ pool, database: databaseFor(pool) });
+      console.log(`실제 API·권한·화면·격리 DB 통합 검사 ${integrated.passed}개 통과 (Auth 제공자 응답은 모의)`);
+    }
     const before = await snapshot(pool);
     for (const table of ['Student', 'Class', 'Enrollment']) assert.deepEqual(before[table], fixtureBefore[table]);
     const archive = path.join(owned, 'monthly-register.dump');

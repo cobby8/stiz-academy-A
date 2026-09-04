@@ -1,5 +1,11 @@
 # Decisions
 
+## 2026-09-04: 실제 API·권한·화면·격리 DB를 연결하되 인증 제공자만 합성
+- 원본 `requireAdmin`과 DB User 역할, 원본 API/서비스/모델을 테스트 로더로 연결한다. Auth ID와 DB User ID를 구분해 감사 작성자를 검증하고, metadata 조작·일반 역할·요청별 병렬 인증/쓰기 플래그 분리를 시험한다.
+- 기존 loopback55432 새 클러스터 실행기에 `--with-api-browser`만 추가한다. GET의 RepeatableRead 및 READ ONLY를 실제 PG에 적용하고, 생성한 합성 User까지 전체 자료·RLS·실효 ACL 백업 복원 비교에 포함한다.
+- 로더는 고정된 신뢰 소스만 같은 객체 영역에서 실행하며 의존 모듈 허용 목록과 별도 process 인자를 유지한다. 비신뢰 코드 샌드박스는 아니며 운영 Prisma·Supabase 모듈과 환경 파일은 읽지 않는다.
+- 통합20·기존 화면19·회귀87·tsc·lint 통과. 실제 토큰/쿠키/세션/Supabase SDK·Next HTTP/middleware/layout·전체 Prisma 스키마는 다음 별도 인증 환경 검증으로 남긴다. 운영 활성화·배포는 별도 승인이다.
+
 ## 2026-09-04: 월 장부 이탈 보호는 미저장과 결과 미확인을 구분
 - 편집/사유/미리보기/needsRefresh/saving에서만 beforeunload와 같은 창 링크 확인을 등록한다. POST 및 결과 조회 중 링크는 차단하고 나머지는 이탈 확인을 받는다. 링크 승인과 전체 문서 이탈의 중복 경고는 같은 클릭에 한해 생략한다.
 - POST 직후 needsRefresh를 올리고 올바른 GET 응답에서만 해제한다. 응답 유실·조회 실패가 저장 완료로 오인되지 않게 하며 자동 재시도는 하지 않는다.

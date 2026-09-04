@@ -2,7 +2,7 @@
 - `/admin/finance/monthly-register` 및 동명 관리자 API는 학생·월 단일 봉투에 반별 금액/기간/근거를 JSON으로 보존한다. 월 셔틀비는 봉투당 하나이며 기존 Payment/Enrollment에는 쓰지 않는다.
 - `MonthlyEnrollmentRegister`와 `MonthlyEnrollmentRegisterRevision`은 현재 버전과 전체 변경 스냅샷을 분리한다. 학생 행 잠금·장부 버전 비교·감사 동일 거래로 중복/덮어쓰기를 차단한다.
 - 공용 순수 모델과 서비스·API·화면을 분리하고 관리자 DB 역할 인증, 같은 사이트 요청, 실제 128KiB 상한, READ ONLY 조회 및 no-store를 적용한다. 저장 설정은 기본 off다.
-- SQL 구조 파일은 준비했지만 실제 DB·브라우저 검증/배포는 하지 않았다. 운영 준비·남은 범위: `docs/monthly-register-operations.md`.
+- SQL 구조 파일과 실제 UI/API/서비스/격리 PostgreSQL 연결 검증을 갖췄다. `tests/helpers/monthly-register-api-db-harness.mjs`가 실제 DB 역할 검사와 합성 인증 응답을 연결한다. 전체 운영 스키마·Supabase 로그인·배포는 별도다. 운영 준비·남은 범위: `docs/monthly-register-operations.md`.
 
 ## 2026-09-04 월별·반별 장부 점검
 - `/admin/finance/monthly-ledger`는 관리자 전용 읽기 화면이며 수납/청구 화면에서 연결된다.

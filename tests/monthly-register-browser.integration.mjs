@@ -6,6 +6,7 @@ const endpoint = '/api/admin/finance/monthly-register';
 const formReason = /^이번 저장·확정·재열기 사유/;
 const saveButton = '초안 저장 미리보기';
 const confirmButton = '저장된 장부 확정 미리보기';
+const backLink = '월별·반별 장부 점검으로 돌아가기';
 const stamp = '2026-09-04T00:00:00.000Z';
 const candidates = [
   { classId: 'class-1', className: '가상 화요일반', status: 'ACTIVE' },
@@ -41,7 +42,7 @@ function fixtures({ seeded = false, writesEnabled = true, unknownClass = false, 
     records.set(key(draft.studentId, draft.month), record(draft));
   }
   return { records, histories: new Map(), writesEnabled, posts: [], gets: [], external: [],
-    nextPostFailure: null, postDelay: 0, delayedStudent: null, mismatchNextGet: false,
+    nextPostFailure: null, postDelay: 0, delayedStudent: null, getDelay: 500, mismatchNextGet: false,
     view(studentId, month) {
       const saved = records.get(key(studentId, month)) ?? null;
       return { studentName: '가상 동명이인', candidates: clone(candidates), record: clone(saved), writesEnabled: this.writesEnabled,
@@ -69,7 +70,7 @@ async function connectFixture(context, baseUrl, state) {
       state.gets.push({ studentId, month });
       if (!['student-1', 'student-2'].includes(studentId) || !['2026-09', '2026-10'].includes(month)) return json({ error: '가상 대상 없음' }, 404);
       const body = state.view(studentId, month);
-      if (state.delayedStudent === studentId) await new Promise(resolve => setTimeout(resolve, 500));
+      if (state.delayedStudent === studentId) await new Promise(resolve => setTimeout(resolve, state.getDelay));
       if (state.mismatchNextGet) { state.mismatchNextGet = false; body.record = record(payload('student-2')); }
       return json(body);
     }
@@ -119,6 +120,48 @@ async function submitPreview(page, name) {
   await page.getByRole('button', { name: /^위 내용을 확인했고/ }).click();
 }
 
+async function clickBackWithWarning(page, accept = false) {
+  const dialogs = [];
+  const handle = async dialog => {
+    dialogs.push(dialog.type());
+    if (accept) await dialog.accept(); else await dialog.dismiss();
+  };
+  page.on('dialog', handle);
+  try {
+    await page.getByRole('link', { name: backLink, exact: true }).click();
+    if (accept) {
+      await expect(page).toHaveURL(/\/admin\/finance\/monthly-ledger$/);
+      await expect(page.getByRole('heading', { name: '격리 장부 목록', exact: true })).toBeVisible();
+    }
+    assert.deepEqual(dialogs, ['confirm'], '동일 창 링크는 확인창 한 번으로 이동 여부를 결정한다');
+  } finally { page.off('dialog', handle); }
+}
+
+async function clickBackWithoutWarning(page) {
+  const dialogs = [];
+  const handle = async dialog => { dialogs.push(dialog.type()); await dialog.dismiss(); };
+  page.on('dialog', handle);
+  try {
+    await page.getByRole('link', { name: backLink, exact: true }).click();
+    await expect(page).toHaveURL(/\/admin\/finance\/monthly-ledger$/);
+    await expect(page.getByRole('heading', { name: '격리 장부 목록', exact: true })).toBeVisible();
+    assert.deepEqual(dialogs, [], '검증된 저장 상태에서는 이탈 확인창이 없어야 한다');
+  } finally { page.off('dialog', handle); }
+}
+
+async function reloadWithWarning(page, accept = false) {
+  const pending = page.waitForEvent('dialog');
+  // page.reload()의 취소 오류를 삼키지 않고, 실제 beforeunload 대화상자를 직접 검증한다.
+  await page.evaluate(() => { setTimeout(() => window.location.reload(), 0); });
+  const dialog = await pending;
+  assert.equal(dialog.type(), 'beforeunload');
+  if (accept) {
+    const loaded = page.waitForEvent('domcontentloaded');
+    await dialog.accept();
+    await loaded;
+  } else await dialog.dismiss();
+}
+
 export async function runMonthlyRegisterBrowserTests({ browser, url, outputDir }) {
   const checks = []; const findings = []; const observations = [];
   async function scenario(name, options, work) {
@@ -133,8 +176,7 @@ export async function runMonthlyRegisterBrowserTests({ browser, url, outputDir }
       await work(page, state, context);
       assert.deepEqual(state.external, [], '예상하지 않은 외부/로컬 경로 요청');
       assert.deepEqual(errors, [], '브라우저 실행 오류');
-      if (options.diagnostic) { observations.push(name); console.log(`DIAGNOSTIC ${name}`); }
-      else { checks.push(name); console.log(`PASS ${name}`); }
+      checks.push(name); console.log(`PASS ${name}`);
     } catch (error) {
       await page.screenshot({ path: path.join(outputDir, `failed-${checks.length + 1}.png`), fullPage: true }).catch(() => {});
       throw new Error(`${name}: ${error.message}`, { cause: error });
@@ -207,10 +249,13 @@ export async function runMonthlyRegisterBrowserTests({ browser, url, outputDir }
       await expect(page.getByRole('button', { name: saveButton, exact: true })).toBeDisabled();
       await page.waitForTimeout(200);
       assert.equal(state.posts.length, 1);
+      await clickBackWithWarning(page);
+      await expect(page.getByText('초안 · 버전 1', { exact: true })).toBeVisible();
       await page.getByRole('button', { name: '조회 / 새로고침', exact: true }).click();
       await expect(page.getByText('초안 · 버전 1', { exact: true })).toBeVisible();
       await expect(page.getByRole('button', { name: saveButton, exact: true })).toBeEnabled();
       assert.equal(state.posts.length, 1);
+      await clickBackWithoutWarning(page);
     });
   }
 
@@ -221,10 +266,12 @@ export async function runMonthlyRegisterBrowserTests({ browser, url, outputDir }
     await expect(page.getByRole('alert')).toContainText('자동 재시도하지 않습니다');
     await expect(page.getByRole('button', { name: saveButton, exact: true })).toBeDisabled();
     assert.equal(state.records.get(key('student-1', '2026-09')).version, 2);
+    await clickBackWithWarning(page);
     await page.getByRole('button', { name: '조회 / 새로고침', exact: true }).click();
     await expect(page.getByText('초안 · 버전 2', { exact: true })).toBeVisible();
     await expect(page.getByRole('button', { name: saveButton, exact: true })).toBeEnabled();
     assert.equal(state.posts.length, 1);
+    await clickBackWithoutWarning(page);
   });
 
   await scenario('동명이인·학생/월 변경·편집 폐기 취소를 ID로 구분', { seeded: true }, async (page, state) => {
@@ -275,16 +322,78 @@ export async function runMonthlyRegisterBrowserTests({ browser, url, outputDir }
     assert.equal(state.posts.length, 0);
   });
 
-  // 이탈 보호는 현재 미구현일 수 있으므로 통과 건수와 분리해 발견 사항으로 보고합니다.
-  await scenario('미저장 새로고침 보호 여부 관찰(기능 통과 판정과 별도)', { seeded: true, diagnostic: true }, async (page, state) => {
+  await scenario('미저장 새로고침 경고: 취소는 편집 유지·승인은 저장값 복원', { seeded: true }, async (page, state) => {
     await page.getByLabel('기본 수강료 (원)', { exact: true }).first().fill('123456');
-    let warned = false;
-    page.on('dialog', async dialog => { warned = true; await dialog.dismiss(); });
-    await page.reload();
-    await expect(page.getByLabel('기본 수강료 (원)', { exact: true }).first()).toBeVisible();
-    const value = await page.getByLabel('기본 수강료 (원)', { exact: true }).first().inputValue();
-    if (!warned && value === '100000') findings.push('미저장 편집 후 새로고침 시 경고 없이 편집값이 사라짐. 화면 이탈 보호 보완 필요.');
+    await reloadWithWarning(page);
+    await expect(page.getByLabel('기본 수강료 (원)', { exact: true }).first()).toHaveValue('123456');
+    await reloadWithWarning(page, true);
+    await expect(page.getByLabel('기본 수강료 (원)', { exact: true }).first()).toHaveValue('100000');
     assert.equal(state.posts.length, 0);
+  });
+
+  await scenario('미저장 동일 창 링크: 취소는 편집 유지·승인은 점검표 이동', { seeded: true }, async (page, state) => {
+    await page.getByLabel('기본 수강료 (원)', { exact: true }).first().fill('123456');
+    await clickBackWithWarning(page);
+    await expect(page.getByLabel('기본 수강료 (원)', { exact: true }).first()).toHaveValue('123456');
+    await clickBackWithWarning(page, true);
+    assert.equal(state.posts.length, 0);
+  });
+
+  await scenario('미편집 장부는 확인창 없이 점검표 이동', { seeded: true }, async (page, state) => {
+    await clickBackWithoutWarning(page);
+    assert.equal(state.posts.length, 0);
+  });
+
+  await scenario('사유만 입력·미리보기 상태도 이탈 경고하고 취소 시 유지', { seeded: true }, async (page, state) => {
+    await page.getByLabel(formReason).fill('사유만 변경');
+    await clickBackWithWarning(page);
+    await expect(page.getByLabel(formReason)).toHaveValue('사유만 변경');
+    await reloadWithWarning(page);
+    await page.getByRole('button', { name: saveButton, exact: true }).click();
+    await clickBackWithWarning(page);
+    await expect(page.getByRole('region', { name: '작업 미리보기' })).toBeVisible();
+    await reloadWithWarning(page);
+    await expect(page.getByRole('region', { name: '작업 미리보기' })).toBeVisible();
+    assert.equal(state.posts.length, 0);
+  });
+
+  await scenario('저장·결과 재조회 중 링크 이동 차단 후 검증 완료 시 해제', { seeded: true }, async (page, state) => {
+    state.postDelay = 1500;
+    state.delayedStudent = 'student-1';
+    state.getDelay = 1500;
+    await page.getByLabel(formReason).fill('저장 중 이동 검사');
+    await page.getByRole('button', { name: saveButton, exact: true }).click();
+    // 같은 이벤트 턴의 링크 클릭까지 검사해 React 상태 반영 전 빈틈을 확인한다.
+    await page.getByRole('button', { name: /^위 내용을 확인했고/ }).evaluate(element => {
+      element.click();
+      document.querySelector('a[href="/admin/finance/monthly-ledger"]').click();
+    });
+    await expect(page.getByRole('alert')).toContainText('저장');
+    await expect(page.getByRole('alert')).toContainText('이동');
+    await expect(page.getByLabel('학생 ID', { exact: true })).toBeDisabled();
+    await reloadWithWarning(page);
+    await expect(page.getByRole('heading', { name: '가상 동명이인 · 2026-09', exact: true })).toBeVisible();
+    await expect.poll(() => state.gets.length).toBe(2);
+    await expect(page.getByText('장부를 조회하고 있습니다.', { exact: true })).toBeVisible();
+    await page.getByRole('link', { name: backLink, exact: true }).click();
+    await expect(page.getByRole('alert')).toContainText('이동');
+    await expect(page.getByText('초안 · 버전 2', { exact: true })).toBeVisible();
+    assert.equal(state.posts.length, 1);
+    await clickBackWithoutWarning(page);
+  });
+
+  await scenario('저장 후 다른 학생 응답이면 사유 초기화 뒤에도 재조회 전 이탈 경고', { seeded: true }, async (page, state) => {
+    state.mismatchNextGet = true;
+    await page.getByLabel(formReason).fill('결과 검증 실패');
+    await submitPreview(page, saveButton);
+    await expect(page.getByRole('alert')).toContainText('조회 대상과 반환된 장부가 다릅니다');
+    await clickBackWithWarning(page);
+    await reloadWithWarning(page);
+    await expect(page.getByRole('alert')).toContainText('조회 대상과 반환된 장부가 다릅니다');
+    await page.getByRole('button', { name: '조회 / 새로고침', exact: true }).click();
+    await expect(page.getByText('초안 · 버전 2', { exact: true })).toBeVisible();
+    assert.equal(state.posts.length, 1);
+    await clickBackWithoutWarning(page);
   });
   return { checks, findings, observations };
 }

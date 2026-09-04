@@ -69,6 +69,46 @@ export default function MonthlyRegisterClient({ initialStudentId, initialMonth }
   const dirty = Boolean(view && JSON.stringify(editor) !== JSON.stringify(view.record ? toEditor(view.record.payload) : blankEditor()));
   const hasUnknownClasses = Boolean(view && editor.classes.some((row) => !view.candidates.some((candidate) => candidate.classId === row.classId)));
   const locked = !ready || saving || Boolean(preview) || confirmed || !view?.writesEnabled || needsRefresh || hasUnknownClasses;
+  const hasUnsavedWork = dirty || Boolean(reason.trim()) || Boolean(preview);
+
+  useEffect(() => {
+    if (!hasUnsavedWork && !saving && !needsRefresh) return;
+    let linkApproved = false;
+    let approvalTimer: ReturnType<typeof setTimeout> | undefined;
+    const warnBeforeUnload = (event: BeforeUnloadEvent) => {
+      // 새로고침·창 닫기는 브라우저 기본 경고로 보호한다. 강제 종료를 막지는 못한다.
+      if (linkApproved) return;
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    const guardLink = (event: MouseEvent) => {
+      if (event.defaultPrevented || event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+      const anchor = event.target instanceof Element ? event.target.closest("a[href]") : null;
+      if (!(anchor instanceof HTMLAnchorElement) || anchor.hasAttribute("download") || (anchor.target && anchor.target !== "_self")) return;
+      const destination = new URL(anchor.href, window.location.href);
+      if (!["http:", "https:"].includes(destination.protocol)) return;
+      if (destination.origin === window.location.origin && destination.pathname === window.location.pathname && destination.search === window.location.search && destination.hash) return;
+      const block = () => { event.preventDefault(); event.stopImmediatePropagation(); };
+      if (posting.current || saving || (needsRefresh && loading)) {
+        block(); setError("저장 결과를 확인 중입니다. 확인이 끝난 뒤 이동해 주세요."); return;
+      }
+      const message = needsRefresh
+        ? "저장 결과가 아직 확인되지 않았습니다. 재조회하지 않고 이동할까요?"
+        : "저장하지 않은 편집이나 작업 사유가 있습니다. 내용을 버리고 이동할까요?";
+      if (!window.confirm(message)) { block(); return; }
+      // 같은 클릭의 전체 페이지 이동에서는 이미 받은 확인을 두 번 묻지 않는다.
+      linkApproved = true;
+      approvalTimer = setTimeout(() => { linkApproved = false; }, 0);
+    };
+    window.addEventListener("beforeunload", warnBeforeUnload);
+    // 이 화면의 돌아가기뿐 아니라 관리자 메뉴의 같은 창 링크도 먼저 확인한다.
+    document.addEventListener("click", guardLink, true);
+    return () => {
+      clearTimeout(approvalTimer);
+      window.removeEventListener("beforeunload", warnBeforeUnload);
+      document.removeEventListener("click", guardLink, true);
+    };
+  }, [hasUnsavedWork, saving, needsRefresh, loading]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -129,6 +169,8 @@ export default function MonthlyRegisterClient({ initialStudentId, initialMonth }
       setError("대상 또는 버전이 달라졌습니다. 다시 조회해 주세요."); setPreview(null); return;
     }
     posting.current = true; setSaving(true); setError("");
+    // POST 응답 이후에도 재조회가 성공하기 전까지 결과 미확인 경고를 유지한다.
+    setNeedsRefresh(true);
     const id = requestId.current;
     try {
       const response = await fetch("/api/admin/finance/monthly-register", {

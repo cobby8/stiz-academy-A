@@ -71,3 +71,26 @@ test("대상변경·중복클릭·쓰기off·응답오류를 잠그고 실패 �
   assert.match(ui, /setPreview\(null\); setView\(null\); setReload/);
   assert.doesNotMatch(ui, /setInterval|localStorage|sessionStorage/);
 });
+
+test("미저장·사유·미리보기·결과 불확실 상태에 이탈 경고를 연결하고 정리한다 (소스 계약)", () => {
+  assert.match(ui, /hasUnsavedWork = dirty \|\| Boolean\(reason\.trim\(\)\) \|\| Boolean\(preview\)/);
+  assert.match(ui, /if \(!hasUnsavedWork && !saving && !needsRefresh\) return/);
+  assert.match(ui, /window\.addEventListener\("beforeunload", warnBeforeUnload\)/);
+  assert.match(ui, /window\.removeEventListener\("beforeunload", warnBeforeUnload\)/);
+  assert.match(ui, /event\.returnValue = ""/);
+  assert.match(ui, /document\.addEventListener\("click", guardLink, true\)/);
+  assert.match(ui, /document\.removeEventListener\("click", guardLink, true\)/);
+  assert.doesNotMatch(ui, /popstate|history\.pushState|history\.replaceState/);
+});
+
+test("저장 시작부터 검증된 재조회까지 링크 이동을 차단하고 동기 중복 보호를 유지한다 (소스 계약)", () => {
+  assert.match(ui, /posting\.current \|\| saving \|\| \(needsRefresh && loading\)/);
+  assert.match(ui, /event\.preventDefault\(\); event\.stopImmediatePropagation\(\)/);
+  assert.match(ui, /저장 결과를 확인 중입니다.*이동해 주세요/);
+  const saveStart = ui.slice(ui.indexOf('posting.current = true;'), ui.indexOf('const response = await fetch("/api/admin/finance/monthly-register"'));
+  assert.match(saveStart, /setNeedsRefresh\(true\)/);
+  // 저장 응답만으로 잠금을 풀지 않고, 대상이 일치하는 GET 응답만 해제한다.
+  assert.equal((ui.match(/setNeedsRefresh\(false\)/g) ?? []).length, 1);
+  assert.ok(ui.indexOf('조회 대상과 반환된 장부가 다릅니다') < ui.indexOf('setNeedsRefresh(false)'));
+  assert.doesNotMatch(ui.slice(ui.indexOf('async function executePreview()')), /setNeedsRefresh\(false\)/);
+});

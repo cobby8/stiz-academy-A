@@ -1,5 +1,7 @@
 # STIZ Knowledge Index
 
+> 2026-09-04 갱신: 사이트 월 운영 장부의 모델·관리자 화면·API·미적용 SQL을 추가했다. 학생·월 봉투, 반별 금액과 근거, 월 셔틀비 1회, 버전/감사 동일 거래, 기본 쓰기 off를 적용한다. architecture/decisions/errors 갱신 및 `docs/monthly-register-operations.md` 참조. 실제 DB·브라우저 검증 및 시트 중단은 미완료다.
+
 > 2026-09-04 갱신: 월별·반별 읽기 점검표(학생/월/반 ID, 미지정 분리, 확정요금 추정 금지), 전체 다반 REVIEW, 신규 Payment ID 범위 한정 청구 연결을 추가했다. 관련 architecture/decisions/errors 3문서 갱신. 영구 월별 장부 및 운영 E2E·시트 중단은 미완료다.
 
 > 2026-09-04 갱신: 시트 수납 대조는 반별 기록 보호를 위해 읽기 전용으로 제한한다. 복수 반/납부는 REVIEW, 대상 월 자료 누락은 오류로 처리한다. errors.md 참조.

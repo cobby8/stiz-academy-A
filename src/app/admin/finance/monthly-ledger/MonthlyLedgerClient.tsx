@@ -95,6 +95,7 @@ export default function MonthlyLedgerClient({ initialMonth }: { initialMonth: st
                     <Link className="font-bold underline" href={`/admin/students/${encodeURIComponent(row.studentId)}`}>{row.studentName}</Link>
                     <p>{row.className ?? (row.classId ? "반 이름 확인 필요" : "반 미연결 — 임의 배분 안 함")}</p>
                     <p className="text-xs">현재 상태: {row.enrollmentStatus === "ACTIVE" ? "수강" : row.enrollmentStatus === "PAUSED" ? "휴원" : "현재 수강 목록에 없음"}</p>
+                    <Link className="mt-2 inline-block underline" href={`/admin/finance/monthly-register?studentId=${encodeURIComponent(row.studentId)}&month=${encodeURIComponent(month)}`}>월 운영 장부 작성·확인</Link>
                   </td>
                   <td className="border-b p-3">{money(row.breakdown.MONTHLY.billedAmount)}</td>
                   <td className="border-b p-3">{money(row.breakdown.SHUTTLE.billedAmount)}</td>

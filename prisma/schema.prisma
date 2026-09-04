@@ -353,6 +353,43 @@ model Class {
   @@index([instructorId])
 }
 
+/// 학생의 한 달 장부. 기존 Enrollment/Payment나 시트를 자동 변경하지 않는다.
+model MonthlyEnrollmentRegister {
+  id          String @id @default(uuid())
+  studentId   String
+  month       String
+  version     Int @default(1)
+  status      String @default("DRAFT")
+  /// 반별 기간·금액·감면 근거와 학생 월 단위 셔틀비의 명시적 스냅샷.
+  payload     Json
+  updatedBy   String
+  updatedAt   DateTime @default(now()) @db.Timestamptz(6)
+  confirmedAt DateTime? @db.Timestamptz(6)
+  revisions   MonthlyEnrollmentRegisterRevision[]
+
+  @@unique([studentId, month])
+  @@index([month, status])
+}
+
+/// 수정 전후 버전을 남기는 감사 기록. 확정 해제도 기존 버전을 지우지 않는다.
+model MonthlyEnrollmentRegisterRevision {
+  id          String @id @default(uuid())
+  registerId  String
+  studentId   String
+  month       String
+  version     Int
+  status      String
+  payload     Json
+  action      String
+  reason      String
+  actorUserId String
+  createdAt   DateTime @default(now()) @db.Timestamptz(6)
+  register    MonthlyEnrollmentRegister @relation(fields: [registerId], references: [id], onDelete: Restrict)
+
+  @@unique([registerId, version])
+  @@index([studentId, month, version])
+}
+
 model Enrollment {
   id             String                    @id @default(uuid())
   studentId      String

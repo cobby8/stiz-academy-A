@@ -8,10 +8,10 @@ import { buildPublicMetadata } from "@/lib/publicMetadata";
 export const revalidate = 60;
 
 export const metadata = buildPublicMetadata({
-    title: "수강 신청 | STIZ 농구교실 다산점",
-    description: "스티즈 농구교실 다산점 수강 신청. 간단한 정보 입력으로 우리 아이의 농구 수업을 시작하세요.",
+    title: "수강 신청 | STIZ 농구교실 다산2호점",
+    description: "스티즈 농구교실 다산2호점 수강 신청. 간단한 정보 입력으로 우리 아이의 농구 수업을 시작하세요.",
     path: "/apply/enroll",
-    imageAlt: "STIZ 농구교실 다산점 수강 신청 미리보기",
+    imageAlt: "STIZ 농구교실 다산2호점 수강 신청 미리보기",
 });
 
 export default async function EnrollApplyPage({

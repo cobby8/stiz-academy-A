@@ -8,10 +8,10 @@ import { buildPublicMetadata } from "@/lib/publicMetadata";
 export const revalidate = 60;
 
 export const metadata = buildPublicMetadata({
-    title: "체험수업 신청 | STIZ 농구교실 다산점",
-    description: "스티즈 농구교실 다산점 체험수업을 신청하세요. 빈자리가 있는 수업을 선택할 수 있습니다.",
+    title: "체험수업 신청 | STIZ 농구교실 다산2호점",
+    description: "스티즈 농구교실 다산2호점 체험수업을 신청하세요. 빈자리가 있는 수업을 선택할 수 있습니다.",
     path: "/apply/trial",
-    imageAlt: "STIZ 농구교실 다산점 체험수업 신청 미리보기",
+    imageAlt: "STIZ 농구교실 다산2호점 체험수업 신청 미리보기",
 });
 
 export default async function TrialApplyPage() {

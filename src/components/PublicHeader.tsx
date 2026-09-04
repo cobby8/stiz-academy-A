@@ -231,7 +231,7 @@ export default function PublicHeader({
                 priority
               />
               <span className="hidden font-extrabold text-lg text-brand-navy-900 dark:text-white sm:inline sm:text-xl">
-                다산점
+                다산2호점
               </span>
             </Link>
           </div>

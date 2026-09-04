@@ -8,8 +8,8 @@ import { buildPublicMetadata } from "@/lib/publicMetadata";
 // 개인정보 처리방침은 자주 바뀌지 않으므로 5분 ISR (terms 페이지와 동일)
 export const revalidate = 300;
 export const metadata = buildPublicMetadata({
-  title: "개인정보 처리방침 | STIZ 농구교실 다산점",
-  description: "STIZ 농구교실 다산점 개인정보 처리방침을 확인하세요.",
+  title: "개인정보 처리방침 | STIZ 농구교실 다산2호점",
+  description: "STIZ 농구교실 다산2호점 개인정보 처리방침을 확인하세요.",
   path: "/privacy",
 });
 

@@ -6,10 +6,10 @@ import ClubShopClient from "./ClubShopClient";
 export const revalidate = 60;
 
 export const metadata = buildPublicMetadata({
-  title: "SHOP | STIZ 농구교실 다산점",
-  description: "스티즈 농구교실 다산점 클럽샵에서 농구공, 훈련 용품, 키즈 제품을 둘러보세요.",
+  title: "SHOP | STIZ 농구교실 다산2호점",
+  description: "스티즈 농구교실 다산2호점 클럽샵에서 농구공, 훈련 용품, 키즈 제품을 둘러보세요.",
   path: "/shop",
-  imageAlt: "STIZ 농구교실 다산점 클럽샵 미리보기",
+  imageAlt: "STIZ 농구교실 다산2호점 클럽샵 미리보기",
 });
 
 export default function ShopPage() {

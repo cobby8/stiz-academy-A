@@ -12,8 +12,8 @@ import { buildPublicMetadata } from "@/lib/publicMetadata";
 
 export const revalidate = 60;
 export const metadata = buildPublicMetadata({
-    title: "학원/멤버소개 | STIZ 농구교실 다산점",
-    description: "스티즈 농구교실 다산점의 원장 인사말, 전문 코치진, 시설을 소개합니다.",
+    title: "학원/멤버소개 | STIZ 농구교실 다산2호점",
+    description: "스티즈 농구교실 다산2호점의 원장 인사말, 전문 코치진, 시설을 소개합니다.",
     path: "/about",
 });
 
@@ -89,7 +89,7 @@ export default async function AboutPage() {
                     <AnimateOnScroll>
                         <p className="text-brand-orange-500 dark:text-brand-neon-lime text-sm font-bold uppercase tracking-widest mb-3">ABOUT US</p>
                         <h1 className="text-4xl md:text-5xl font-black mb-4 break-keep">학원/멤버소개</h1>
-                        <p className="text-blue-200 text-lg max-w-xl">스티즈 농구교실 다산점의 교육 철학과 전문 코치진을 소개합니다.</p>
+                        <p className="text-blue-200 text-lg max-w-xl">스티즈 농구교실 다산2호점의 교육 철학과 전문 코치진을 소개합니다.</p>
                     </AnimateOnScroll>
                 </div>
             </section>
@@ -108,7 +108,7 @@ export default async function AboutPage() {
                                         dangerouslySetInnerHTML={{
                                             __html: renderHtml(
                                                 settings.introductionText,
-                                                "<p>안녕하세요, 스티즈 농구교실 다산점입니다.</p><p>저희 학원은 아이들이 농구를 통해 협동심, 책임감, 그리고 건강한 체력을 기를 수 있도록 최선을 다해 지도하고 있습니다.</p><p>전문 코치진과 체계적인 커리큘럼으로 아이들의 가능성을 이끌어 드리겠습니다.</p>"
+                                                "<p>안녕하세요, 스티즈 농구교실 다산2호점입니다.</p><p>저희 학원은 아이들이 농구를 통해 협동심, 책임감, 그리고 건강한 체력을 기를 수 있도록 최선을 다해 지도하고 있습니다.</p><p>전문 코치진과 체계적인 커리큘럼으로 아이들의 가능성을 이끌어 드리겠습니다.</p>"
                                             ),
                                         }}
                                     />

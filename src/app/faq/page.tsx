@@ -16,8 +16,8 @@ import { buildPublicMetadata } from "@/lib/publicMetadata";
 export const revalidate = 60;
 
 export const metadata = buildPublicMetadata({
-  title: "자주 묻는 질문 | STIZ 농구교실 다산점",
-  description: "체험수업, 수강료, 보강, 준비물 등 스티즈 농구교실 다산점 FAQ를 확인하세요.",
+  title: "자주 묻는 질문 | STIZ 농구교실 다산2호점",
+  description: "체험수업, 수강료, 보강, 준비물 등 스티즈 농구교실 다산2호점 FAQ를 확인하세요.",
   path: "/faq",
 });
 

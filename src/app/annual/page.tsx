@@ -19,8 +19,8 @@ import { buildPublicMetadata } from "@/lib/publicMetadata";
 export const revalidate = 300;
 
 export const metadata = buildPublicMetadata({
-    title: "연간일정표 | STIZ 농구교실 다산점",
-    description: "스티즈 농구교실 다산점 연간 행사 일정. 대회, 방학, 특별행사 및 정기 일정을 확인하세요.",
+    title: "연간일정표 | STIZ 농구교실 다산2호점",
+    description: "스티즈 농구교실 다산2호점 연간 행사 일정. 대회, 방학, 특별행사 및 정기 일정을 확인하세요.",
     path: "/annual",
 });
 

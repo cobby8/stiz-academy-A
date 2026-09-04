@@ -53,7 +53,7 @@ const TRIAL_FEE_PAYMENT_INFO = {
     memo: "STIZ 체험수업비",
 };
 const TRIAL_FEE_COPY_TEXT = [
-    "STIZ 농구교실 다산점 체험수업비 입금 안내",
+    "STIZ 농구교실 다산2호점 체험수업비 입금 안내",
     `금액: ${TRIAL_FEE_PAYMENT_INFO.amountLabel}`,
     `은행: ${TRIAL_FEE_PAYMENT_INFO.bankName}`,
     `계좌: ${TRIAL_FEE_PAYMENT_INFO.accountNumber}`,

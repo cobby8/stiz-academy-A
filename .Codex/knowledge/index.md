@@ -1,5 +1,7 @@
 # STIZ Knowledge Index
 
+> 2026-09-04 갱신: 실제 React+가상 API 격리 브라우저 기능13 통과·별도진단1에서 미저장 새로고침 편집 유실 재현(미수정). decisions/errors 2문서 및 월 장부 가이드 갱신. 테스트 도구만 추가했으며 운영 인증/API/DB/라우터 E2E·시트 대체는 미완료다.
+
 > 2026-09-04 갱신: 월 장부 격리 PostgreSQL 실제 검사 37개·회귀88 통과. 경합·감사 롤백·역할/RLS·백업 복원 일치 및 임시 서버 종료 확인. decisions/errors 2문서와 운영 가이드 갱신. 카카오 문의 예약 automation-2는 해제했으며 운영 DB 적용·브라우저 E2E·시트 중단은 미완료다.
 
 > 2026-09-04 갱신: 사이트 월 운영 장부의 모델·관리자 화면·API·미적용 SQL을 추가했다. 학생·월 봉투, 반별 금액과 근거, 월 셔틀비 1회, 버전/감사 동일 거래, 기본 쓰기 off를 적용한다. architecture/decisions/errors 갱신 및 `docs/monthly-register-operations.md` 참조. 실제 DB·브라우저 검증 및 시트 중단은 미완료다.

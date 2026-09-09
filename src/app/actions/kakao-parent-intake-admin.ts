@@ -6,7 +6,7 @@ import { prisma } from "@/lib/prisma";
 import { operationsRequestKey, SYNC_TARGETS, type OperationsKind } from "@/lib/operationsSync";
 import { ensureOperationsSyncInfrastructure } from "@/lib/operationsSyncInfrastructure";
 
-export type KakaoIntakeDecision = "TRANSFER" | "NEEDS_DETAILS" | "REJECT" | "CONSULTATION";
+export type KakaoIntakeDecision = "TRANSFER" | "NEEDS_DETAILS" | "REJECT" | "CONSULTATION" | "CLOSE_CONSULTATION";
 
 export type KakaoIntakeReviewDetails = {
   effectiveDate?: string;
@@ -16,7 +16,7 @@ export type KakaoIntakeReviewDetails = {
   details?: string;
 };
 
-const REVIEWABLE_STATUSES = ["SUBMITTED", "HELD", "FAILED", "NEEDS_DETAILS"] as const;
+const REVIEWABLE_STATUSES = ["SUBMITTED", "HELD", "FAILED", "NEEDS_DETAILS", "CONSULTATION"] as const;
 
 const OPERATIONS_KIND: Record<string, OperationsKind | null> = {
   PAUSE: "PAUSE",
@@ -32,6 +32,7 @@ const OPERATIONS_KIND: Record<string, OperationsKind | null> = {
 
 type IntakeForReview = {
   id: string;
+  revision: string;
   kind: string;
   sourceText: string;
   status: string;
@@ -162,6 +163,7 @@ function cleanNote(value: string | undefined) {
 }
 
 function nonTransferStatus(decision: Exclude<KakaoIntakeDecision, "TRANSFER">) {
+  if (decision === "CLOSE_CONSULTATION") return "CONSULTATION_CLOSED";
   if (decision === "NEEDS_DETAILS") return "NEEDS_DETAILS";
   if (decision === "REJECT") return "REJECTED";
   return "CONSULTATION";
@@ -169,20 +171,24 @@ function nonTransferStatus(decision: Exclude<KakaoIntakeDecision, "TRANSFER">) {
 
 export async function decideKakaoParentIntake(input: {
   intakeId: string;
+  expectedRevision: string;
   decision: KakaoIntakeDecision;
   note?: string;
   review?: KakaoIntakeReviewDetails;
 }) {
   const admin = await requireAdmin();
+  if (!["TRANSFER", "NEEDS_DETAILS", "REJECT", "CONSULTATION", "CLOSE_CONSULTATION"].includes(input.decision)) {
+    return { ok: false as const, message: "지원하지 않는 처리입니다. 새로고침해 주세요." };
+  }
   const note = cleanNote(input.note);
   if (!input.intakeId) return { ok: false as const, message: "요청을 찾지 못했습니다." };
   if (input.decision !== "TRANSFER" && !note) {
-    return { ok: false as const, message: "보류·거절·상담 전환 사유를 입력해 주세요." };
+    return { ok: false as const, message: "추가 확인·반려·상담 처리 사유를 입력해 주세요." };
   }
 
   await ensureOperationsSyncInfrastructure();
   const rows = await prisma.$queryRawUnsafe<IntakeForReview[]>(
-    `SELECT r.id,r.kind,r."sourceText",r.status,r."studentId",r."structuredJson",
+    `SELECT r.id,r."updatedAt"::text AS revision,r.kind,r."sourceText",r.status,r."studentId",r."structuredJson",
             r."operationsRequestId",i."parentUserId",i.status AS "identityStatus",
             s.name AS "studentName",s."parentId" AS "studentParentId",
             to_char(r."createdAt" AT TIME ZONE 'Asia/Seoul','YYYY-MM') AS "targetMonth"
@@ -194,8 +200,19 @@ export async function decideKakaoParentIntake(input: {
   );
   const intake = rows[0];
   if (!intake) return { ok: false as const, message: "요청을 찾지 못했습니다." };
+  // 날짜를 JS Date로 바꾸면 DB의 마이크로초가 잘린다. 목록에서 받은 원문 버전을 비교한다.
+  if (!input.expectedRevision || input.expectedRevision !== intake.revision) {
+    return { ok: false as const, message: "다른 관리자가 내용을 변경했습니다. 새로고침 후 다시 확인해 주세요." };
+  }
   if (!REVIEWABLE_STATUSES.includes(intake.status as (typeof REVIEWABLE_STATUSES)[number])) {
     return { ok: false as const, message: "이미 처리됐거나 다른 관리자가 검토 중인 요청입니다." };
+  }
+
+  if (intake.operationsRequestId) {
+    return { ok: false as const, message: "이미 운영 원장에 연결된 요청입니다. 실제 처리 이력을 확인해 주세요." };
+  }
+  if (input.decision === "CLOSE_CONSULTATION" && intake.status !== "CONSULTATION") {
+    return { ok: false as const, message: "상담 전환된 요청만 상담 종결할 수 있습니다." };
   }
 
   if (input.decision !== "TRANSFER") {
@@ -203,9 +220,10 @@ export async function decideKakaoParentIntake(input: {
     const changed = await prisma.$transaction(async (tx) => {
       const claimed = await tx.$executeRawUnsafe(
         `UPDATE "KakaoParentIntake"
-            SET status=$2,"decidedByUserId"=$3,"decidedAt"=now(),"decisionNote"=$4,"updatedAt"=now()
-          WHERE id=$1 AND status = ANY($5::text[])`,
-        intake.id, nextStatus, admin.appUserId, note, [...REVIEWABLE_STATUSES],
+            SET status=$2,"decidedByUserId"=$3,"decidedAt"=now(),"decisionNote"=$4,
+                "updatedAt"=GREATEST(clock_timestamp(),"updatedAt"+interval '1 microsecond')
+          WHERE id=$1 AND status=$5 AND "updatedAt"=$6::timestamptz AND "operationsRequestId" IS NULL`,
+        intake.id, nextStatus, admin.appUserId, note, intake.status, input.expectedRevision,
       );
       if (claimed !== 1) return false;
       await tx.$executeRawUnsafe(
@@ -213,7 +231,7 @@ export async function decideKakaoParentIntake(input: {
           (id,"intakeId",action,"actorUserId","fromStatus","toStatus",note,"detailsJson")
          VALUES ($1,$2,$3,$4,$5,$6,$7,$8::jsonb)`,
         crypto.randomUUID(), intake.id, input.decision, admin.appUserId, intake.status, nextStatus, note,
-        JSON.stringify({ externalMessageSent: false, operationsCreated: false }),
+        JSON.stringify({ externalMessageSent: false, operationsCreated: false, enrollmentApplied: false, billingApplied: false }),
       );
       return true;
     });
@@ -238,9 +256,9 @@ export async function decideKakaoParentIntake(input: {
   const created = await prisma.$transaction(async (tx) => {
     const claimed = await tx.$executeRawUnsafe(
       `UPDATE "KakaoParentIntake"
-          SET status='PROCESSING',"updatedAt"=now()
-        WHERE id=$1 AND status = ANY($2::text[]) AND "operationsRequestId" IS NULL`,
-      intake.id, [...REVIEWABLE_STATUSES],
+          SET status='PROCESSING',"updatedAt"=GREATEST(clock_timestamp(),"updatedAt"+interval '1 microsecond')
+        WHERE id=$1 AND status=$2 AND "updatedAt"=$3::timestamptz AND "operationsRequestId" IS NULL`,
+      intake.id, intake.status, input.expectedRevision,
     );
     if (claimed !== 1) return false;
     const verified = await verifyReviewDetails(tx, intake, input.review);
@@ -286,7 +304,7 @@ export async function decideKakaoParentIntake(input: {
     await tx.$executeRawUnsafe(
       `UPDATE "KakaoParentIntake"
           SET status='APPROVED',"decidedByUserId"=$2,"decidedAt"=now(),"decisionNote"=$3,
-              "operationsRequestId"=$4,"updatedAt"=now()
+              "operationsRequestId"=$4,"updatedAt"=GREATEST(clock_timestamp(),"updatedAt"+interval '1 microsecond')
         WHERE id=$1 AND status='PROCESSING'`,
       intake.id, admin.appUserId, note || null, requestId,
     );

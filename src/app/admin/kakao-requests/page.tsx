@@ -44,7 +44,7 @@ export default async function KakaoRequestsPage({
 
   try {
     rows = await prisma.$queryRawUnsafe<DbRow[]>(
-      `SELECT r.id,r.kind,r."sourceText",r."structuredJson",r.status,r."createdAt",
+      `SELECT r.id,r."updatedAt"::text AS revision,r.kind,r."sourceText",r."structuredJson",r.status,r."createdAt",
               r."decidedAt",r."decisionNote",r."operationsRequestId",(r."errorCode" IS NOT NULL) AS "hasProcessingError",
               r."studentId",s.name AS "studentName",s.grade AS "studentGrade",
               i."parentUserId",u.name AS "rawParentName",i.status AS "identityStatus",
@@ -57,7 +57,7 @@ export default async function KakaoRequestsPage({
         WHERE ($1='ALL')
            OR ($1='ACTION' AND r.status IN ('SUBMITTED','HELD','FAILED','NEEDS_DETAILS','APPROVED','CONSULTATION','PROCESSING'))
            OR ($1='FOLLOWUP' AND r.status IN ('APPROVED','CONSULTATION','NEEDS_DETAILS','PROCESSING'))
-           OR ($1='DONE' AND r.status IN ('REJECTED','APPLIED','CANCELED'))
+           OR ($1='DONE' AND r.status IN ('REJECTED','APPLIED','CANCELED','CONSULTATION_CLOSED'))
            OR r.status=$1
         ORDER BY CASE WHEN r.status IN ('SUBMITTED','HELD','FAILED','NEEDS_DETAILS','PROCESSING') THEN 0 ELSE 1 END,
                  r."createdAt" DESC
@@ -111,7 +111,7 @@ export default async function KakaoRequestsPage({
   return (
     <KakaoRequestsClient
       rows={rows.map((row) => ({
-        id:row.id, kind:row.kind, sourceText:row.sourceText, structuredJson:row.structuredJson, status:row.status,
+        id:row.id, revision:row.revision, kind:row.kind, sourceText:row.sourceText, structuredJson:row.structuredJson, status:row.status,
         studentId:row.studentId, studentName:row.studentName, studentGrade:row.studentGrade,
         parentName:row.parentName, linkedStudents:row.linkedStudents, identityStatus:row.identityStatus,
         operationsRequestId:row.operationsRequestId, decisionNote:row.decisionNote, decidedByName:row.decidedByName,

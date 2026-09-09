@@ -34,9 +34,16 @@ test("24시간 경과는 후속 대상만 표시한다", () => {
 test("접수 종결 필터에 이관·상담 상태가 들어가지 않는다", () => {
   const page = readFileSync("src/app/admin/kakao-requests/page.tsx", "utf8");
   const done = page.split("OR ($1='DONE'")[1].split("\n")[0];
-  assert.doesNotMatch(done, /APPROVED|CONSULTATION/);
+  assert.doesNotMatch(done, /'APPROVED'|'CONSULTATION'/);
+  assert.match(done, /'CONSULTATION_CLOSED'/);
   assert.match(page, /OperationsCommand/);
   assert.match(page.split("OR ($1='ACTION'")[1].split("\n")[0], /PROCESSING/);
   assert.match(page.split("OR ($1='FOLLOWUP'")[1].split("\n")[0], /PROCESSING/);
   assert.match(page, /errorCode" IS NOT NULL/);
+});
+
+test("상담 종결은 후속 지연에서 제외하고 수강·발송과 구분한다", () => {
+  assert.equal(isKakaoFollowupOverdue("CONSULTATION_CLOSED", "2020-01-01T00:00:00Z", Date.now()), false);
+  assert.match(kakaoFollowupSummary("CONSULTATION_CLOSED", []), /수강 반영·청구 완료가 아닙니다/);
+  assert.match(kakaoFollowupSummary("CONSULTATION_CLOSED", []), /안내를 발송하지 않았습니다/);
 });

@@ -8,6 +8,7 @@ import { prepareKakaoReconfirmationNotice, sendKakaoReconfirmationNotice } from 
 import { kakaoFollowupSummary, isKakaoFollowupOverdue, type KakaoFollowupCommand } from "@/lib/kakaoIntakeFollowup";
 
 export type KakaoRequestAdminRow = {
+  revision: string;
   id: string; kind: string; sourceText: string; structuredJson: Record<string, unknown> | null; status: string;
   studentId: string | null; studentName: string | null; studentGrade: string | null; parentName: string | null;
   linkedStudents: Array<{ id:string; name:string; grade:string | null }>;
@@ -32,12 +33,11 @@ type ReviewDetails = {
 };
 
 const FILTERS = [["ACTION","처리·후속 필요"],["SUBMITTED","신규"],["HELD","보류"],["FAILED","실패"],["FOLLOWUP","상담·이관 후속"],["DONE","접수 종결"],["ALL","전체"]] as const;
-const LABEL: Record<string,string> = { SUBMITTED:"신규 접수", PROCESSING:"처리 중·반영 확인", HELD:"관리자 확인 필요", FAILED:"처리 실패", NEEDS_DETAILS:"추가 확인 필요", APPROVED:"운영 원장 이관", REJECTED:"접수 반려", CONSULTATION:"상담 전환", APPLIED:"자동 반영 완료", CANCELED:"학부모 취소" };
+const LABEL: Record<string,string> = { SUBMITTED:"신규 접수", PROCESSING:"처리 중·반영 확인", HELD:"관리자 확인 필요", FAILED:"처리 실패", NEEDS_DETAILS:"추가 확인 필요", APPROVED:"운영 원장 이관", REJECTED:"접수 반려", CONSULTATION:"상담 전환", CONSULTATION_CLOSED:"상담 종결", APPLIED:"자동 반영 완료", CANCELED:"학부모 취소" };
 const TRANSFERABLE = new Set(["PAUSE","WITHDRAW","RESUME","CLASS_CHANGE","CLASS_ADD","SHUTTLE_START_STOP","SHUTTLE_CHANGE","SHUTTLE_FEE","CONTACT_CHANGE","BILLING_CORRECTION"]);
-const REVIEWABLE = new Set(["SUBMITTED","HELD","FAILED","NEEDS_DETAILS"]);
+const REVIEWABLE = new Set(["SUBMITTED","HELD","FAILED","NEEDS_DETAILS","CONSULTATION"]);
 const formatDate = (value: string) => new Intl.DateTimeFormat("ko-KR", { timeZone:"Asia/Seoul", dateStyle:"short", timeStyle:"short" }).format(new Date(value));
 
-const EMPTY_DETAILS: ReviewDetails = { effectiveDate:"", fromClassId:"", toClassId:"", shuttleIntent:"", details:"" };
 const NEEDS_FROM_CLASS = new Set(["PAUSE","WITHDRAW","RESUME","CLASS_CHANGE"]);
 const NEEDS_TO_CLASS = new Set(["CLASS_CHANGE","CLASS_ADD"]);
 const NEEDS_SHUTTLE = new Set(["SHUTTLE_START_STOP","SHUTTLE_CHANGE","SHUTTLE_FEE"]);
@@ -58,7 +58,16 @@ export default function KakaoRequestsClient({ rows, classes, status, schemaReady
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [notes, setNotes] = useState<Record<string,string>>({});
-  const [reviewDetails, setReviewDetails] = useState<Record<string,ReviewDetails>>(() => Object.fromEntries(rows.map(row => [row.id, initialDetails(row)])));
+  const [reviewDetails, setReviewDetails] = useState<Record<string,ReviewDetails>>({});
+  // 편집을 시작한 버전을 유지해 다른 행 저장 후 새 목록이 와도 오래된 초안을 덮어쓰지 않는다.
+  const [editRevisions, setEditRevisions] = useState<Record<string,string>>({});
+  function captureRevision(row: KakaoRequestAdminRow) {
+    setEditRevisions(current => ({ ...current, [row.id]: current[row.id] ?? row.revision }));
+  }
+  function reloadRows() {
+    if (Object.keys(editRevisions).length && !window.confirm("입력 중인 검토 내용을 버리고 최신 목록을 불러올까요?")) return;
+    setNotes({}); setReviewDetails({}); setEditRevisions({}); setError(""); router.refresh();
+  }
   const [error, setError] = useState("");
   const [notice, setNotice] = useState<Awaited<ReturnType<typeof prepareKakaoReconfirmationNotice>> | null>(null);
   const [noticeResult, setNoticeResult] = useState("");
@@ -81,12 +90,17 @@ export default function KakaoRequestsClient({ rows, classes, status, schemaReady
   }
   const [checkedAt] = useState(() => Date.now());
   function decide(id: string, decision: KakaoIntakeDecision) {
+    const row = rows.find(item => item.id === id);
+    if (!row) return;
     setError("");
     startTransition(async () => {
       try {
-        const detail = reviewDetails[id] ?? EMPTY_DETAILS;
-        const result = await decideKakaoParentIntake({ intakeId:id, decision, note:notes[id], review:{ ...detail, shuttleIntent:detail.shuttleIntent || null } });
+        const detail = reviewDetails[id] ?? initialDetails(row);
+        const result = await decideKakaoParentIntake({ intakeId:id, expectedRevision:editRevisions[id] ?? row.revision, decision, note:notes[id], review:{ ...detail, shuttleIntent:detail.shuttleIntent || null } });
         if (!result.ok) return setError(result.message);
+        setNotes(current => { const next = { ...current }; delete next[id]; return next; });
+        setReviewDetails(current => { const next = { ...current }; delete next[id]; return next; });
+        setEditRevisions(current => { const next = { ...current }; delete next[id]; return next; });
         router.refresh();
       } catch (caught) { setError(caught instanceof Error ? caught.message : "처리 중 오류가 발생했습니다."); }
     });
@@ -98,6 +112,7 @@ export default function KakaoRequestsClient({ rows, classes, status, schemaReady
     <p className="text-sm">현재 목록 {rows.length}건(최대 200건) · 접수 후 24시간 이상 후속 대상 {rows.filter(row => isKakaoFollowupOverdue(row.status, row.createdAt, checkedAt)).length}건 · 접수/동기화 실패 {rows.filter(row => row.status === "FAILED" || row.commands.some(command => ["FAILED", "PARTIAL"].includes(command.status))).length}건</p>
     <p className="text-xs text-gray-500">상담 전환·운영 원장 이관은 업무 완료가 아닙니다. 접수 종결도 청구·알림 발송 완료를 뜻하지 않습니다.</p>
     {error && <p role="alert" className="rounded-xl bg-red-50 p-3 text-sm font-bold text-red-700">{error}</p>}
+    <button type="button" disabled={pending} onClick={reloadRows} className="min-h-11 rounded-xl border px-3 disabled:opacity-40">최신 목록 다시 조회</button>
     {noticeResult && <p role="status">{noticeResult}</p>}
     {notice && <section aria-label="재확인 안내 미리보기" className="rounded-xl border p-4 space-y-2">
       <h2 className="font-bold">{notice.studentName} 학생 보호자 · 재확인 안내 미발송</h2>
@@ -110,8 +125,11 @@ export default function KakaoRequestsClient({ rows, classes, status, schemaReady
     </section>}
     {!schemaReady || rows.length===0 ? <p className="rounded-2xl border bg-white p-8 text-center text-sm text-gray-500">{schemaReady ? "해당 요청이 없습니다." : "DB 준비 후 표시됩니다."}</p> : <ul className="space-y-4">{rows.map(row => {
       const identityOk = row.identityStatus==="ACTIVE" && Boolean(row.studentId);
-      const detail = reviewDetails[row.id] ?? EMPTY_DETAILS;
-      const updateDetail = (key: keyof ReviewDetails, value: string) => setReviewDetails(current => ({ ...current, [row.id]: { ...(current[row.id] ?? EMPTY_DETAILS), [key]:value } }));
+      const detail = reviewDetails[row.id] ?? initialDetails(row);
+      const updateDetail = (key: keyof ReviewDetails, value: string) => {
+        captureRevision(row);
+        setReviewDetails(current => ({ ...current, [row.id]: { ...(current[row.id] ?? initialDetails(row)), [key]:value } }));
+      };
       const currentClasses = classes.filter(option => row.currentClassIds.includes(option.id));
       const followup = kakaoFollowupSummary(row.status, row.commands);
       return <li key={row.id} className="rounded-2xl border bg-white p-5 shadow-sm dark:bg-gray-900">
@@ -134,7 +152,8 @@ export default function KakaoRequestsClient({ rows, classes, status, schemaReady
             {NEEDS_SHUTTLE.has(row.kind) && <label className="block text-xs font-bold text-gray-700">셔틀 요청<select value={detail.shuttleIntent} onChange={event => updateDetail("shuttleIntent", event.target.value as ReviewDetails["shuttleIntent"])} className="mt-1 min-h-11 w-full rounded-xl border bg-white px-3 text-sm font-normal"><option value="">요청 의도 선택</option>{row.kind==="SHUTTLE_START_STOP" && <><option value="START">지속 이용 시작</option><option value="STOP">지속 이용 중단</option></>}{row.kind==="SHUTTLE_CHANGE" && <option value="CHANGE">탑승 정보 변경</option>}{row.kind==="SHUTTLE_FEE" && <option value="EXEMPT">셔틀비 면제 검토</option>}</select></label>}
             <label className="block text-xs font-bold text-gray-700">상세 메모<textarea rows={3} maxLength={500} value={detail.details} onChange={event => updateDetail("details", event.target.value)} placeholder="학부모가 확인한 날짜·방향·장소·청구 근거 등을 입력" className="mt-1 w-full rounded-xl border bg-white p-3 text-sm font-normal" /></label>
           </section>}
-          <textarea rows={2} maxLength={500} value={notes[row.id] ?? ""} onChange={e => setNotes(v => ({...v,[row.id]:e.target.value}))} placeholder="보류·반려·상담 사유" className="w-full rounded-xl border p-3 text-sm"/>
+          <textarea aria-label="검토 및 상담 처리 사유" rows={2} maxLength={500} value={notes[row.id] ?? ""} onChange={e => { captureRevision(row); setNotes(v => ({...v,[row.id]:e.target.value})); }} placeholder="추가 확인·반려·상담 종결 사유 (필수)" className="w-full rounded-xl border p-3 text-sm"/>
+          {row.status === "CONSULTATION" && <button type="button" disabled={pending || !notes[row.id]?.trim()} onClick={() => decide(row.id,"CLOSE_CONSULTATION")} className="min-h-11 rounded-xl border px-3 font-bold disabled:opacity-40">사유를 남기고 상담 종결 (안내 미발송)</button>}
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">{[["NEEDS_DETAILS","추가 확인"],["CONSULTATION","상담 전환"],["REJECT","접수 반려"]].map(([decision,label]) => <button key={decision} disabled={pending} onClick={() => decide(row.id, decision as KakaoIntakeDecision)} className="min-h-11 rounded-xl border font-bold disabled:opacity-40">{label}</button>)}<button disabled={pending || !identityOk || !TRANSFERABLE.has(row.kind)} onClick={() => decide(row.id,"TRANSFER")} className="min-h-11 rounded-xl bg-[var(--brand-accent)] px-2 font-black text-[var(--brand-accent-contrast)] disabled:opacity-40">검토 정보 저장 및 운영 원장 이관</button></div>
         </div>}
       </li>;

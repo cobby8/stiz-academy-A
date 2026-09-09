@@ -8,9 +8,10 @@
 ## 진행 현황표
 | 그룹 | 담당 | 상태 | 완료 기준 |
 |---|---|---|---|
+| G4 수동 설정 백업 | 홈페이지 구현 / 테스트 / 운영 검토 | 로컬 완료·미배포 | 57검사·tsc·독립검토 통과, 기존 lint 오류1/경고3 유지; 실제 Storage/복원 미실행 |
 | G3a 입학 증거 | 홈페이지 구현 / 운영 독립검토 | 로컬 검증 완료·미배포 | 모델10·SSR2·tsc·lint 통과; 확정일 미확정 유지, G3b 설계는 정책 대기 |
 | G2 상담 후속·종결 | 홈페이지 구현 / tester / 운영 독립검토 | 로컬 검증 완료·미배포 | 행동18·회귀12·tsc·lint·운영 독립검토 통과; 실제 PG/브라우저는 별도 |
-| G1 예약 설정 백업 | 홈페이지 코드·기록 / 운영 독립 검토 | 로컬 검증 완료·미배포 | 실제 라우트 행동18·tsc·lint·운영 독립 재검토 통과; 전체 DB/수동 백업은 후속 |
+| G1 예약 설정 백업 | 홈페이지 코드·기록 / 운영 독립 검토 | 로컬 검증 완료·미배포 | 실제 라우트 행동18·tsc·lint·운영 독립 재검토 통과; 전체 DB/실제 복원 검증은 후속, 수동은 G4 완료 |
 | 사이트 월 장부 1차 | PM + developer + QA | 로컬 검증 완료 | 현재 수강과 선택월 Payment 분리, 다반 확인필요, 발행 범위 제한; 영구 월 장부는 다음 단계 |
 | 사이트 월 장부 2차 | PM + API 연결 + 통합 suite + QA | 통합 로컬 검증 완료 | 실제 권한/API/화면/임시 DB 통합20·DB/복원37·브라우저19·회귀87·tsc·lint·QA 통과; 모의 인증, 운영 DB/배포 미적용 |
 | 수납 대조 안전 차단 | Codex | 로컬 검증 완료·미배포 | 자동 쓰기 차단, 복수 반 REVIEW, 월 자료 누락 오류, 회귀 5건·tsc 통과 |
@@ -43,7 +44,6 @@
 - `src/app/api/operations-events/`: 64KB 제한, HMAC-SHA256, 5분 재생 방지, source+eventId 중복·충돌 처리.
 - `src/app/actions/admin.ts`: enrollStudent/updateEnrollmentStatus와 원장 적재를 동일 트랜잭션으로 연결.
 - `src/app/admin/students/[id]/StudentDetailClient.tsx`: 하드 삭제 UI 제거, WITHDRAWN 이력 보존 경로만 유지.
-- WEBSITE는 SUCCEEDED, SHEET·RALLYZ는 PENDING, billing·notification은 HELD로 시작한다.
 
 ## 기획설계
 - 사이트 변경은 원본 시스템 완료, 나머지 시스템 대기로 기록한다.
@@ -63,17 +63,7 @@
 - 기존 대량 SMS 큐의 500명 상한·멱등·암호화·UNCERTAIN 격리 회귀는 유지한다.
 
 ## 수정 요청
-
-| 요청자 | 파일 | 문제 | 상태 |
-|---|---|---|---|
-| G3a 입학 증거 | 홈페이지 구현 / 운영 독립검토 | 로컬 검증 완료·미배포 | 모델10·SSR2·tsc·lint 통과; 확정일 미확정 유지, G3b 설계는 정책 대기 |
-| tester | `parent-regular-absence.ts`, `parent-shuttle-exception.ts` | 결석 반복 lifecycle 버전과 셔틀 동일 payload no-op/advisory lock, 누락 복구 선별로 보완 후 회귀 검증 완료 | 완료 |
-| tester | 체험 일정/문자 경로 | Sat-2 canonical 시간, date-only 차단, stale Class 우선순위, 부모·담당자 동일 시간 보완 및 검증 완료 | 완료 |
-| tester | `tests/regular-shuttle-location-link.test.mjs` | Prisma 가짜 어댑터 기반 roundtrip·경합·멱등 행동 테스트 보완 완료 | 완료 |
-| reviewer | `src/lib/message-ledger.ts:101-125` | 암호문/키 오류 행을 UNCERTAIN 격리하고 나머지를 계속 처리하도록 보완됨 | 완료 |
-| reviewer | `src/lib/message-ledger.ts:103-105,119` | stale·복호화 실패 UNCERTAIN 전환 때 payloadJSON을 즉시 제거하도록 보완됨 | 완료 |
-| reviewer | `src/app/api/cron/manual-message-dispatch/route.ts:6-45` | 실행당 5건으로 축소해 공급자 최대 대기시간을 약 25초로 제한함 | 완료 |
-| reviewer | `src/lib/message-ledger.ts:103-127`, `src/app/api/cron/manual-message-dispatch/route.ts:14-43` | stale·복호화 실패·정상 claim의 batchId를 모두 finalize 대상으로 전달해 배치 집계 정합성 보완 | 완료 |
+- 현재 미결 코드 검토 요청 없음. 이전 완료 결과는 Git 이력과 knowledge에 보존.
 
 ## 확인보류
 - 복수 반은 시트 별도 행. 운영 라우터/인증/API/DB 통합 E2E·스키마 호환·이관대조·할인/이월 잔액 자동검증 필요. 시트 중단·운영 쓰기·배포 미승인.
@@ -83,6 +73,7 @@
 - 카카오 운영 적용은 전용 migration·비밀 환경변수·챗봇 관리자센터 스킬/블록 배포·단일 ACTIVE 처리기 승인이 필요하다.
 
 ## 작업 로그 (최근 10건)
+- 2026-09-09: G4 수동 백업 조회실패·UNKNOWN·정리실패와 UI 안내 수정. 57검사·tsc·독립검토 통과, 기존 lint잔여 유지. 실제DB·Storage·복원·푸시·배포 없음.
 - 2026-09-09: G3a 원장 증거·타깃별 실패 표시와 시작일 보류, 모델10·SSR2·tsc·lint 통과. G3b 후보 설계 작성, 미래 ACTIVE 정책 대기. 운영·발송·푸시·배포 없음.
 - 2026-09-09: G2 상담 후속·종결과 원문 updatedAt 버전 비교 구현. 행동18·회귀12·tsc·lint·독립검토 통과. 실제 PG/브라우저 별도, DB·발송·푸시·배포 없음.
 - 2026-09-09: G1 예약 설정 백업 실패 차단·저장 미확인 구분 구현, 행동18·tsc·lint·운영 독립 재검토 통과. 운영 DB·Storage·발송·푸시·배포 없음.
@@ -92,7 +83,6 @@
 - 2026-09-04: 카카오 문의 예약 automation-2 해제. 격리 PostgreSQL16 실제 검사37·회귀88·tsc·lint·안전리뷰 통과. 동시저장/감사롤백/권한/백업복원 일치, 임시 DB 종료. 운영 자료·발송·배포 없음.
 - 2026-09-04: 사이트 월 장부 모델·API·UI·미적용 SQL 구현. 학생월 셔틀 1회·버전/감사 거래·128KiB·기본 저장 off. 회귀88·tsc·Prisma·lint·QA 통과. 실제 DB·발송·배포 없음.
 - 2026-09-04: 반별 월 점검표/API(읽기 거래·미배정 분리·금액 미상 null), 전체 다반 REVIEW, 신규 ID 한정 청구를 원자 거래·연월 잠금으로 연결. 회귀44·tsc·QA 통과, 운영 쓰기·발송·배포 없음.
-- 2026-09-04: 시트 수납 자동 적용/전역 연체 갱신 차단, 전체 월 기록 합산과 모호한 항목 REVIEW, 대상 월 원장 누락 오류 처리. 회귀5·tsc·읽기전용 운영 SQL 검증. 운영 쓰기·발송·배포 없음.
 
 ## PM 체크
 - scratchpad 100줄 이내 및 작업 로그 최근 10건 유지.

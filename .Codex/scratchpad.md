@@ -8,6 +8,7 @@
 ## 진행 현황표
 | 그룹 | 담당 | 상태 | 완료 기준 |
 |---|---|---|---|
+| G3a 입학 증거 | 홈페이지 구현 / 운영 독립검토 | 로컬 검증 완료·미배포 | 모델10·SSR2·tsc·lint 통과; 확정일 미확정 유지, G3b 설계는 정책 대기 |
 | G2 상담 후속·종결 | 홈페이지 구현 / tester / 운영 독립검토 | 로컬 검증 완료·미배포 | 행동18·회귀12·tsc·lint·운영 독립검토 통과; 실제 PG/브라우저는 별도 |
 | G1 예약 설정 백업 | 홈페이지 코드·기록 / 운영 독립 검토 | 로컬 검증 완료·미배포 | 실제 라우트 행동18·tsc·lint·운영 독립 재검토 통과; 전체 DB/수동 백업은 후속 |
 | 사이트 월 장부 1차 | PM + developer + QA | 로컬 검증 완료 | 현재 수강과 선택월 Payment 분리, 다반 확인필요, 발행 범위 제한; 영구 월 장부는 다음 단계 |
@@ -42,9 +43,7 @@
 - `src/app/api/operations-events/`: 64KB 제한, HMAC-SHA256, 5분 재생 방지, source+eventId 중복·충돌 처리.
 - `src/app/actions/admin.ts`: enrollStudent/updateEnrollmentStatus와 원장 적재를 동일 트랜잭션으로 연결.
 - `src/app/admin/students/[id]/StudentDetailClient.tsx`: 하드 삭제 UI 제거, WITHDRAWN 이력 보존 경로만 유지.
-- PAUSE/WITHDRAW는 기존 시트 계약과 호환한다. RESUME/CLASS_ADD/CLASS_CHANGE 및 셔틀·연락처·청구는 전용 어댑터 전까지 HELD.
 - WEBSITE는 SUCCEEDED, SHEET·RALLYZ는 PENDING, billing·notification은 HELD로 시작한다.
-- 동일 상태 재저장은 Enrollment와 updatedAt 모두 변경하지 않는다.
 
 ## 기획설계
 - 사이트 변경은 원본 시스템 완료, 나머지 시스템 대기로 기록한다.
@@ -67,6 +66,7 @@
 
 | 요청자 | 파일 | 문제 | 상태 |
 |---|---|---|---|
+| G3a 입학 증거 | 홈페이지 구현 / 운영 독립검토 | 로컬 검증 완료·미배포 | 모델10·SSR2·tsc·lint 통과; 확정일 미확정 유지, G3b 설계는 정책 대기 |
 | tester | `parent-regular-absence.ts`, `parent-shuttle-exception.ts` | 결석 반복 lifecycle 버전과 셔틀 동일 payload no-op/advisory lock, 누락 복구 선별로 보완 후 회귀 검증 완료 | 완료 |
 | tester | 체험 일정/문자 경로 | Sat-2 canonical 시간, date-only 차단, stale Class 우선순위, 부모·담당자 동일 시간 보완 및 검증 완료 | 완료 |
 | tester | `tests/regular-shuttle-location-link.test.mjs` | Prisma 가짜 어댑터 기반 roundtrip·경합·멱등 행동 테스트 보완 완료 | 완료 |
@@ -83,6 +83,7 @@
 - 카카오 운영 적용은 전용 migration·비밀 환경변수·챗봇 관리자센터 스킬/블록 배포·단일 ACTIVE 처리기 승인이 필요하다.
 
 ## 작업 로그 (최근 10건)
+- 2026-09-09: G3a 원장 증거·타깃별 실패 표시와 시작일 보류, 모델10·SSR2·tsc·lint 통과. G3b 후보 설계 작성, 미래 ACTIVE 정책 대기. 운영·발송·푸시·배포 없음.
 - 2026-09-09: G2 상담 후속·종결과 원문 updatedAt 버전 비교 구현. 행동18·회귀12·tsc·lint·독립검토 통과. 실제 PG/브라우저 별도, DB·발송·푸시·배포 없음.
 - 2026-09-09: G1 예약 설정 백업 실패 차단·저장 미확인 구분 구현, 행동18·tsc·lint·운영 독립 재검토 통과. 운영 DB·Storage·발송·푸시·배포 없음.
 - 2026-09-04: 실제UI/requireAdmin/API/서비스와 격리PG 연결 통합20·DB/복원37·브라우저19·회귀87·tsc·lint·QA 통과, 임시서버 종료. Auth응답만 모의, 운영코드·설정·DB·발송 불변.
@@ -92,7 +93,6 @@
 - 2026-09-04: 사이트 월 장부 모델·API·UI·미적용 SQL 구현. 학생월 셔틀 1회·버전/감사 거래·128KiB·기본 저장 off. 회귀88·tsc·Prisma·lint·QA 통과. 실제 DB·발송·배포 없음.
 - 2026-09-04: 반별 월 점검표/API(읽기 거래·미배정 분리·금액 미상 null), 전체 다반 REVIEW, 신규 ID 한정 청구를 원자 거래·연월 잠금으로 연결. 회귀44·tsc·QA 통과, 운영 쓰기·발송·배포 없음.
 - 2026-09-04: 시트 수납 자동 적용/전역 연체 갱신 차단, 전체 월 기록 합산과 모호한 항목 REVIEW, 대상 월 원장 누락 오류 처리. 회귀5·tsc·읽기전용 운영 SQL 검증. 운영 쓰기·발송·배포 없음.
-- 2026-09-04: 재확인 SMS 1건 명시 승인·해시/만료 대조·SMS 고정·중복 및 유효링크 재발급 방지·결과 장부 구현. 새 승인 원장에 신청ID 연결. TypeScript·QA 통과, 실제 DB·발송·푸시 없음.
 
 ## PM 체크
 - scratchpad 100줄 이내 및 작업 로그 최근 10건 유지.

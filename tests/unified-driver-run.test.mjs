@@ -292,12 +292,13 @@ test("기사님 카드의 길안내는 시간 아래 작은 버튼이며 학생 
   assert.match(src, /h-11 min-w-\[60px\]/);
 });
 
-test("순서·시간 수정은 운행 시작 영역 오른쪽 위의 작은 버튼으로 둔다", async () => {
+test("운행 시작은 헤더 오른쪽에만 두고 순서·시간 수정은 목록 제목 옆에 둔다", async () => {
   const src = await readFile("src/components/shuttle/UnifiedDriverClient.tsx", "utf8");
   assert.match(src, /const orderControls = stopRows\.length > 0/);
   assert.match(src, /text-\[11px\] font-black text-gray-600[\s\S]*↕ 순서·시간 수정/);
-  assert.match(src, /운행을 시작하면 위치가 관리자에게 공유됩니다[\s\S]*\{orderControls\}/);
-  assert.match(src, /<p className="text-\[14px\] font-black text-gray-600">확정 운행 순서<\/p>/);
+  assert.match(src, /flex items-center justify-between gap-3[\s\S]*runState === "idle"[\s\S]*🚦 운행 시작/);
+  assert.doesNotMatch(src, /운행을 시작하면 위치가 관리자에게 공유됩니다/);
+  assert.match(src, /확정 운행 순서<\/p>[\s\S]*\{orderControls\}/);
 });
 
 test("탑승 상태 저장·조회 키는 특강/정규 접두사로만 합치고, 저장할 땐 원래 키로 되돌린다", async () => {

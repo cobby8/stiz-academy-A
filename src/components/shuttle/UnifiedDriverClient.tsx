@@ -198,13 +198,21 @@ export default function UnifiedDriverClient({
 
   return (
     <div className="mx-auto max-w-lg px-3 pb-28 text-gray-900" style={{ colorScheme: "light" }}>
-      <header className="sticky top-0 z-10 -mx-3 mb-3 border-b border-gray-200 bg-white px-4 py-4">
-        <p className="text-[20px] font-black text-gray-900">🚌 스티즈 셔틀 운행</p>
-        <p className="mt-0.5 text-[15px] font-bold text-gray-600">
-          {fmtDate(date)} · 체크 {progress.boarded}/{progress.total}
-          {progress.noshow > 0 ? ` · 결석 ${progress.noshow}` : ""}
-          {progress.self > 0 ? ` · 자차 ${progress.self}` : ""}
-        </p>
+      <header className="sticky top-0 z-10 -mx-3 mb-3 flex items-center justify-between gap-3 border-b border-gray-200 bg-white px-4 py-4">
+        <div>
+          <p className="text-[20px] font-black text-gray-900">🚌 스티즈 셔틀 운행</p>
+          <p className="mt-0.5 text-[15px] font-bold text-gray-600">
+            {fmtDate(date)} · 체크 {progress.boarded}/{progress.total}
+            {progress.noshow > 0 ? ` · 결석 ${progress.noshow}` : ""}
+            {progress.self > 0 ? ` · 자차 ${progress.self}` : ""}
+          </p>
+        </div>
+        {runState === "idle" && (
+          <button type="button" onClick={handleRunStart}
+            className="h-10 shrink-0 rounded-xl bg-green-600 px-3 text-[14px] font-black text-white active:bg-green-700">
+            🚦 운행 시작
+          </button>
+        )}
       </header>
 
       {/* PWA 설치 배너 */}
@@ -218,20 +226,6 @@ export default function UnifiedDriverClient({
           <button type="button" onClick={installPwa}
             className="rounded-xl bg-indigo-600 px-4 py-2 text-[14px] font-black text-white active:bg-indigo-700">설치</button>
           <button type="button" onClick={() => setShowInstallBanner(false)} className="text-[20px] text-indigo-300">✕</button>
-        </div>
-      )}
-
-      {/* 운행 시작 전 */}
-      {runState === "idle" && (
-        <div className="mb-4 rounded-2xl border-2 border-yellow-400 bg-yellow-50 p-4 text-center">
-          <div className="mb-3 flex items-start justify-between gap-2 text-left">
-            <p className="pt-0.5 text-[15px] font-bold text-gray-700">운행을 시작하면 위치가 관리자에게 공유됩니다</p>
-            {orderControls}
-          </div>
-          <button type="button" onClick={handleRunStart}
-            className="h-16 w-full rounded-2xl bg-green-600 text-[20px] font-black text-white active:bg-green-700">
-            🚦 운행 시작
-          </button>
         </div>
       )}
 
@@ -257,8 +251,9 @@ export default function UnifiedDriverClient({
 
       {/* 순서 편집 */}
       {stopRows.length > 0 && (
-        <div className="mb-2">
+        <div className="mb-2 flex items-center justify-between gap-2">
           <p className="text-[14px] font-black text-gray-600">확정 운행 순서</p>
+          {orderControls}
         </div>
       )}
       {editing && <p className="mb-2 rounded-xl bg-blue-50 px-3 py-2 text-[13px] font-bold text-blue-700">카드를 끌어서 순서를 바꾸고, 시간을 눌러 수정한 뒤 저장하세요. 정규 셔틀만 저장됩니다.</p>}

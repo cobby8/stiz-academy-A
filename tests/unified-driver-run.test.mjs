@@ -278,6 +278,18 @@ test("통합 화면은 종류별 기존 저장 API·기존 파라미터를 그�
   assert.match(src, /SELF/);
 });
 
+test("기사님 카드의 길안내는 시간 아래 작은 버튼이며 학생 행은 압축한다", async () => {
+  const src = await readFile("src/components/shuttle/UnifiedDriverClient.tsx", "utf8");
+  // 길안내는 시간과 같은 오른쪽 열에 두고, 이전의 카드 폭 전체 버튼을 다시 만들지 않는다.
+  assert.match(src, /flex shrink-0 flex-col items-end gap-1/);
+  assert.match(src, /inline-flex h-8 items-center gap-1 rounded-lg border-2 border-blue-500/);
+  assert.match(src, /🧭 길안내/);
+  assert.doesNotMatch(src, /flex h-12 items-center justify-center gap-1\.5 rounded-xl bg-blue-600/);
+  // 전화 링크를 이름과 같은 행에 놓고 탑승 버튼은 48px로 유지한다.
+  assert.match(src, /flex flex-wrap items-center gap-x-2 gap-y-1/);
+  assert.match(src, /h-12 min-w-\[64px\]/);
+});
+
 test("탑승 상태 저장·조회 키는 특강/정규 접두사로만 합치고, 저장할 땐 원래 키로 되돌린다", async () => {
   const src = await readFile("src/lib/shuttle/unifiedDriverRun.ts", "utf8");
   assert.match(src, /S:PICKUP:/);

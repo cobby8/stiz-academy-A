@@ -298,7 +298,7 @@ export default function UnifiedDriverClient({
               className={`rounded-2xl border-2 p-3.5 ${editable ? "touch-none cursor-grab active:cursor-grabbing" : ""} ${dragKey === row.key ? "opacity-60" : ""} ${
               editing ? "border-blue-200 bg-blue-50" : row.warn ? "border-amber-300 bg-amber-50" : row.isHub ? "border-green-300 bg-green-50" : "border-gray-200 bg-white"
             }`}>
-              <div className="flex items-center gap-2.5">
+              <div className="flex items-start gap-2.5">
                 {editable ? (
                   <div className="flex shrink-0 flex-col gap-0.5" aria-label="순서 변경">
                     <button type="button" onClick={() => moveRow(row, -1)}
@@ -321,7 +321,14 @@ export default function UnifiedDriverClient({
                     aria-label={`${row.label} 정차 시간`}
                   />
                 ) : (
-                  <span className={`shrink-0 text-[28px] font-black leading-none ${displayTime(row) ? "text-blue-600" : "text-gray-400"}`}>{displayTime(row) ?? "시간 미정"}</span>
+                  <div className="flex shrink-0 flex-col items-end gap-1">
+                    <span className={`text-[28px] font-black leading-none ${displayTime(row) ? "text-blue-600" : "text-gray-400"}`}>{displayTime(row) ?? "시간 미정"}</span>
+                    {url && (
+                      <a href={url} className="inline-flex h-8 items-center gap-1 rounded-lg border-2 border-blue-500 px-2 text-[13px] font-black text-blue-600 active:bg-blue-50">
+                        🧭 길안내
+                      </a>
+                    )}
+                  </div>
                 )}
               </div>
 
@@ -337,13 +344,10 @@ export default function UnifiedDriverClient({
                 {row.pending && <span className="rounded-md bg-green-100 px-1.5 py-0.5 text-[12px] font-black text-green-700">확정 순서</span>}
               </div>
 
-              {!editing && url && (
-                <a href={url} className="mt-2 flex h-12 items-center justify-center gap-1.5 rounded-xl bg-blue-600 text-[16px] font-black text-white active:bg-blue-700">🧭 T맵 길안내</a>
-              )}
               {row.isHub && row.riders.length === 0 && <p className="mt-1.5 text-[15px] font-bold text-green-700">무료 거점(워크인, 정원 별도)</p>}
 
               {row.riders.length > 0 && (
-                <div className="mt-2.5 space-y-2.5">
+                <div className="mt-2 space-y-1.5">
                   {row.riders.map((rider) => {
                     const status = boarding[rider.key] ?? null;
                     const parent = digits(rider.parentPhone), child = digits(rider.studentPhone);
@@ -353,10 +357,10 @@ export default function UnifiedDriverClient({
                     const lockedAbsent = rider.absent && rider.kind === "REGULAR";
                     const rowKey = `${row.key}:${rider.checkId}`;
                     return (
-                      <div key={rowKey} className={`rounded-xl p-2.5 ${lockedAbsent ? "bg-red-50" : "bg-gray-50"}`}>
+                      <div key={rowKey} className={`rounded-xl px-2.5 py-2 ${lockedAbsent ? "bg-red-50" : "bg-gray-50"}`}>
                         <div className="flex items-center gap-2">
                           <div className="min-w-0 flex-1">
-                            <div className="flex flex-wrap items-baseline gap-1.5">
+                            <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                               <span className={`text-[19px] font-black ${lockedAbsent ? "text-gray-400 line-through" : "text-gray-900"}`}>{rider.name}</span>
                               {rider.grade && <span className="text-[14px] text-gray-500">{rider.grade}</span>}
                               {lockedAbsent && <span className="rounded-md bg-red-500 px-2 py-0.5 text-[13px] font-black text-white">오늘 결석</span>}
@@ -368,24 +372,20 @@ export default function UnifiedDriverClient({
                               {/* "오늘만" 셔틀 변경. 결석과 다른 색으로 둔다 — 아이는 수업에 오고,
                                   기사님이 태우지 않거나 다른 곳으로 가야 한다는 뜻이다. */}
                               {rider.shuttleNote && <span className="rounded-md bg-blue-600 px-2 py-0.5 text-[13px] font-black text-white">{rider.shuttleNote}</span>}
+                              {!lockedAbsent && parent && <a href={`tel:${parent}`} className="text-[15px] font-black text-blue-600">📞 학부모</a>}
+                              {!lockedAbsent && child && <a href={`tel:${child}`} className="text-[15px] font-black text-green-600">📞 학생</a>}
                             </div>
-                            {!lockedAbsent && (parent || child) && (
-                              <div className="mt-1 flex gap-3">
-                                {parent && <a href={`tel:${parent}`} className="text-[15px] font-black text-blue-600">📞 학부모</a>}
-                                {child && <a href={`tel:${child}`} className="text-[15px] font-black text-green-600">📞 학생</a>}
-                              </div>
-                            )}
                           </div>
                           {lockedAbsent ? (
                             <span className="rounded-xl border-2 border-red-300 px-3 py-2 text-[15px] font-black text-red-500">미{isPickup ? "탑승" : "하차"}(결석)</span>
                           ) : (
                             <>
                               <button type="button" disabled={isBusy} onClick={() => { setMenuKey(null); setStatus(rider, "BOARDED"); }}
-                                className={`h-14 min-w-[68px] rounded-xl text-[16px] font-black ${status === "BOARDED" ? "bg-green-600 text-white" : "border-2 border-green-400 text-green-700"}`}>
+                                className={`h-12 min-w-[64px] rounded-xl text-[15px] font-black ${status === "BOARDED" ? "bg-green-600 text-white" : "border-2 border-green-400 text-green-700"}`}>
                                 {isPickup ? "탑승" : "하차"}
                               </button>
                               <button type="button" onClick={() => setMenuKey(menuKey === rowKey ? null : rowKey)}
-                                className={`h-14 min-w-[68px] rounded-xl text-[16px] font-black ${status === "NOSHOW" || status === "SELF" ? "bg-gray-700 text-white" : "border-2 border-gray-300 text-gray-600"}`}>
+                                className={`h-12 min-w-[64px] rounded-xl text-[15px] font-black ${status === "NOSHOW" || status === "SELF" ? "bg-gray-700 text-white" : "border-2 border-gray-300 text-gray-600"}`}>
                                 미{isPickup ? "탑승" : "하차"}
                               </button>
                             </>

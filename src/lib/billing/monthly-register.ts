@@ -101,11 +101,14 @@ function date(value: unknown, label: string): { value: string; timestamp: number
   if (!/^\d{4}-\d{2}-\d{2}$/.test(normalized)) {
     throw new MonthlyRegisterError(`${label}은 YYYY-MM-DD 형식이어야 합니다.`);
   }
-  const timestamp = Date.parse(`${normalized}T00:00:00.000Z`);
-  // 2월 30일처럼 Date가 다음 달로 넘기는 입력도 원문과 재비교해 거절한다.
-  if (!Number.isFinite(timestamp) || normalized.startsWith("0000-") || new Date(timestamp).toISOString().slice(0, 10) !== normalized) {
+  const [year, month, day] = normalized.split("-").map(Number);
+  const isLeapYear = year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
+  const daysInMonth = [31, isLeapYear ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31][month - 1] ?? 0;
+  // 날짜 값은 시각이 아니므로 시간대 변환 없이 달력 자체로 유효성을 확인한다.
+  if (year === 0 || day < 1 || day > daysInMonth) {
     throw new MonthlyRegisterError(`${label}은 실제 존재하는 날짜여야 합니다.`);
   }
+  const timestamp = Date.UTC(year, month - 1, day);
   return { value: normalized, timestamp };
 }
 

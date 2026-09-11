@@ -10,6 +10,7 @@ export function kakaoFollowupSummary(status: string, commands: KakaoFollowupComm
   if (status === "REJECTED") return "접수 반려 기록 · 학부모 안내 미발송";
   if (status === "NEEDS_DETAILS") return "추가 확인 대기 · 상태만 저장됨 · 학부모 안내 미발송";
   if (status === "CONSULTATION") return "상담 후속 필요 · 상담 완료가 아닙니다";
+  if (status === "CONSULTATION_CLOSED") return "상담 종결 기록 · 수강 반영·청구 완료가 아닙니다 · 이 처리로 학부모 안내를 발송하지 않았습니다";
   if (status === "FAILED") return "처리 실패 · 요청 내용과 처리 이력을 확인해 주세요";
   if (status !== "APPROVED") return null;
   if (!commands.length) return "운영 원장 연결 확인 필요 · 완료로 간주하지 마세요";

@@ -281,13 +281,23 @@ test("통합 화면은 종류별 기존 저장 API·기존 파라미터를 그�
 test("기사님 카드의 길안내는 시간 아래 작은 버튼이며 학생 행은 압축한다", async () => {
   const src = await readFile("src/components/shuttle/UnifiedDriverClient.tsx", "utf8");
   // 길안내는 시간과 같은 오른쪽 열에 두고, 이전의 카드 폭 전체 버튼을 다시 만들지 않는다.
-  assert.match(src, /flex shrink-0 flex-col items-end gap-1/);
+  assert.match(src, /row-span-2 flex shrink-0 flex-col items-end gap-1/);
   assert.match(src, /inline-flex h-8 items-center gap-1 rounded-lg border-2 border-blue-500/);
   assert.match(src, /🧭 길안내/);
   assert.doesNotMatch(src, /flex h-12 items-center justify-center gap-1\.5 rounded-xl bg-blue-600/);
-  // 전화 링크를 이름과 같은 행에 놓고 탑승 버튼은 48px로 유지한다.
+  // 배지는 이름 바로 아래로 붙고, 전화 링크와 탑승 버튼은 한 행을 유지한다.
+  assert.match(src, /grid grid-cols-\[auto_minmax\(0,1fr\)_auto\] items-start gap-x-2\.5/);
+  assert.match(src, /col-start-2 mt-1 flex flex-wrap items-center gap-1\.5/);
   assert.match(src, /flex flex-wrap items-center gap-x-2 gap-y-1/);
-  assert.match(src, /h-12 min-w-\[64px\]/);
+  assert.match(src, /h-11 min-w-\[60px\]/);
+});
+
+test("순서·시간 수정은 운행 시작 영역 오른쪽 위의 작은 버튼으로 둔다", async () => {
+  const src = await readFile("src/components/shuttle/UnifiedDriverClient.tsx", "utf8");
+  assert.match(src, /const orderControls = stopRows\.length > 0/);
+  assert.match(src, /text-\[11px\] font-black text-gray-600[\s\S]*↕ 순서·시간 수정/);
+  assert.match(src, /운행을 시작하면 위치가 관리자에게 공유됩니다[\s\S]*\{orderControls\}/);
+  assert.match(src, /<p className="text-\[14px\] font-black text-gray-600">확정 운행 순서<\/p>/);
 });
 
 test("탑승 상태 저장·조회 키는 특강/정규 접두사로만 합치고, 저장할 땐 원래 키로 되돌린다", async () => {

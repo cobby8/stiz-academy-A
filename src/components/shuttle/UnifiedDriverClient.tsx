@@ -179,6 +179,21 @@ export default function UnifiedDriverClient({
 
   const progress = countProgress(rows, boarding);
   const stopRows = ordered.filter((r) => !r.isTerminal);
+  const orderControls = stopRows.length > 0 && (!editing ? (
+    <button type="button" onClick={() => setEditing(true)}
+      className="shrink-0 rounded-lg border border-gray-300 bg-white px-2 py-1 text-[11px] font-black text-gray-600 active:bg-gray-100">
+      ↕ 순서·시간 수정
+    </button>
+  ) : (
+    <div className="flex shrink-0 gap-1">
+      <button type="button" disabled={savingOrder} onClick={saveRegularOrder}
+        className="rounded-lg bg-blue-600 px-2 py-1 text-[11px] font-black text-white active:bg-blue-700">
+        {savingOrder ? "저장 중..." : "💾 저장"}
+      </button>
+      <button type="button" onClick={() => { setEditing(false); setSortOverride({}); setTimeOverride({}); }}
+        className="rounded-lg border border-gray-300 bg-white px-2 py-1 text-[11px] font-black text-gray-600">취소</button>
+    </div>
+  ));
   let seq = 0;
 
   return (
@@ -208,8 +223,11 @@ export default function UnifiedDriverClient({
 
       {/* 운행 시작 전 */}
       {runState === "idle" && (
-        <div className="mb-4 rounded-2xl border-2 border-yellow-400 bg-yellow-50 p-5 text-center">
-          <p className="mb-3 text-[15px] font-bold text-gray-700">운행을 시작하면 위치가 관리자에게 공유됩니다</p>
+        <div className="mb-4 rounded-2xl border-2 border-yellow-400 bg-yellow-50 p-4 text-center">
+          <div className="mb-3 flex items-start justify-between gap-2 text-left">
+            <p className="pt-0.5 text-[15px] font-bold text-gray-700">운행을 시작하면 위치가 관리자에게 공유됩니다</p>
+            {orderControls}
+          </div>
           <button type="button" onClick={handleRunStart}
             className="h-16 w-full rounded-2xl bg-green-600 text-[20px] font-black text-white active:bg-green-700">
             🚦 운행 시작
@@ -239,23 +257,8 @@ export default function UnifiedDriverClient({
 
       {/* 순서 편집 */}
       {stopRows.length > 0 && (
-        <div className="mb-2 flex items-center justify-between gap-2">
+        <div className="mb-2">
           <p className="text-[14px] font-black text-gray-600">확정 운행 순서</p>
-          {!editing ? (
-            <button type="button" onClick={() => setEditing(true)}
-              className="rounded-xl border-2 border-gray-300 px-3 py-1.5 text-[13px] font-black text-gray-600 active:bg-gray-100">
-              ↕ 순서·시간 수정
-            </button>
-          ) : (
-            <>
-              <button type="button" disabled={savingOrder} onClick={saveRegularOrder}
-                className="rounded-xl bg-blue-600 px-3 py-1.5 text-[13px] font-black text-white active:bg-blue-700">
-                {savingOrder ? "저장 중..." : "💾 저장"}
-              </button>
-              <button type="button" onClick={() => { setEditing(false); setSortOverride({}); setTimeOverride({}); }}
-                className="rounded-xl border-2 border-gray-300 px-3 py-1.5 text-[13px] font-black text-gray-600">취소</button>
-            </>
-          )}
         </div>
       )}
       {editing && <p className="mb-2 rounded-xl bg-blue-50 px-3 py-2 text-[13px] font-bold text-blue-700">카드를 끌어서 순서를 바꾸고, 시간을 눌러 수정한 뒤 저장하세요. 정규 셔틀만 저장됩니다.</p>}
@@ -295,10 +298,10 @@ export default function UnifiedDriverClient({
               onPointerEnter={() => editable && dragKey && moveDraggedRow(row)}
               onPointerUp={() => setDragKey(null)}
               onPointerCancel={() => setDragKey(null)}
-              className={`rounded-2xl border-2 p-3.5 ${editable ? "touch-none cursor-grab active:cursor-grabbing" : ""} ${dragKey === row.key ? "opacity-60" : ""} ${
+              className={`rounded-2xl border-2 p-3 ${editable ? "touch-none cursor-grab active:cursor-grabbing" : ""} ${dragKey === row.key ? "opacity-60" : ""} ${
               editing ? "border-blue-200 bg-blue-50" : row.warn ? "border-amber-300 bg-amber-50" : row.isHub ? "border-green-300 bg-green-50" : "border-gray-200 bg-white"
             }`}>
-              <div className="flex items-start gap-2.5">
+              <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-start gap-x-2.5">
                 {editable ? (
                   <div className="flex shrink-0 flex-col gap-0.5" aria-label="순서 변경">
                     <button type="button" onClick={() => moveRow(row, -1)}
@@ -311,7 +314,7 @@ export default function UnifiedDriverClient({
                     {row.isHub ? "🆓" : seq}
                   </span>
                 )}
-                <span className="min-w-0 flex-1 text-[18px] font-black leading-tight text-gray-900">{row.label}</span>
+                <span className="min-w-0 text-[18px] font-black leading-tight text-gray-900">{row.label}</span>
                 {editable ? (
                   <input
                     type="time"
@@ -321,7 +324,7 @@ export default function UnifiedDriverClient({
                     aria-label={`${row.label} 정차 시간`}
                   />
                 ) : (
-                  <div className="flex shrink-0 flex-col items-end gap-1">
+                  <div className="row-span-2 flex shrink-0 flex-col items-end gap-1">
                     <span className={`text-[28px] font-black leading-none ${displayTime(row) ? "text-blue-600" : "text-gray-400"}`}>{displayTime(row) ?? "시간 미정"}</span>
                     {url && (
                       <a href={url} className="inline-flex h-8 items-center gap-1 rounded-lg border-2 border-blue-500 px-2 text-[13px] font-black text-blue-600 active:bg-blue-50">
@@ -330,24 +333,23 @@ export default function UnifiedDriverClient({
                     )}
                   </div>
                 )}
-              </div>
-
-              {/* 종류·방향 배지 + 노선 이름 */}
-              <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
-                <span className={`rounded-md px-2 py-0.5 text-[13px] font-black text-white ${row.kind === "SEASONAL" ? "bg-indigo-600" : "bg-teal-600"}`}>
-                  {row.kind === "SEASONAL" ? "특강" : "정규"}
-                </span>
-                <span className={`rounded-md px-2 py-0.5 text-[13px] font-black text-white ${isPickup ? "bg-blue-600" : "bg-orange-600"}`}>
-                  {isPickup ? "⬆ 등원" : "⬇ 하원"}
-                </span>
-                {row.groupLabel && <span className="text-[13px] font-bold text-gray-500">{row.groupLabel}</span>}
-                {row.pending && <span className="rounded-md bg-green-100 px-1.5 py-0.5 text-[12px] font-black text-green-700">확정 순서</span>}
+                {/* 종류·방향 배지는 정류장명 바로 아래에 둬, 오른쪽 길안내 버튼 높이만큼 카드가 비지 않게 한다. */}
+                <div className="col-start-2 mt-1 flex flex-wrap items-center gap-1.5">
+                  <span className={`rounded-md px-2 py-0.5 text-[13px] font-black text-white ${row.kind === "SEASONAL" ? "bg-indigo-600" : "bg-teal-600"}`}>
+                    {row.kind === "SEASONAL" ? "특강" : "정규"}
+                  </span>
+                  <span className={`rounded-md px-2 py-0.5 text-[13px] font-black text-white ${isPickup ? "bg-blue-600" : "bg-orange-600"}`}>
+                    {isPickup ? "⬆ 등원" : "⬇ 하원"}
+                  </span>
+                  {row.groupLabel && <span className="text-[13px] font-bold text-gray-500">{row.groupLabel}</span>}
+                  {row.pending && <span className="rounded-md bg-green-100 px-1.5 py-0.5 text-[12px] font-black text-green-700">확정 순서</span>}
+                </div>
               </div>
 
               {row.isHub && row.riders.length === 0 && <p className="mt-1.5 text-[15px] font-bold text-green-700">무료 거점(워크인, 정원 별도)</p>}
 
               {row.riders.length > 0 && (
-                <div className="mt-2 space-y-1.5">
+                <div className="mt-1.5 space-y-1">
                   {row.riders.map((rider) => {
                     const status = boarding[rider.key] ?? null;
                     const parent = digits(rider.parentPhone), child = digits(rider.studentPhone);
@@ -357,7 +359,7 @@ export default function UnifiedDriverClient({
                     const lockedAbsent = rider.absent && rider.kind === "REGULAR";
                     const rowKey = `${row.key}:${rider.checkId}`;
                     return (
-                      <div key={rowKey} className={`rounded-xl px-2.5 py-2 ${lockedAbsent ? "bg-red-50" : "bg-gray-50"}`}>
+                      <div key={rowKey} className={`rounded-xl px-2.5 py-1.5 ${lockedAbsent ? "bg-red-50" : "bg-gray-50"}`}>
                         <div className="flex items-center gap-2">
                           <div className="min-w-0 flex-1">
                             <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
@@ -381,11 +383,11 @@ export default function UnifiedDriverClient({
                           ) : (
                             <>
                               <button type="button" disabled={isBusy} onClick={() => { setMenuKey(null); setStatus(rider, "BOARDED"); }}
-                                className={`h-12 min-w-[64px] rounded-xl text-[15px] font-black ${status === "BOARDED" ? "bg-green-600 text-white" : "border-2 border-green-400 text-green-700"}`}>
+                                className={`h-11 min-w-[60px] rounded-xl text-[15px] font-black ${status === "BOARDED" ? "bg-green-600 text-white" : "border-2 border-green-400 text-green-700"}`}>
                                 {isPickup ? "탑승" : "하차"}
                               </button>
                               <button type="button" onClick={() => setMenuKey(menuKey === rowKey ? null : rowKey)}
-                                className={`h-12 min-w-[64px] rounded-xl text-[15px] font-black ${status === "NOSHOW" || status === "SELF" ? "bg-gray-700 text-white" : "border-2 border-gray-300 text-gray-600"}`}>
+                                className={`h-11 min-w-[60px] rounded-xl text-[15px] font-black ${status === "NOSHOW" || status === "SELF" ? "bg-gray-700 text-white" : "border-2 border-gray-300 text-gray-600"}`}>
                                 미{isPickup ? "탑승" : "하차"}
                               </button>
                             </>

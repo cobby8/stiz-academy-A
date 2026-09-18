@@ -7,8 +7,10 @@ import {
   CATEGORY,
   addDays,
   assertReadOnlyTossRequest,
+  attachStudentResolution,
   buildReconciliation,
   classifyBranch,
+  cleanMemoFragment,
   dayDiff,
   flattenTossOrders,
   formatWon,
@@ -16,7 +18,9 @@ import {
   matchSets,
   monthRange,
   normalizeSiteRow,
+  parseMemoNames,
   redactSecrets,
+  resolveStudentName,
   renderCsv,
   renderMarkdown,
   summarize,
@@ -47,7 +51,7 @@ function siteRow({ date, amount, id, status = "PAID", providerOrderId = "", time
 }
 
 let tossSeq = 0;
-function tossOrder({ date, amount, orderId, state = "APPROVED", sourceType = "CARD", time = "05:00:00" }) {
+function tossOrder({ date, amount, orderId, state = "APPROVED", sourceType = "CARD", time = "05:00:00", memo = "", orderMemo = "" }) {
   tossSeq += 1;
   const id = orderId ?? `order-${String(tossSeq).padStart(3, "0")}`;
   // 토스는 UTC(Z) 로 준다 → date/time 은 UTC 기준으로 넣는다.
@@ -56,7 +60,8 @@ function tossOrder({ date, amount, orderId, state = "APPROVED", sourceType = "CA
     orderState: state === "CANCELLED" ? "CANCELLED" : "COMPLETED",
     source: "POS",
     createdAt: `${date}T${time}Z`,
-    lineItems: [{ item: { title: "수강료" }, quantity: 1 }],
+    memo: orderMemo,
+    lineItems: [{ item: { title: "수강료" }, quantity: 1, memo }],
     chargePrice: { totalAmount: amount },
     payments: [
       {
@@ -390,4 +395,153 @@ test("비밀값은 어떤 문구에도 남지 않게 가려진다", () => {
   assert.ok(masked.includes("[숨김]"));
   const url = redactSecrets("postgresql://user:p4ssw0rd@db.example.com:6543/postgres", []);
   assert.ok(!url.includes("p4ssw0rd"));
+});
+
+// ───────────── POS 메모 이름 매칭 ─────────────
+
+const ROSTER = [
+  { id: "stu-1", name: "박찬민", classes: "화요일 8교시" },
+  { id: "stu-2", name: "이시윤", classes: "토요일 4교시" },
+  { id: "stu-3", name: "김대건", classes: "목요일 3교시" },
+  { id: "stu-4", name: "강시우", classes: "금요일 5교시" },
+  { id: "stu-5", name: "김시우", classes: "월요일 2교시" },
+  { id: "stu-6", name: "양시우", classes: "금요일 5교시" },
+  { id: "stu-7", name: "정우준", classes: "월요일 6교시" },
+  { id: "stu-8", name: "정지유", classes: "수요일 6교시" },
+];
+
+function memoRows(orders) {
+  return attachStudentResolution(tossRows(orders), ROSTER);
+}
+
+test("메모에서 반 토큰·청구월·주차를 걷어내고 이름만 남긴다", () => {
+  assert.equal(cleanMemoFragment("토4 이시윤 9월"), "이시윤");
+  assert.equal(cleanMemoFragment("박찬민 9월"), "박찬민");
+  assert.equal(cleanMemoFragment("목3 김대건 2주"), "김대건");
+  assert.equal(cleanMemoFragment("이시윤 2026-09"), "이시윤");
+  assert.equal(cleanMemoFragment("토요일 4교시 이시윤 9월"), "이시윤");
+  assert.equal(cleanMemoFragment("   "), "");
+});
+
+test("한 메모에 여러 줄·쉼표로 여러 원생이 적힌 경우를 모두 읽는다", () => {
+  const parsed = parseMemoNames({ lineItems: [{ memo: "정우준 9월\n정지유 9월" }] });
+  assert.deepEqual(parsed.names, ["정우준", "정지유"]);
+  const commas = parseMemoNames({ lineItems: [{ memo: "박찬민 9월, 이시윤 9월" }] });
+  assert.deepEqual(commas.names, ["박찬민", "이시윤"]);
+});
+
+test("줄바꿈으로 끝나는 메모와 주문 단위 메모도 읽는다", () => {
+  const trailing = parseMemoNames({ memo: "토4 이시윤 9월\n" });
+  assert.deepEqual(trailing.names, ["이시윤"]);
+  assert.equal(trailing.memoRaw, "토4 이시윤 9월");
+
+  // 품목 메모가 없으면 주문 메모를 쓴다
+  const rows = memoRows([tossOrder({ date: "2026-09-05", amount: 110000, orderMemo: "토4 이시윤 9월\n" })]);
+  assert.deepEqual(rows[0].memoNames, ["이시윤"]);
+  assert.equal(rows[0].resolvedStudents[0].name, "이시윤");
+});
+
+test("이름 해석: 정확히 일치 / 성 생략(1명) / 성 생략(여러 명) / 명단에 없음", () => {
+  assert.equal(resolveStudentName("박찬민", ROSTER).status, "EXACT");
+  const suffix = resolveStudentName("대건", ROSTER);
+  assert.equal(suffix.status, "SUFFIX");
+  assert.equal(suffix.students[0].name, "김대건");
+  const many = resolveStudentName("시우", ROSTER);
+  assert.equal(many.status, "AMBIGUOUS");
+  assert.equal(many.students.length, 3);
+  assert.equal(resolveStudentName("박상원", ROSTER).status, "NONE");
+});
+
+test("메모 이름 + 금액이 맞으면 날짜가 달라도 정상 매칭된다", () => {
+  const site = [siteRow({ date: "2026-09-10", amount: 120000, name: "박찬민" })];
+  const toss = memoRows([tossOrder({ date: "2026-09-25", amount: 120000, memo: "박찬민 9월" })]);
+  const r = matchSets(site, toss);
+  assert.equal(r.siteResults[0].category, CATEGORY.MATCHED_BY_MEMO_NAME);
+  assert.equal(r.tossResults[0].category, CATEGORY.MATCHED_BY_MEMO_NAME);
+});
+
+test("성을 생략한 메모도 원생이 한 명뿐이면 매칭된다", () => {
+  const site = [siteRow({ date: "2026-09-10", amount: 110000, name: "김대건" })];
+  const toss = memoRows([tossOrder({ date: "2026-09-10", amount: 110000, memo: "대건" })]);
+  const r = matchSets(site, toss);
+  assert.equal(r.tossResults[0].category, CATEGORY.MATCHED_BY_MEMO_NAME);
+});
+
+test("메모 이름이 여러 원생과 겹치면 절대 자동 매칭하지 않는다", () => {
+  const site = [siteRow({ date: "2026-09-10", amount: 100000, name: "양시우" })];
+  const toss = memoRows([tossOrder({ date: "2026-09-18", amount: 100000, memo: "시우" })]);
+  const r = matchSets(site, toss);
+  assert.equal(r.tossResults[0].category, CATEGORY.HELD_MEMO_NAME_AMBIGUOUS);
+  assert.match(r.tossResults[0].reason, /3명/);
+  assert.notEqual(r.siteResults[0].category, CATEGORY.MATCHED_BY_MEMO_NAME);
+});
+
+test("메모 이름은 맞는데 금액이 다르면 보류(합계 일치 여부를 알려준다)", () => {
+  const site = [
+    siteRow({ date: "2026-09-09", amount: 80000, name: "박찬민" }),
+    siteRow({ date: "2026-09-09", amount: 80000, name: "박찬민" }),
+  ];
+  const toss = memoRows([tossOrder({ date: "2026-09-09", amount: 160000, memo: "박찬민 9월" })]);
+  const r = matchSets(site, toss);
+  assert.equal(r.tossResults[0].category, CATEGORY.HELD_MEMO_NAME_AMOUNT_MISMATCH);
+  assert.match(r.tossResults[0].reason, /합계는 일치합니다/);
+  assert.deepEqual(new Set(r.siteResults.map((e) => e.category)), new Set([CATEGORY.HELD_MEMO_NAME_AMOUNT_MISMATCH]));
+
+  const single = matchSets(
+    [siteRow({ date: "2026-09-09", amount: 90000, name: "박찬민" })],
+    memoRows([tossOrder({ date: "2026-09-09", amount: 120000, memo: "박찬민 9월" })]),
+  );
+  assert.equal(single.tossResults[0].category, CATEGORY.HELD_MEMO_NAME_AMOUNT_MISMATCH);
+  assert.match(single.tossResults[0].reason, /차이/);
+});
+
+test("한 결제에 원생이 둘이면(형제 합산) 절대 자동 매칭하지 않는다", () => {
+  const site = [
+    siteRow({ date: "2026-09-02", amount: 216000, name: "정우준" }),
+    siteRow({ date: "2026-09-02", amount: 216000, name: "정지유" }),
+  ];
+  const toss = memoRows([tossOrder({ date: "2026-09-02", amount: 432000, memo: "정우준 9월\n정지유 9월" })]);
+  const r = matchSets(site, toss);
+  assert.equal(r.tossResults[0].category, CATEGORY.HELD_MULTI_STUDENT_ORDER);
+  assert.equal(r.tossResults[0].candidates.length, 2);
+  assert.deepEqual(new Set(r.siteResults.map((e) => e.category)), new Set([CATEGORY.HELD_MULTI_STUDENT_ORDER]));
+});
+
+test("명단에 없는 메모 이름은 리포트에 따로 드러난다", () => {
+  const payments = memoRows([tossOrder({ date: "2026-09-16", amount: 100000, memo: "박상원 9월" })]);
+  const result = buildReconciliation({ month: "2026-09", siteRows: [], tossPayments: payments, students: ROSTER });
+  assert.equal(result.unknownMemoNamePayments.length, 1);
+  assert.equal(result.main.tossResults[0].category, CATEGORY.POS_ONLY);
+  const md = renderMarkdown(result, { naiveTz: "KST", assumedCount: 0 });
+  assert.ok(md.includes("메모 이름이 원생 명단에 없음"));
+  assert.ok(md.includes("박상원"));
+});
+
+test("토스POS에만 있는 건에는 원생 이름과 수강 반이 함께 보인다", () => {
+  const payments = memoRows([tossOrder({ date: "2026-09-16", amount: 100000, memo: "박찬민 9월" })]);
+  const result = buildReconciliation({ month: "2026-09", siteRows: [], tossPayments: payments, students: ROSTER });
+  const md = renderMarkdown(result, { naiveTz: "KST", assumedCount: 0 });
+  assert.ok(md.includes("원생: **박찬민**"));
+  assert.ok(md.includes("화요일 8교시"));
+  const csv = renderCsv(result);
+  assert.ok(csv.includes("memo,resolved_student"));
+  assert.ok(csv.includes("박찬민 9월"));
+});
+
+test("메모 매칭은 주문번호 매칭 다음, 날짜·금액 매칭보다 먼저 적용된다", () => {
+  // 같은 날 같은 금액이 2:2 라 날짜·금액만으로는 묶음 처리되지만, 메모 이름이 있으면 1:1 로 정확히 갈린다.
+  const site = [
+    siteRow({ date: "2026-09-14", amount: 110000, name: "박찬민" }),
+    siteRow({ date: "2026-09-14", amount: 110000, name: "이시윤" }),
+  ];
+  const toss = memoRows([
+    tossOrder({ date: "2026-09-14", amount: 110000, memo: "이시윤 9월" }),
+    tossOrder({ date: "2026-09-14", amount: 110000, memo: "박찬민 9월" }),
+  ]);
+  const r = matchSets(site, toss);
+  assert.deepEqual(new Set(r.siteResults.map((e) => e.category)), new Set([CATEGORY.MATCHED_BY_MEMO_NAME]));
+  assert.equal(r.groups.length, 2);
+  for (const g of r.groups) {
+    assert.equal(g.siteRows[0].studentName, g.tossRows[0].resolvedStudents[0].name);
+  }
 });

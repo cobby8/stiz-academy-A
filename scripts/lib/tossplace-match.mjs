@@ -19,6 +19,10 @@
 /** 대사 결과 분류 코드 (CSV 에 그대로 들어간다) */
 export const CATEGORY = {
   MATCHED_BY_ID: "MATCHED_BY_ID",
+  MATCHED_BY_MEMO_NAME: "MATCHED_BY_MEMO_NAME",
+  HELD_MEMO_NAME_AMOUNT_MISMATCH: "HELD_MEMO_NAME_AMOUNT_MISMATCH",
+  HELD_MEMO_NAME_AMBIGUOUS: "HELD_MEMO_NAME_AMBIGUOUS",
+  HELD_MULTI_STUDENT_ORDER: "HELD_MULTI_STUDENT_ORDER",
   MATCHED_BY_DATE_AMOUNT: "MATCHED_BY_DATE_AMOUNT",
   MATCHED_AS_GROUP: "MATCHED_AS_GROUP",
   HELD_AMOUNT_MISMATCH: "HELD_AMOUNT_MISMATCH",
@@ -33,6 +37,10 @@ export const CATEGORY = {
 /** 사람이 읽는 분류 이름 (원장님이 읽는 리포트용) */
 export const CATEGORY_LABEL = {
   MATCHED_BY_ID: "정상 매칭 — 주문번호 일치",
+  MATCHED_BY_MEMO_NAME: "정상 매칭 — POS 메모의 원생 이름 + 금액 일치",
+  HELD_MEMO_NAME_AMOUNT_MISMATCH: "확인 필요 — 메모 이름은 맞는데 금액이 다름",
+  HELD_MEMO_NAME_AMBIGUOUS: "확인 필요 — 메모 이름만으로 원생을 특정할 수 없음",
+  HELD_MULTI_STUDENT_ORDER: "확인 필요 — 한 결제에 원생이 여럿(형제·합산 결제)",
   MATCHED_BY_DATE_AMOUNT: "정상 매칭 — 같은 날·같은 금액 1:1",
   MATCHED_AS_GROUP: "정상 매칭 — 같은 날·같은 금액 묶음",
   HELD_AMOUNT_MISMATCH: "확인 필요 — 주문번호는 같은데 금액이 다름",
@@ -47,6 +55,7 @@ export const CATEGORY_LABEL = {
 /** 매칭으로 인정하는 분류 (합계 검증에서 "맞춰진 돈"으로 본다) */
 export const MATCHED_CATEGORIES = new Set([
   CATEGORY.MATCHED_BY_ID,
+  CATEGORY.MATCHED_BY_MEMO_NAME,
   CATEGORY.MATCHED_BY_DATE_AMOUNT,
   CATEGORY.MATCHED_AS_GROUP,
 ]);
@@ -220,6 +229,107 @@ function joinLineItems(order) {
     .join(", ");
 }
 
+// ───────────────── POS 메모에서 원생 이름 읽기 ─────────────────
+//
+// 현장에서 POS 에 "토4 이시윤 9월" 처럼 반 · 이름 · 청구월을 적어 둔다.
+// 이름은 날짜·금액보다 훨씬 강한 단서라서 매칭 2순위로 쓴다.
+// 다만 "루나루희"(자매를 한 칸에 적음)처럼 규칙 밖 표기가 섞이므로,
+// **해석되지 않으면 조용히 버리지 말고 리포트에 그대로 드러낸다.**
+
+const CLASS_PREFIX_RE = /^(?:[월화수목금토일]요일\s*\d{1,2}교시|[월화수목금토일]\s*\d{1,2})\s*/;
+const MONTH_SUFFIX_RE = /\s*(?:\d{1,2}\s*월|\d{4}-\d{2})\s*$/;
+const WEEK_TOKEN_RE = /\s*\d{1,2}\s*주\s*/g;
+const NAME_RE = /^[가-힣]{2,5}$/;
+
+/** 메모 조각 하나에서 이름 후보만 남긴다(반 토큰·청구월·주차 토큰 제거). */
+export function cleanMemoFragment(fragment) {
+  let text = String(fragment ?? "").trim();
+  if (!text) return "";
+  // "박상원 9월 2주" 처럼 토큰이 겹쳐 붙는 경우가 있어 더 지워지지 않을 때까지 반복한다.
+  for (let i = 0; i < 4; i += 1) {
+    const before = text;
+    text = text.replace(CLASS_PREFIX_RE, "");
+    text = text.replace(WEEK_TOKEN_RE, " ").trim();
+    text = text.replace(MONTH_SUFFIX_RE, "").trim();
+    if (text === before) break;
+  }
+  return text.replace(/\s+/g, " ").trim();
+}
+
+/**
+ * 주문(order)의 메모를 모아 이름 후보를 뽑는다.
+ * 줄바꿈과 쉼표로 자른다 — 한 줄에 여러 원생이 적히는 경우가 실제로 있다("정우준 9월\n정지유 9월").
+ */
+export function parseMemoNames(order) {
+  const rawMemos = [];
+  const pushMemo = (memo) => {
+    const text = String(memo ?? "").trim();
+    if (text) rawMemos.push(text);
+  };
+  pushMemo(order?.memo);
+  for (const li of Array.isArray(order?.lineItems) ? order.lineItems : []) {
+    pushMemo(li?.memo);
+    pushMemo(li?.item?.memo);
+  }
+
+  const names = [];
+  const unparsed = [];
+  for (const memo of rawMemos) {
+    for (const fragment of memo.split(/[\n\r,]+/)) {
+      const cleaned = cleanMemoFragment(fragment);
+      if (!cleaned) continue;
+      if (NAME_RE.test(cleaned)) {
+        if (!names.includes(cleaned)) names.push(cleaned);
+      } else if (!unparsed.includes(cleaned)) {
+        unparsed.push(cleaned);
+      }
+    }
+  }
+  // 같은 메모가 주문·품목에 중복으로 달리는 경우가 있어 원문도 중복을 없앤다.
+  return { memoRaw: [...new Set(rawMemos)].join(" / "), names, unparsed };
+}
+
+const normName = (value) => String(value ?? "").replace(/\s+/g, "").toLowerCase();
+/** 동명이인 표기(이현준A/이현준B)의 꼬리 글자를 떼서 비교용 이름을 만든다. */
+const baseName = (value) => normName(value).replace(/[a-z]$/, "");
+
+/**
+ * 메모 이름 → 원생. 성을 뺀 표기("대건" ← 김대건)도 받아 주되,
+ * **후보가 둘 이상이면 절대 고르지 않는다**(실제로 "시우"는 강시우·김시우·양시우 셋이 걸린다).
+ */
+export function resolveStudentName(name, students) {
+  const target = normName(name);
+  if (!target) return { status: "EMPTY", students: [] };
+  const list = Array.isArray(students) ? students : [];
+
+  const exact = list.filter((s) => normName(s.name) === target || baseName(s.name) === target);
+  if (exact.length === 1) return { status: "EXACT", students: exact };
+  if (exact.length > 1) return { status: "AMBIGUOUS", matchKind: "EXACT", students: exact };
+
+  const suffix = list.filter((s) => baseName(s.name).endsWith(target) && baseName(s.name) !== target);
+  if (suffix.length === 1) return { status: "SUFFIX", students: suffix };
+  if (suffix.length > 1) return { status: "AMBIGUOUS", matchKind: "SUFFIX", students: suffix };
+
+  return { status: "NONE", students: [] };
+}
+
+/** 토스 결제 행에 메모 해석 결과(원생·상태)를 붙인다. */
+export function attachStudentResolution(tossRows, students) {
+  return tossRows.map((row) => {
+    const resolutions = row.memoNames.map((name) => ({ name, ...resolveStudentName(name, students) }));
+    const resolved = resolutions.filter((r) => r.status === "EXACT" || r.status === "SUFFIX");
+    const unknownNames = resolutions.filter((r) => r.status === "NONE").map((r) => r.name);
+    const ambiguous = resolutions.filter((r) => r.status === "AMBIGUOUS");
+    return {
+      ...row,
+      memoResolutions: resolutions,
+      resolvedStudents: resolved.map((r) => r.students[0]),
+      unknownMemoNames: unknownNames,
+      ambiguousMemoNames: ambiguous,
+    };
+  });
+}
+
 function toIntAmount(value) {
   const n = Number(value);
   if (!Number.isFinite(n)) return null;
@@ -240,6 +350,7 @@ export function flattenTossOrders(orders, options = {}) {
   for (const order of list) {
     const orderId = String(order?.id ?? order?.orderId ?? "");
     const items = joinLineItems(order);
+    const memo = parseMemoNames(order);
     const payments = Array.isArray(order?.payments) ? order.payments : [];
     if (payments.length === 0) {
       invalid.push({ orderId, reason: "주문에 결제 정보가 없습니다", orderState: order?.orderState ?? "" });
@@ -287,6 +398,13 @@ export function flattenTossOrders(orders, options = {}) {
         cardType: String(payment?.cardDetails?.cardType ?? ""),
         installmentMonth: payment?.cardDetails?.installmentMonth ?? null,
         items,
+        memoRaw: memo.memoRaw,
+        memoNames: memo.names,
+        memoUnparsed: memo.unparsed,
+        // 아래 세 필드는 원생 명단을 받은 뒤 attachStudentResolution 이 채운다.
+        memoResolutions: [],
+        resolvedStudents: [],
+        unknownMemoNames: [],
       });
     });
   }
@@ -323,6 +441,7 @@ export function normalizeSiteRow(row) {
   return {
     side: "SITE",
     id: String(row.id ?? ""),
+    studentId: String(row.studentId ?? row.student_id ?? ""),
     amount: toIntAmount(row.amount) ?? 0,
     status: String(row.status ?? "").toUpperCase(),
     method: row.method == null ? "" : String(row.method),
@@ -468,7 +587,90 @@ export function matchSets(siteRows, tossRows, options = {}) {
     }
   }
 
-  // ② 같은 날 + 같은 금액
+  // ② POS 메모의 원생 이름 — 날짜·금액보다 강한 단서라 여기서 먼저 본다.
+  //    단, 이름이 한 명으로 특정되고 금액까지 맞을 때만 자동 매칭한다.
+  const sameStudent = (siteRow, student) =>
+    (siteRow.studentId && student.id && siteRow.studentId === student.id) ||
+    baseName(siteRow.studentName) === baseName(student.name);
+
+  for (const t of tosses) {
+    if (tossResult.has(t.paymentId)) continue;
+    const names = t.memoNames ?? [];
+    const resolutions = t.memoResolutions ?? [];
+    if (names.length === 0) continue;
+
+    // 한 결제에 원생이 여럿(형제 합산 결제) → 절대 자동 매칭하지 않는다.
+    if (names.length > 1) {
+      const related = sites.filter(
+        (s) => !siteResult.has(s.id) && resolutions.some((r) => r.students.some((st) => sameStudent(s, st))),
+      );
+      const reason =
+        `한 결제(${formatWon(t.amount)})에 원생 이름이 ${names.length}명 적혀 있습니다: ${names.join(", ")} — ` +
+        `형제 합산 결제로 보이며, 어느 원생에게 얼마인지는 사람이 나눠야 합니다`;
+      assign(tossResult, t, CATEGORY.HELD_MULTI_STUDENT_ORDER, reason, related.map((s) => candidateOf(s, t, "MEMO_NAME")));
+      for (const s of related) {
+        assign(siteResult, s, CATEGORY.HELD_MULTI_STUDENT_ORDER, reason, [candidateOf(t, s, "MEMO_NAME")]);
+      }
+      continue;
+    }
+
+    const resolution = resolutions[0];
+    if (!resolution) continue;
+    if (resolution.status === "AMBIGUOUS") {
+      // 동명이인은 "수강 중인 반"을 함께 보여줘야 원장님이 바로 고를 수 있다(퇴원생이 섞여 후보가 늘어난다).
+      const who = resolution.students
+        .map((s) => `${s.name}${s.classes ? `(${s.classes})` : "(수강 중인 반 없음 — 퇴원 가능성)"}`)
+        .join(", ");
+      const reason =
+        `메모 이름 "${resolution.name}" 에 해당하는 원생이 ${resolution.students.length}명입니다 ` +
+        `(${who}) — 누구인지 특정할 수 없습니다`;
+      const related = sites.filter((s) => !siteResult.has(s.id) && resolution.students.some((st) => sameStudent(s, st)));
+      assign(tossResult, t, CATEGORY.HELD_MEMO_NAME_AMBIGUOUS, reason, related.map((s) => candidateOf(s, t, "MEMO_NAME")));
+      continue;
+    }
+    if (resolution.status !== "EXACT" && resolution.status !== "SUFFIX") continue; // 명단에 없는 이름은 뒤 단계로
+
+    const student = resolution.students[0];
+    const candidates = sites.filter((s) => !siteResult.has(s.id) && sameStudent(s, student));
+    if (candidates.length === 0) continue; // 사이트에 기록 자체가 없음 → 뒤에서 "토스POS에만 있음"
+
+    const exactAmount = candidates.filter((s) => s.amount === t.amount);
+    if (exactAmount.length === 1) {
+      const s = exactAmount[0];
+      const groupId = `MEMO:${t.paymentId}`;
+      const reason = `POS 메모 "${t.memoRaw}" → 원생 ${student.name} · 금액도 일치`;
+      assign(siteResult, s, CATEGORY.MATCHED_BY_MEMO_NAME, reason, [], groupId);
+      assign(tossResult, t, CATEGORY.MATCHED_BY_MEMO_NAME, reason, [], groupId);
+      groups.push({ id: groupId, kind: "MEMO", kstDate: t.kstDate, amount: t.amount, siteRows: [s], tossRows: [t] });
+      continue;
+    }
+    if (exactAmount.length > 1) {
+      const reason =
+        `메모 이름은 ${student.name} 로 특정됐지만 같은 금액(${formatWon(t.amount)})의 사이트 기록이 ` +
+        `${exactAmount.length}건이라 어느 건인지 고를 수 없습니다`;
+      assign(tossResult, t, CATEGORY.HELD_MEMO_NAME_AMBIGUOUS, reason, exactAmount.map((s) => candidateOf(s, t, "MEMO_NAME")));
+      continue;
+    }
+
+    const siteSum = sumAmount(candidates);
+    const reason =
+      `메모 이름 → 원생 ${student.name} 은(는) 맞는데 금액이 다릅니다 ` +
+      `(토스 ${formatWon(t.amount)} / 사이트 ${candidates.length}건 합 ${formatWon(siteSum)}` +
+      `${candidates.length > 1 ? `: ${candidates.map((s) => formatWon(s.amount)).join(" + ")}` : ""}) — ` +
+      (siteSum === t.amount ? "합계는 일치합니다(나눠 기록한 것으로 보이나 확인이 필요합니다)" : `차이 ${formatWon(t.amount - siteSum)}`);
+    assign(
+      tossResult,
+      t,
+      CATEGORY.HELD_MEMO_NAME_AMOUNT_MISMATCH,
+      reason,
+      candidates.map((s) => candidateOf(s, t, "MEMO_NAME")),
+    );
+    for (const s of candidates) {
+      assign(siteResult, s, CATEGORY.HELD_MEMO_NAME_AMOUNT_MISMATCH, reason, [candidateOf(t, s, "MEMO_NAME")]);
+    }
+  }
+
+  // ③ 같은 날 + 같은 금액
   const freeSites = sites.filter((s) => !siteResult.has(s.id));
   const freeTosses = tosses.filter((t) => !tossResult.has(t.paymentId));
   const keyOf = (r) => `${r.kstDate}|${r.amount}`;
@@ -516,7 +718,7 @@ export function matchSets(siteRows, tossRows, options = {}) {
     }
   }
 
-  // ③ 남은 건의 근접 후보 — 자동 매칭하지 않고 "확인 필요"로만 둔다
+  // ④ 남은 건의 근접 후보 — 자동 매칭하지 않고 "확인 필요"로만 둔다
   const isMatched = (entry) => entry && MATCHED_CATEGORIES.has(entry.category);
   const tossPool = [
     ...tosses.filter((t) => !isMatched(tossResult.get(t.paymentId))).map((row) => ({ row, outOfMonth: false })),
@@ -630,11 +832,12 @@ export function collectQualityWarnings(siteRows) {
 }
 
 /** 대사 전체를 한 번에 계산한다(CLI·테스트 공용 진입점). */
-export function buildReconciliation({ month, siteRows, tossPayments }) {
+export function buildReconciliation({ month, siteRows, tossPayments, students = [] }) {
   if (!isValidMonth(month)) throw new Error(`월 형식이 올바르지 않습니다(YYYY-MM): ${month}`);
   const range = monthRange(month);
   const site = partitionSiteRows(siteRows, month);
-  const toss = partitionTossPayments(tossPayments, month);
+  // POS 메모의 이름을 원생 명단에 대조해 붙인다(명단이 없으면 이름 매칭은 그냥 건너뛴다).
+  const toss = partitionTossPayments(attachStudentResolution(tossPayments, students), month);
 
   const main = matchSets(site.paid, toss.approved, {
     siteBuffer: site.paidBuffer,
@@ -655,6 +858,12 @@ export function buildReconciliation({ month, siteRows, tossPayments }) {
     cancel,
     cancelSummary: summarize(cancel),
     quality: collectQualityWarnings([...site.paid, ...site.canceled, ...site.otherStatus]),
+    // 메모에 적힌 이름이 원생 명단에 아예 없는 건 — 리포트에서 크게 드러낸다.
+    unknownMemoNamePayments: [...toss.approved, ...toss.cancelled].filter(
+      (row) => (row.unknownMemoNames ?? []).length > 0 || (row.memoUnparsed ?? []).length > 0,
+    ),
+    // 메모 자체가 없어 이름 단서가 없는 건
+    noMemoPayments: toss.approved.filter((row) => !row.memoRaw),
   };
 }
 
@@ -675,8 +884,22 @@ function siteLabel(row) {
   return parts.join(" · ");
 }
 
+/** 토스 결제 1건의 "원생" 표시 — 메모에서 특정되면 이름, 아니면 미확인 */
+export function resolvedStudentLabel(row) {
+  const resolved = row.resolvedStudents ?? [];
+  if (resolved.length === 1) return resolved[0].name;
+  if (resolved.length > 1) return resolved.map((s) => s.name).join(" + ");
+  if ((row.ambiguousMemoNames ?? []).length > 0) {
+    return `미확인(동명 후보 ${row.ambiguousMemoNames.map((a) => a.students.map((s) => s.name).join("/")).join(", ")})`;
+  }
+  if ((row.unknownMemoNames ?? []).length > 0) return `미확인(명단에 없음: ${row.unknownMemoNames.join(", ")})`;
+  return "미확인";
+}
+
 function tossLabel(row) {
   const parts = [row.kstDateTime, formatWon(row.amount)];
+  parts.push(`원생 ${resolvedStudentLabel(row)}`);
+  if (row.memoRaw) parts.push(`메모 "${row.memoRaw.replace(/\n/g, " / ")}"`);
   if (row.items) parts.push(row.items);
   if (row.approvedNo) parts.push(`승인번호 ${row.approvedNo}`);
   if (row.cardMasked) parts.push(row.cardMasked);
@@ -705,6 +928,9 @@ function entriesOf(matchResult, category) {
 }
 
 const HELD_ORDER = [
+  CATEGORY.HELD_MEMO_NAME_AMOUNT_MISMATCH,
+  CATEGORY.HELD_MULTI_STUDENT_ORDER,
+  CATEGORY.HELD_MEMO_NAME_AMBIGUOUS,
   CATEGORY.HELD_AMOUNT_MISMATCH,
   CATEGORY.HELD_ID_MULTIPLE,
   CATEGORY.HELD_DUPLICATE_SURPLUS,
@@ -762,7 +988,26 @@ export function renderMarkdown(result, meta = {}) {
     L.push("");
   };
 
-  section("토스POS에만 있음", entriesOf(result.main, CATEGORY.POS_ONLY), (e) => L.push(`- ${describeRow(e.row)}`));
+  // 토스에만 있는 건은 "누구 결제인지"가 가장 급하다. 메모 이름과 그 원생의 수강 반까지 붙여서
+  // 원장님이 DB 를 열지 않고도 바로 처리할 수 있게 한다.
+  section("토스POS에만 있음", entriesOf(result.main, CATEGORY.POS_ONLY), (e) => {
+    const row = e.row;
+    L.push(`- ${describeRow(row)}`);
+    const student = (row.resolvedStudents ?? [])[0];
+    if (student) {
+      L.push(`  - 원생: **${student.name}**${student.classes ? ` · 수강 중: ${student.classes}` : " · 수강 반 정보 없음"}`);
+      L.push("  - → 사이트에 이 결제가 없습니다. 수납 기록을 추가할지 확인이 필요합니다.");
+    } else if ((row.unknownMemoNames ?? []).length > 0) {
+      L.push(`  - ⚠️ 메모 이름 "${row.unknownMemoNames.join(", ")}" 이(가) 원생 명단에 없습니다.`);
+    } else if ((row.ambiguousMemoNames ?? []).length > 0) {
+      const alt = row.ambiguousMemoNames.map((a) => `${a.name} → ${a.students.map((s) => s.name).join("/")}`).join(", ");
+      L.push(`  - ⚠️ 메모 이름으로 원생을 특정할 수 없습니다: ${alt}`);
+    } else if ((row.memoUnparsed ?? []).length > 0) {
+      L.push(`  - ⚠️ 메모를 이름으로 읽지 못했습니다: ${row.memoUnparsed.join(" / ")}`);
+    } else if (!row.memoRaw) {
+      L.push("  - ⚠️ POS 메모가 없어 누구 결제인지 단서가 없습니다.");
+    }
+  });
   section("사이트에만 있음", entriesOf(result.main, CATEGORY.SITE_ONLY), (e) => L.push(`- ${describeRow(e.row)}`));
 
   const held = HELD_ORDER.flatMap((cat) => entriesOf(result.main, cat));
@@ -803,6 +1048,27 @@ export function renderMarkdown(result, meta = {}) {
   for (const e of cancelEntries) {
     L.push(`- [${e.row.side === "SITE" ? "사이트" : "토스POS"}] ${CATEGORY_LABEL[e.category] ?? e.category} — ${describeRow(e.row)}`);
   }
+  L.push("");
+
+  L.push(`## 메모 이름이 원생 명단에 없음 (${result.unknownMemoNamePayments.length}건)`);
+  L.push("");
+  if (result.unknownMemoNamePayments.length === 0) L.push("- 없음");
+  for (const row of result.unknownMemoNamePayments) {
+    L.push(`- ${describeRow(row)}`);
+    if ((row.unknownMemoNames ?? []).length > 0) {
+      L.push(`  - 명단에 없는 이름: **${row.unknownMemoNames.join(", ")}** (퇴원·타지점·오타·가족 명의 여부 확인 필요)`);
+    }
+    if ((row.memoUnparsed ?? []).length > 0) {
+      L.push(`  - 이름으로 읽히지 않은 메모 조각: ${row.memoUnparsed.join(" / ")}`);
+    }
+  }
+  L.push("");
+
+  const noMemo = result.noMemoPayments;
+  L.push(`## POS 메모가 없는 결제 (${noMemo.length}건)`);
+  L.push("");
+  if (noMemo.length === 0) L.push("- 없음");
+  noMemo.forEach((row) => L.push(`- ${describeRow(row)}`));
   L.push("");
 
   const other = result.site.otherBranch;
@@ -850,6 +1116,8 @@ const CSV_HEADER = [
   "card_masked",
   "items",
   "note",
+  "memo",
+  "resolved_student",
 ];
 
 function csvCell(value) {
@@ -878,6 +1146,8 @@ function csvRowFor(entry, categoryPrefix = "") {
       "",
       row.description,
       note,
+      "",
+      row.studentName,
     ];
   }
   return [
@@ -894,6 +1164,8 @@ function csvRowFor(entry, categoryPrefix = "") {
     row.cardMasked,
     row.items,
     note,
+    (row.memoRaw ?? "").replace(/\n/g, " / "),
+    resolvedStudentLabel(row),
   ];
 }
 

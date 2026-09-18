@@ -23,6 +23,7 @@ import {
   TOSS_API_BASE,
   assertReadOnlyTossRequest,
   buildReconciliation,
+  classifyBranch,
   flattenTossOrders,
   formatKstDateTime,
   formatWon,
@@ -171,9 +172,21 @@ const COLUMN_TYPE_SQL = `SELECT column_name, data_type
                            FROM information_schema.columns
                           WHERE table_name = 'Payment' AND column_name IN ('paidDate','updatedAt')`;
 
+// POS 메모의 이름을 대조할 원생 명단(대표 행만 + 수강 중인 반). 이것도 조회 전용이다.
+const ROSTER_SQL = `SELECT s.id,
+                           s.name,
+                           s.branch,
+                           COALESCE(string_agg(c.name, ', ' ORDER BY c.name), '') AS classes
+                      FROM "Student" s
+                      LEFT JOIN "Enrollment" e ON e."studentId" = s.id AND e.status = 'ACTIVE'
+                      LEFT JOIN "Class" c ON c.id = e."classId"
+                     WHERE s."mergedIntoStudentId" IS NULL
+                     GROUP BY s.id, s.name, s.branch`;
+
 // ⚠️ paidDate 는 "시간대 없는(timestamp) UTC 값"이라 KST 변환에 **두 번** 건다.
 //    한 번만 걸면 9시간이 밀린 '그럴듯한 날짜'가 나와서 아무도 못 알아챈다.
 const ROWS_SQL = `SELECT p.id,
+                         p."studentId",
                          p.amount,
                          p.status,
                          p.method,
@@ -222,13 +235,14 @@ async function readSiteRows({ connectionString, from, to }) {
       queryMode = `리터럴 치환(파라미터 실패: ${error.code ?? error.message})`;
       rows = (await client.query(inlineDateLiteralSql(ROWS_SQL, from, to))).rows;
     }
+    const students = (await client.query(ROSTER_SQL)).rows;
     await client.query("ROLLBACK");
 
     await client.query("BEGIN READ ONLY");
     const after = (await client.query(SNAPSHOT_SQL)).rows[0];
     await client.query("ROLLBACK");
 
-    return { rows, before, after, columnTypes, queryMode };
+    return { rows, students, before, after, columnTypes, queryMode };
   } finally {
     await client.end();
   }
@@ -286,7 +300,7 @@ async function main() {
   if (!connectionString) throw new Error("DATABASE_URL 이 없습니다. .env.local 을 확인하세요.");
   console.log(`[2/4] 사이트 DB에서 ${range.bufferFrom} ~ ${range.bufferTo} 결제를 읽습니다(읽기 전용).`);
   const db = await readSiteRows({ connectionString, from: range.bufferFrom, to: range.bufferTo });
-  console.log(`      → 결제 ${db.rows.length}건 (조회 방식: ${db.queryMode})`);
+  console.log(`      → 결제 ${db.rows.length}건, 원생 명단 ${db.students.length}명 (조회 방식: ${db.queryMode})`);
 
   const paidDateType = db.columnTypes.find((c) => c.column_name === "paidDate")?.data_type ?? "(확인 불가)";
   if (paidDateType !== "timestamp without time zone") {
@@ -296,9 +310,15 @@ async function main() {
     );
   }
 
+  // 메모 이름 대조는 2호점(및 지점 미상) 원생만 대상으로 한다 — 다른 지점 동명이인이 섞이면 오히려 흐려진다.
+  const students = db.students
+    .filter((s) => classifyBranch(s.branch) !== "OTHER")
+    .map((s) => ({ id: String(s.id), name: String(s.name ?? ""), branch: s.branch ?? "", classes: String(s.classes ?? "") }));
+
   const siteRows = db.rows.map((row) =>
     normalizeSiteRow({
       ...row,
+      studentId: row.studentId,
       paidProvider: row.paidProvider,
       providerOrderId: row.providerOrderId,
       providerPaymentKey: row.providerPaymentKey,
@@ -310,7 +330,7 @@ async function main() {
 
   // 3) 대사 계산
   console.log("[3/4] 대사 계산 중…");
-  const result = buildReconciliation({ month: options.month, siteRows, tossPayments: flattened.rows });
+  const result = buildReconciliation({ month: options.month, siteRows, tossPayments: flattened.rows, students });
 
   const sameCount = db.before.payment_count === db.after.payment_count;
   const sameUpdated = db.before.max_updated === db.after.max_updated;

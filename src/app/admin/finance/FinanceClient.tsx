@@ -5,6 +5,7 @@ import AdminModal from "@/components/admin/AdminModal";
 import AdminQuickActionMenu, { type AdminQuickAction } from "@/components/admin/AdminQuickActionMenu";
 import {
     createPayment,
+    cancelUnpaidPayment,
     updatePaymentStatus,
     deletePayment,
     previewMonthlyInvoices,
@@ -20,6 +21,8 @@ type Payment = {
     id: string;
     studentId: string;
     studentName: string;
+    classId?: string | null;
+    className?: string | null;
     amount: number;
     status: string;
     dueDate: Date | string;
@@ -47,6 +50,15 @@ type Payment = {
 type Student = {
     id: string;
     name: string;
+    parent: { name: string | null };
+    hasParent: boolean;
+    classes: {
+        id: string;
+        name: string;
+        dayOfWeek: string;
+        startTime: string;
+        programName: string | null;
+    }[];
 };
 
 type Summary = {
@@ -445,14 +457,22 @@ export default function FinanceClient({
 
     // 수동 생성 폼 상태
     const [studentId, setStudentId] = useState("");
+    const [classId, setClassId] = useState("");
     const [amount, setAmount] = useState(0);
     const [dueDate, setDueDate] = useState("");
     const [status, setStatus] = useState("PENDING");
     const [paymentType, setPaymentType] = useState("MONTHLY");
     const [description, setDescription] = useState("");
+    const [notifyParent, setNotifyParent] = useState(false);
+    const [createPreviewOpen, setCreatePreviewOpen] = useState(false);
+    const [cancelTarget, setCancelTarget] = useState<Payment | null>(null);
+    const [cancelReason, setCancelReason] = useState("");
+    const [cancelError, setCancelError] = useState<string | null>(null);
 
     const hasAnyData = payments.length > 0 || summary.totalCount > 0;
     const canManageCriticalFinance = currentAdminRole === "ADMIN";
+    const selectedStudent = students.find((student) => student.id === studentId);
+    const classRequired = paymentType === "MONTHLY" || paymentType === "SHUTTLE";
 
     // 월 이동 시 데이터 재조회
     const loadMonth = useCallback(async (y: number, m: number) => {
@@ -503,23 +523,76 @@ export default function FinanceClient({
     }
 
     // 수납 기록 수동 생성
-    async function handleCreate(e: React.FormEvent) {
+    function handleCreate(e: React.FormEvent) {
         e.preventDefault();
         if (!studentId || !amount || !dueDate) return;
+        if (classRequired && !classId) {
+            alert("수강료와 셔틀 청구에는 수업을 선택해 주세요.");
+            return;
+        }
+        if (notifyParent && (status !== "PENDING" || !selectedStudent?.hasParent)) {
+            alert("학부모 알림은 보호자가 연결된 미납 청구에만 보낼 수 있습니다.");
+            return;
+        }
+        setCreatePreviewOpen(true);
+    }
+
+    async function submitCreate() {
+        if (busy || !createPreviewOpen) return;
         setBusy(true);
         try {
             const paymentStatus = canManageCriticalFinance ? status : "PENDING";
-            await createPayment({ studentId, amount, dueDate, status: paymentStatus, type: paymentType, description: description || undefined });
+            await createPayment({ studentId, classId: classId || undefined, amount, dueDate, status: paymentStatus, type: paymentType, description: description || undefined, notifyParent });
+            setCreatePreviewOpen(false);
             setShowForm(false);
             setStudentId("");
+            setClassId("");
             setAmount(0);
             setDueDate("");
             setStatus("PENDING");
             setPaymentType("MONTHLY");
             setDescription("");
+            setNotifyParent(false);
             await loadMonth(year, month);
         } catch (err: unknown) {
             alert(getErrorMessage(err, "생성 실패"));
+        } finally {
+            setBusy(false);
+        }
+    }
+
+    function handleCancelUnpaid(payment: Payment) {
+        if (!canManageCriticalFinance) {
+            alert("수퍼관리자만 미납 청구를 취소할 수 있습니다.");
+            return;
+        }
+        setCancelTarget(payment);
+        setCancelReason("");
+        setCancelError(null);
+    }
+
+    async function submitCancelUnpaid() {
+        const payment = cancelTarget;
+        if (!payment || busy) return;
+        if (!cancelReason.trim()) {
+            setCancelError("취소 사유를 입력해 주세요.");
+            return;
+        }
+        const period = payment.year && payment.month
+            ? `${payment.year}년 ${payment.month}월`
+            : `${year}년 ${month}월`;
+        const classLabel = payment.className || payment.description || "수업 연결 정보 없음";
+        setBusy(true);
+        setCancelError(null);
+        try {
+            await cancelUnpaidPayment(
+                payment.id,
+                `${period} ${classLabel}: ${cancelReason.trim()}`,
+            );
+            setCancelTarget(null);
+            await loadMonth(year, month);
+        } catch (err: unknown) {
+            setCancelError(getErrorMessage(err, "미납 청구 취소 실패"));
         } finally {
             setBusy(false);
         }
@@ -1594,7 +1667,14 @@ export default function FinanceClient({
                             <label className="block text-sm font-bold text-gray-700 dark:text-gray-200 mb-1">원생 *</label>
                             <select
                                 value={studentId}
-                                onChange={(e) => setStudentId(e.target.value)}
+                                onChange={(e) => {
+                                    const nextStudentId = e.target.value;
+                                    setStudentId(nextStudentId);
+                                    const nextStudent = students.find((student) => student.id === nextStudentId);
+                                    const nextClasses = nextStudent?.classes ?? [];
+                                    setClassId(nextClasses.length === 1 ? nextClasses[0].id : "");
+                                    if (!nextStudent?.hasParent) setNotifyParent(false);
+                                }}
                                 disabled={studentsLoading || Boolean(studentsError)}
                                 required
                                 className="w-full border border-gray-300 dark:border-gray-600 dark:text-white rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime bg-white dark:bg-gray-800"
@@ -1622,6 +1702,28 @@ export default function FinanceClient({
                                 <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
                                     등록된 학생이 없습니다.
                                 </p>
+                            )}
+                        </div>
+                        <div>
+                            <label className="block text-sm font-bold text-gray-700 dark:text-gray-200 mb-1">
+                                연결 수업 {classRequired ? "*" : "(선택)"}
+                            </label>
+                            <select
+                                value={classId}
+                                onChange={(e) => setClassId(e.target.value)}
+                                required={classRequired}
+                                disabled={!studentId || !selectedStudent?.classes.length}
+                                className="w-full border border-gray-300 dark:border-gray-600 dark:text-white rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime bg-white dark:bg-gray-800"
+                            >
+                                <option value="">{selectedStudent?.classes.length ? "수업을 선택하세요" : "활성 수강 수업 없음"}</option>
+                                {selectedStudent?.classes.map((classOption) => (
+                                    <option key={classOption.id} value={classOption.id}>
+                                        {classOption.name} · {classOption.programName || "프로그램 미지정"}
+                                    </option>
+                                ))}
+                            </select>
+                            {classRequired && !selectedStudent?.classes.length && studentId && (
+                                <p className="mt-1 text-xs text-red-600">현재 활성 수업이 없어 수강료 청구를 만들 수 없습니다.</p>
                             )}
                         </div>
                         <div>
@@ -1664,7 +1766,10 @@ export default function FinanceClient({
                                 <label className="block text-sm font-bold text-gray-700 dark:text-gray-200 mb-1">상태</label>
                                 <select
                                     value={status}
-                                    onChange={(e) => setStatus(e.target.value)}
+                                    onChange={(e) => {
+                                        setStatus(e.target.value);
+                                        if (e.target.value !== "PENDING") setNotifyParent(false);
+                                    }}
                                     className="w-full border border-gray-300 dark:border-gray-600 dark:text-white rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime bg-white dark:bg-gray-800"
                                 >
                                     <option value="PENDING">미납</option>
@@ -1687,6 +1792,19 @@ export default function FinanceClient({
                                 className="w-full border border-gray-300 dark:border-gray-600 dark:text-white dark:bg-gray-800 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-brand-orange-500 dark:focus:ring-brand-neon-lime"
                             />
                         </div>
+                        <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-200">
+                            <input
+                                type="checkbox"
+                                checked={notifyParent}
+                                onChange={(e) => setNotifyParent(e.target.checked)}
+                                disabled={status !== "PENDING" || !selectedStudent?.hasParent}
+                                className="rounded border-gray-300"
+                            />
+                            생성 후 학부모 수납 안내 알림 보내기
+                        </label>
+                        {studentId && !selectedStudent?.hasParent && (
+                            <p className="text-xs text-amber-700 dark:text-amber-300">연결된 학부모가 없어 알림은 선택할 수 없습니다.</p>
+                        )}
                     </div>
                     <div className="flex gap-2 justify-end">
                         <button type="button" onClick={() => setShowForm(false)} className="px-4 py-2 text-sm text-gray-600 dark:text-gray-300">취소</button>
@@ -1780,6 +1898,18 @@ export default function FinanceClient({
                                                 },
                                             },
                                         ] : []),
+                                        ...(canManageCriticalFinance && ["PENDING", "OVERDUE"].includes(p.status) ? [
+                                            {
+                                                key: "cancel",
+                                                label: "청구 취소",
+                                                icon: "cancel",
+                                                tone: "danger" as const,
+                                                disabled: busy,
+                                                onSelect: () => {
+                                                    handleCancelUnpaid(p);
+                                                },
+                                            },
+                                        ] : []),
                                         ...(canManageCriticalFinance && p.status === "PAID" ? [
                                             {
                                                 key: "refund",
@@ -1821,6 +1951,9 @@ export default function FinanceClient({
                                             )}
                                             <td className="px-4 py-3.5">
                                                 <span className="font-medium text-gray-900 dark:text-white">{p.studentName}</span>
+                                                {p.className && (
+                                                    <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">{p.className}</p>
+                                                )}
                                             </td>
                                             <td className="px-4 py-3.5 text-sm text-gray-600 dark:text-gray-300">
                                                 {TYPE_LABELS[p.type] || p.type}
@@ -1880,6 +2013,62 @@ export default function FinanceClient({
                         </table>
                     </div>
                 </div>
+            )}
+            {createPreviewOpen && (
+                <AdminModal
+                    titleId="manual-payment-preview-title"
+                    panelClassName="max-w-md p-6"
+                    onClose={() => { if (!busy) setCreatePreviewOpen(false); }}
+                    closeOnBackdrop={!busy}
+                >
+                    <div className="space-y-4 text-sm text-gray-700 dark:text-gray-200">
+                        <h2 id="manual-payment-preview-title" className="text-lg font-black text-gray-900 dark:text-white">수동 청구 확인</h2>
+                        <p>{selectedStudent?.name || "학생 미선택"} · {selectedStudent?.classes.find((item) => item.id === classId)?.name || "수업 연결 없음"}</p>
+                        <p>{TYPE_LABELS[paymentType] || paymentType} · {formatAmount(amount)}원 · 납부 기한 {dueDate}</p>
+                        <p>상태: {STATUS_LABELS[canManageCriticalFinance ? status : "PENDING"]?.label ?? status}</p>
+                        <p className={notifyParent ? "font-bold text-red-700 dark:text-red-300" : "font-bold"}>
+                            학부모 알림: {notifyParent ? `${selectedStudent?.parent.name || "연결된 학부모"}에게 사이트 알림 1건` : "보내지 않음"}
+                        </p>
+                        <p className="text-xs text-gray-500 dark:text-gray-300">청구 1건을 생성합니다. 알림을 선택한 경우에만 학부모 사이트 알림을 요청합니다.</p>
+                        <div className="flex justify-end gap-2">
+                            <button type="button" disabled={busy} onClick={() => setCreatePreviewOpen(false)} className="rounded-lg border px-4 py-2 font-bold disabled:opacity-50">돌아가기</button>
+                            <button type="button" disabled={busy} onClick={() => void submitCreate()} className="rounded-lg bg-brand-orange-500 px-4 py-2 font-bold text-white disabled:opacity-50">{busy ? "처리 중…" : "청구 생성"}</button>
+                        </div>
+                    </div>
+                </AdminModal>
+            )}
+            {cancelTarget && (
+                <AdminModal
+                    titleId="cancel-unpaid-title"
+                    panelClassName="max-w-md p-6"
+                    onClose={() => { if (!busy) setCancelTarget(null); }}
+                    closeOnBackdrop={!busy}
+                >
+                    <div className="space-y-4">
+                        <h2 id="cancel-unpaid-title" className="text-lg font-black text-gray-900 dark:text-white">미납 청구 취소</h2>
+                        <p className="text-sm text-gray-700 dark:text-gray-200">
+                            {cancelTarget.studentName} · {cancelTarget.year ?? year}년 {cancelTarget.month ?? month}월 · {cancelTarget.className || cancelTarget.description || "수업 연결 정보 없음"}
+                        </p>
+                        <p className="font-bold text-gray-900 dark:text-white">{formatAmount(cancelTarget.amount)}원 · {STATUS_LABELS[cancelTarget.status]?.label ?? cancelTarget.status} → 취소</p>
+                        <p className="text-xs text-gray-500 dark:text-gray-300">기록은 삭제하지 않고 취소 사유와 담당자를 감사 이력에 남깁니다. 학부모 알림은 보내지 않습니다.</p>
+                        <label className="block text-sm font-bold text-gray-700 dark:text-gray-200">
+                            취소 사유
+                            <textarea
+                                value={cancelReason}
+                                onChange={(event) => setCancelReason(event.target.value)}
+                                maxLength={300}
+                                rows={3}
+                                data-admin-modal-initial-focus="true"
+                                className="mt-1 w-full rounded-lg border border-gray-300 bg-white p-3 text-gray-900 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
+                            />
+                        </label>
+                        {cancelError && <p role="alert" className="text-sm font-bold text-red-600">{cancelError}</p>}
+                        <div className="flex justify-end gap-2">
+                            <button type="button" disabled={busy} onClick={() => setCancelTarget(null)} className="rounded-lg border px-4 py-2 font-bold disabled:opacity-50">닫기</button>
+                            <button type="button" disabled={busy || !cancelReason.trim()} onClick={() => void submitCancelUnpaid()} className="rounded-lg bg-red-600 px-4 py-2 font-bold text-white disabled:opacity-50">{busy ? "처리 중…" : "청구 취소"}</button>
+                        </div>
+                    </div>
+                </AdminModal>
             )}
         </div>
     );

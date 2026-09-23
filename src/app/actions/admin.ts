@@ -181,6 +181,7 @@ function revalidateClassAdminCaches() {
 
 function revalidateStudentAdminCaches() {
     revalidateTag("admin-students", { expire: 0 });
+    revalidateTag("admin-student-options", { expire: 0 });
     revalidateTag("admin-waitlist", { expire: 0 });
     revalidateTag("admin-makeup", { expire: 0 });
     revalidateTag("admin-dashboard", { expire: 0 });
@@ -1450,54 +1451,168 @@ export async function createPayment(data: {
     status?: string;
     type?: string;        // 청구 유형: MONTHLY, SHUTTLE, UNIFORM, OTHER
     description?: string; // 설명: "4월 수강료" 등
+    notifyParent?: boolean;
 }) {
     const admin = await requireAdmin();
     try {
         const dueDate = new Date(data.dueDate);
+        if (Number.isNaN(dueDate.getTime())) throw new Error("납부 기한이 올바르지 않습니다.");
+        if (!Number.isSafeInteger(data.amount) || data.amount <= 0) throw new Error("청구 금액은 1원 이상의 정수여야 합니다.");
         const year = dueDate.getFullYear();
         const month = dueDate.getMonth() + 1;
         const requestedStatus = data.status || "PENDING";
+        const paymentType = data.type || "MONTHLY";
+        if (!["PENDING", "PAID", "OVERDUE"].includes(requestedStatus)) {
+            throw new Error("지원하지 않는 수납 상태입니다.");
+        }
+        if (!["MONTHLY", "SHUTTLE", "UNIFORM", "OTHER"].includes(paymentType)) {
+            throw new Error("지원하지 않는 수납 유형입니다.");
+        }
         if (admin.appUserRole !== "ADMIN" && requestedStatus !== "PENDING") {
             throw new Error("수퍼관리자만 납부 상태로 바로 등록할 수 있습니다.");
         }
-        await ensurePaymentInfrastructure();
-        const classId = data.classId?.trim() || null;
-        if (classId) {
-            const enrollment = await prisma.$queryRawUnsafe<{ id: string }[]>(
-                `SELECT id FROM "Enrollment"
-                 WHERE "studentId" = $1 AND "classId" = $2 AND status = 'ACTIVE'
-                 LIMIT 1`,
-                data.studentId,
-                classId,
-            );
-            if (enrollment.length === 0) {
-                throw new Error("선택한 수업에 현재 수강 중인 학생만 청구할 수 있습니다.");
-            }
+        if (data.notifyParent && requestedStatus !== "PENDING") {
+            throw new Error("학부모 수납 안내는 미납 청구에만 보낼 수 있습니다.");
         }
-        // type과 description을 포함하여 INSERT (수동 생성 시 유형/설명 저장)
-        const rows = await prisma.$queryRawUnsafe<{ id: string }[]>(
-            `INSERT INTO "Payment" (id, "studentId", "classId", amount, status, "dueDate", year, month, type, description, "createdAt", "updatedAt")
-             VALUES (gen_random_uuid()::text, $1, $2, $3, $4, $5::timestamp, $6, $7, $8, $9, NOW(), NOW())
-             RETURNING id`,
-            data.studentId, classId, data.amount, requestedStatus, data.dueDate,
-            year, month,
-            data.type || "MONTHLY", data.description || null,
-        );
-        const paymentId = rows[0]?.id;
-        const invoice = paymentId ? await ensureInvoiceForPayment(paymentId) : null;
+        await ensurePaymentInfrastructure();
+        if (data.notifyParent) {
+            const parentRows = await prisma.$queryRawUnsafe<{ parentId: string | null }[]>(
+                `SELECT "parentId" FROM "Student" WHERE id = $1 LIMIT 1`, data.studentId,
+            );
+            if (!parentRows[0]?.parentId) throw new Error("연결된 학부모가 없어 알림을 보낼 수 없습니다.");
+        }
+        const classId = data.classId?.trim() || null;
+        if (["MONTHLY", "SHUTTLE"].includes(paymentType) && !classId) {
+            throw new Error("수강료와 셔틀 청구에는 연결할 수업을 선택해 주세요.");
+        }
+        const invoice = await prisma.$transaction(async (tx) => {
+            if (classId) {
+                const enrollment = await tx.$queryRawUnsafe<{ id: string }[]>(
+                    `SELECT id FROM "Enrollment"
+                     WHERE "studentId" = $1 AND "classId" = $2 AND status = 'ACTIVE'
+                     LIMIT 1 FOR SHARE`,
+                    data.studentId,
+                    classId,
+                );
+                if (enrollment.length === 0) {
+                    throw new Error("선택한 수업에 현재 수강 중인 학생만 청구할 수 있습니다.");
+                }
+            }
+            const rows = await tx.$queryRawUnsafe<{ id: string }[]>(
+                `INSERT INTO "Payment" (id, "studentId", "classId", amount, status, "dueDate", year, month, type, description, "createdAt", "updatedAt")
+                 VALUES (gen_random_uuid()::text, $1, $2, $3, $4, $5::timestamp, $6, $7, $8, $9, NOW(), NOW())
+                 RETURNING id`,
+                data.studentId, classId, data.amount, requestedStatus, data.dueDate,
+                year, month, paymentType, data.description || null,
+            );
+            const paymentId = rows[0]?.id;
+            if (!paymentId) throw new Error("청구 기록을 생성하지 못했습니다.");
+            await ensureInvoicesForMonth(year, month, [paymentId], tx);
+            const invoiceRows = await tx.$queryRawUnsafe<{ id: string }[]>(
+                `SELECT id FROM "PaymentInvoice" WHERE "paymentId" = $1`, paymentId,
+            );
+            if (!invoiceRows[0]) throw new Error("청구서를 생성하지 못했습니다.");
+            await tx.$executeRawUnsafe(
+                `INSERT INTO "PaymentAuditLog" (
+                    id, "paymentId", "invoiceId", "actorType", "actorId", action, message, metadata, "createdAt"
+                 ) VALUES (
+                    gen_random_uuid()::text, $1, $2, 'ADMIN', $3, 'PAYMENT_CREATE_MANUAL', $4, $5::jsonb, NOW()
+                 )`,
+                paymentId, invoiceRows[0].id, admin.appUserId,
+                "관리자 수동 청구 생성",
+                JSON.stringify({ classId, amount: data.amount, year, month, type: paymentType, notifyParent: Boolean(data.notifyParent) }),
+            );
+            return invoiceRows[0];
+        });
 
-        // 수납 안내 알림 → 해당 학부모
-        const amountStr = data.amount.toLocaleString("ko-KR");
-        await notifyParentsOfStudents(
-            [data.studentId],
-            "PAYMENT",
-            "수납 안내",
-            `${amountStr}원 수납 요청이 등록되었습니다.`,
-            invoice?.id ? `/payments/${invoice.id}` : "/mypage",
-        );
+        if (data.notifyParent) {
+            const amountStr = data.amount.toLocaleString("ko-KR");
+            await notifyParentsOfStudents(
+                [data.studentId],
+                "PAYMENT",
+                "수납 안내",
+                `${amountStr}원 수납 요청이 등록되었습니다.`,
+                `/payments/${invoice.id}`,
+            );
+        }
     } catch (e) {
         console.error("Failed to create payment:", e);
-        throw new Error("수납 기록 생성 실패");
+        throw new Error(e instanceof Error ? e.message : "수납 기록 생성 실패");
+    }
+    revalidateFinanceCaches();
+    revalidatePath("/mypage");
+}
+
+export async function cancelUnpaidPayment(id: string, reason: string) {
+    const admin = await requireFinanceOwner();
+    const paymentId = id?.trim();
+    const cancelReason = reason?.trim();
+    if (!paymentId) throw new Error("취소할 청구를 선택해 주세요.");
+    if (!cancelReason || cancelReason.length > 300) throw new Error("취소 사유를 1~300자로 입력해 주세요.");
+
+    try {
+        await ensurePaymentInfrastructure();
+        await prisma.$transaction(async (tx) => {
+            const paymentRows = await tx.$queryRawUnsafe<{ status: string; amount: number; year: number | null; month: number | null }[]>(
+                `SELECT status, amount, year, month FROM "Payment" WHERE id = $1 FOR UPDATE`,
+                paymentId,
+            );
+            const payment = paymentRows[0];
+            if (!payment) throw new Error("수납 기록을 찾을 수 없습니다.");
+            if (!["PENDING", "OVERDUE"].includes(payment.status)) {
+                throw new Error("미납 또는 연체 상태의 청구만 취소할 수 있습니다.");
+            }
+
+            // 취소 도중 새 청구서를 만들지 않는다. 현재 연결된 청구서만 잠가 검증한다.
+            const invoiceRows = await tx.$queryRawUnsafe<{ id: string; status: string }[]>(
+                `SELECT id, status FROM "PaymentInvoice" WHERE "paymentId" = $1 FOR UPDATE`,
+                paymentId,
+            );
+            const invoice = invoiceRows[0];
+            if (!invoice) throw new Error("연결된 청구서를 찾을 수 없습니다.");
+            if (!["ISSUED", "SENT", "OVERDUE"].includes(invoice.status)) {
+                throw new Error("현재 청구서 상태에서는 취소할 수 없습니다. 다시 조회해 주세요.");
+            }
+
+            const completedTransactions = await tx.$queryRawUnsafe<{ id: string }[]>(
+                `SELECT id FROM "PaymentTransaction" WHERE "paymentId" = $1 AND status = 'DONE' LIMIT 1`,
+                paymentId,
+            );
+            if (completedTransactions.length > 0) {
+                throw new Error("완료된 결제 거래가 있어 취소할 수 없습니다. 환불 절차를 사용해 주세요.");
+            }
+
+            const paymentUpdated = await tx.$executeRawUnsafe(
+                `UPDATE "Payment" SET status = 'CANCELED', "paidDate" = NULL, "updatedAt" = NOW()
+                 WHERE id = $1 AND status IN ('PENDING', 'OVERDUE')`,
+                paymentId,
+            );
+            const invoiceUpdated = await tx.$executeRawUnsafe(
+                `UPDATE "PaymentInvoice" SET status = 'CANCELED', "canceledAt" = NOW(), "updatedAt" = NOW()
+                 WHERE id = $1 AND "paymentId" = $2 AND status IN ('ISSUED', 'SENT', 'OVERDUE')`,
+                invoice.id,
+                paymentId,
+            );
+            if (paymentUpdated !== 1 || invoiceUpdated !== 1) {
+                throw new Error("현재 수납·청구 상태가 바뀌어 취소하지 않았습니다. 다시 조회해 주세요.");
+            }
+
+            await tx.$executeRawUnsafe(
+                `INSERT INTO "PaymentAuditLog" (
+                    id, "paymentId", "invoiceId", "actorType", "actorId", action, message, metadata, "createdAt"
+                 ) VALUES (
+                    gen_random_uuid()::text, $1, $2, 'ADMIN', $3, 'PAYMENT_CANCEL_UNPAID', $4, $5::jsonb, NOW()
+                 )`,
+                paymentId,
+                invoice.id,
+                admin.appUserId,
+                cancelReason,
+                JSON.stringify({ amount: payment.amount, year: payment.year, month: payment.month }),
+            );
+        });
+    } catch (e) {
+        console.error("Failed to cancel unpaid payment:", e);
+        throw new Error(e instanceof Error ? e.message : "미납 청구 취소 실패");
     }
     revalidateFinanceCaches();
     revalidatePath("/mypage");

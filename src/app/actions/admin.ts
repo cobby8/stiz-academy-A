@@ -3,6 +3,7 @@
 import { createHash, createHmac, timingSafeEqual } from "crypto";
 import { revalidatePath, revalidateTag } from "next/cache";
 import { prisma } from "@/lib/prisma";
+import { isKstYmd, todayKst } from "@/lib/datetime/kst";
 import { normalizeApprovalClassIds } from "@/lib/enrollment/approval-classes";
 import { requireAdmin, requireOwner, requireVerifiedParent } from "@/lib/auth-guard";
 import {
@@ -1164,13 +1165,20 @@ export async function enrollStudent(studentId: string, classId: string) {
     revalidateClassAdminCaches();
 }
 
-export async function updateEnrollmentStatus(enrollmentId: string, status: string) {
+export async function updateEnrollmentStatus(
+    enrollmentId: string,
+    status: string,
+    change?: { effectiveFrom?: string; reason?: string },
+) {
     const admin = await requireAdmin();
 
     const allowedStatuses = new Set(["ACTIVE", "PAUSED", "WITHDRAWN"]);
     if (!allowedStatuses.has(status)) {
         throw new Error("허용되지 않는 수강 상태입니다.");
     }
+    const effectiveFrom = change?.effectiveFrom?.trim() || todayKst();
+    if (!isKstYmd(effectiveFrom)) throw new Error("효력일 형식이 올바르지 않습니다.");
+    if (effectiveFrom > todayKst()) throw new Error("미래 효력일은 예약 변경으로 신청해 주세요.");
 
     let changedStudentId: string | null = null;
     let changedClassId: string | null = null;
@@ -1203,6 +1211,23 @@ export async function updateEnrollmentStatus(enrollmentId: string, status: strin
             const [changed] = await tx.$queryRawUnsafe<Array<{ updatedAt: Date }>>(
                 `UPDATE "Enrollment" SET status=$1,"updatedAt"=NOW() WHERE id=$2 RETURNING "updatedAt"`,
                 status, enrollmentId,
+            );
+            const kind = status === "PAUSED" ? "PAUSE" : status === "WITHDRAWN" ? "WITHDRAW" : "RESUME";
+            await tx.$executeRawUnsafe(
+                `INSERT INTO "EnrollmentChangeRequest" (
+                    id, "studentId", "enrollmentId", "fromClassId", kind, "effectiveFrom", reason,
+                    status, "requestedByUserId", "decidedByUserId", "decidedAt", "appliedAt", "createdAt", "updatedAt"
+                ) VALUES (
+                    gen_random_uuid()::text, $1, $2, $3, $4, $5::date, $6,
+                    'APPLIED', $7, $7, NOW(), NOW(), NOW(), NOW()
+                )`,
+                before.studentId,
+                enrollmentId,
+                before.classId,
+                kind,
+                effectiveFrom,
+                change?.reason?.trim() || `관리자 상태 변경: ${before.previousStatus} → ${status}`,
+                admin.appUserId,
             );
             changedStudentId = before.studentId;
             changedClassId = before.classId;

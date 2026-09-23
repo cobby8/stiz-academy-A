@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState, useTransition } from "react";
 import Link from "next/link";
 import { updateEnrollmentStatus, updateStudentMemo, updateStudent, updatePaymentStatus, enrollStudent } from "@/app/actions/admin";
+import { todayKst } from "@/lib/datetime/kst";
 import LocationPickerModal, { type MapLocationData } from "@/components/maps/LocationPickerModal";
 import ParentRequestLinkPanel from "./ParentRequestLinkPanel";
 
@@ -749,12 +750,16 @@ export default function StudentDetailClient({
 
         const nextInfo = getEnrollmentStatusInfo(nextStatus);
         if (!window.confirm(`이 수강 반 상태를 '${nextInfo.label}'으로 변경할까요?`)) return;
+        const effectiveFrom = window.prompt("효력일을 입력하세요 (오늘 또는 과거, YYYY-MM-DD)", todayKst());
+        if (!effectiveFrom) return;
+        const reason = window.prompt("변경 사유를 입력하세요 (선택)", "");
+        if (reason === null) return;
 
         setStatusUpdatingId(enrollmentId);
         setStatusFeedback(null);
 
         try {
-            await updateEnrollmentStatus(enrollmentId, nextStatus);
+            await updateEnrollmentStatus(enrollmentId, nextStatus, { effectiveFrom, reason });
             await loadData();
             setStatusFeedback({ type: "success", message: "수강 상태를 변경했습니다." });
             window.setTimeout(() => setStatusFeedback(null), 2500);

@@ -772,7 +772,10 @@ export default function StudentDetailClient({
     async function submitEnrollmentStatusChange(event: FormEvent<HTMLFormElement>) {
         event.preventDefault();
         if (!statusChange || statusUpdatingId) return;
-        const { enrollmentId, nextStatus, effectiveFrom, reason } = statusChange;
+        const { enrollmentId, nextStatus } = statusChange;
+        const formData = new FormData(event.currentTarget);
+        const effectiveFrom = String(formData.get("effectiveFrom") || "");
+        const reason = String(formData.get("reason") || "");
         if (effectiveFrom > todayKst()) {
             setStatusFormError("미래 효력일은 예약 변경으로 신청해 주세요.");
             return;
@@ -1697,6 +1700,7 @@ export default function StudentDetailClient({
                             효력일
                             <input
                                 type="date"
+                                name="effectiveFrom"
                                 required
                                 max={todayKst()}
                                 value={statusChange.effectiveFrom}
@@ -1708,6 +1712,7 @@ export default function StudentDetailClient({
                         <label className="block text-sm font-bold text-gray-700 dark:text-gray-200">
                             변경 사유 (선택)
                             <textarea
+                                name="reason"
                                 value={statusChange.reason}
                                 onChange={(event) => setStatusChange((current) => current && ({ ...current, reason: event.target.value }))}
                                 rows={3}

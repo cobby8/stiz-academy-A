@@ -55,7 +55,7 @@ export default async function Home() {
   const kakaoChannelUrl = settings?.kakaoChannelUrl || "";
   const localBusiness = {
     "@context": "https://schema.org",
-    "@type": "SportsActivityLocation",
+    "@type": ["LocalBusiness", "SportsActivityLocation"],
     "@id": "https://www.stiz-dasan.kr/#academy",
     name: "스티즈농구교실 다산2호점",
     url: "https://www.stiz-dasan.kr/",

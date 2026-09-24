@@ -462,6 +462,7 @@ function TrialEditModal({
                                 <option value="WEBSITE">홈페이지</option>
                                 <option value="NAVER">네이버</option>
                                 <option value="NAVER_SEARCH">네이버 키워드 검색</option>
+                                <option value="NAVER_AD">네이버 검색광고</option>
                                 <option value="PORTAL_OTHER">네이버 외 포털검색</option>
                                 <option value="NAVER_BLOG">스티즈 네이버블로그</option>
                                 <option value="INSTAGRAM">인스타그램</option>
@@ -784,6 +785,7 @@ function AddLeadModal({
                             <option value="WEBSITE">홈페이지</option>
                             <option value="NAVER">네이버</option>
                             <option value="NAVER_SEARCH">네이버 키워드 검색</option>
+                            <option value="NAVER_AD">네이버 검색광고</option>
                             <option value="PORTAL_OTHER">네이버 외 포털검색</option>
                             <option value="NAVER_BLOG">스티즈 네이버블로그</option>
                             <option value="INSTAGRAM">인스타그램</option>

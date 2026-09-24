@@ -183,6 +183,7 @@ const SOURCE_LABELS: Record<string, string> = {
     WEBSITE: "홈페이지",
     NAVER: "네이버",
     NAVER_SEARCH: "네이버 키워드 검색",
+    NAVER_AD: "네이버 검색광고",
     PORTAL_OTHER: "네이버 외 포털검색",
     NAVER_BLOG: "스티즈 네이버블로그",
     INSTAGRAM: "인스타그램",

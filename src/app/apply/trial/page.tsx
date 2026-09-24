@@ -14,10 +14,12 @@ export const metadata = buildPublicMetadata({
     imageAlt: "STIZ 농구교실 다산2호점 체험수업 신청 미리보기",
 });
 
-export default async function TrialApplyPage() {
+export default async function TrialApplyPage({ searchParams }: { searchParams: Promise<{ utm_source?: string; utm_medium?: string }> }) {
+    const params = await searchParams;
+    const initialSource = params.utm_source?.toLowerCase() === "naver" && params.utm_medium?.toLowerCase() === "cpc" ? "NAVER_AD" : "";
     const [slots, settings] = await Promise.all([
         getAvailableTrialSlots(),
-        getAcademySettings() as Promise<any>,
+        getAcademySettings(),
     ]);
 
     // 체험수업은 항상 자체 신청 폼을 사용한다(외부 폼으로 리다이렉트하지 않는다).
@@ -41,7 +43,7 @@ export default async function TrialApplyPage() {
 
             <section className="bg-gray-50 py-8 dark:bg-gray-900 md:py-12">
                 <div className="mx-auto max-w-2xl px-4">
-                    <TrialApplicationForm availableSlots={slots} contactPhone={phone} />
+                    <TrialApplicationForm availableSlots={slots} contactPhone={phone} initialSource={initialSource} />
                 </div>
             </section>
         </PublicPageLayout>

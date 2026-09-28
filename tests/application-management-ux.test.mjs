@@ -49,6 +49,15 @@ test("체험 신청은 수정, 일정 변경, 취소 모달로 관리할 수 있
   assert.match(adminAction, /"trialDate",\s*"trialFeeConfirmed"/);
 });
 
+test("체험 신청 수정은 최신 목록 반영을 확인한 뒤에만 성공으로 처리한다", () => {
+  assert.match(trialClient, /onSaved=\{\(\) => loadTrialData\(\)\}/);
+  assert.doesNotMatch(trialClient, /onSaved=\{\(\) => void loadTrialData\(\)\}/);
+  assert.match(trialModals, /const refreshed = await onSaved\(\);/);
+  assert.match(trialModals, /if \(!refreshed\) \{/);
+  assert.match(trialModals, /목록을 새로 불러오지 못했습니다/);
+  assert.match(trialModals, /if \(!refreshed\)[\s\S]*onDone\(\);/);
+});
+
 test("체험 신청 일정은 DB 수업 정보와 연결해 실제 수업 시간을 표시한다", () => {
   assert.match(adminReadPayloads, /getCachedAdminTrialPayload/);
   assert.match(adminReadPayloads, /getClasses\(\)/);

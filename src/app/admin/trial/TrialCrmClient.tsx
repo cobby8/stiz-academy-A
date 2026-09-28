@@ -1545,7 +1545,8 @@ export default function TrialCrmClient({
                     onCloseLost={() => setShowLostModal(null)}
                     onCloseMemo={() => setShowMemoModal(null)}
                     classes={classes}
-                    onSaved={() => void loadTrialData()}
+                    // 저장 성공을 알리기 전에 최신 목록이 실제로 반영됐는지 확인한다.
+                    onSaved={() => loadTrialData()}
                     onFeedback={showFeedback}
                 />
             )}

@@ -1,9 +1,11 @@
 "use client";
 
-import { useCallback, useEffect, useState, useTransition } from "react";
+import { useCallback, useEffect, useState, useTransition, type FormEvent } from "react";
 import Link from "next/link";
 import { updateEnrollmentStatus, updateStudentMemo, updateStudent, updatePaymentStatus, enrollStudent } from "@/app/actions/admin";
+import { todayKst } from "@/lib/datetime/kst";
 import LocationPickerModal, { type MapLocationData } from "@/components/maps/LocationPickerModal";
+import AdminModal from "@/components/admin/AdminModal";
 import ParentRequestLinkPanel from "./ParentRequestLinkPanel";
 
 type MediaItem = { url: string; type: "image" | "video" };
@@ -429,6 +431,15 @@ export default function StudentDetailClient({
     const [memoSaved, setMemoSaved] = useState(false);
     const [statusUpdatingId, setStatusUpdatingId] = useState<string | null>(null);
     const [statusFeedback, setStatusFeedback] = useState<{ type: "success" | "error"; message: string } | null>(null);
+    const [statusChange, setStatusChange] = useState<{
+        enrollmentId: string;
+        className: string;
+        currentStatus: string;
+        nextStatus: string;
+        effectiveFrom: string;
+        reason: string;
+    } | null>(null);
+    const [statusFormError, setStatusFormError] = useState<string | null>(null);
     // ── 반 추가 상태 (E3) ───────────────────────────────────
     // showClassPicker: 반 선택 UI 펼침 / enrollingClassId: 등록 처리 중(disabled)
     // enrollError: 수강 반 추가/상태 변경 실패 사유
@@ -744,25 +755,42 @@ export default function StudentDetailClient({
         );
     }
 
-    async function changeEnrollmentStatus(enrollmentId: string, currentStatus: string, nextStatus: string) {
-        if (currentStatus === nextStatus || statusUpdatingId) return;
-
-        const nextInfo = getEnrollmentStatusInfo(nextStatus);
-        if (!window.confirm(`이 수강 반 상태를 '${nextInfo.label}'으로 변경할까요?`)) return;
-
-        setStatusUpdatingId(enrollmentId);
+    function changeEnrollmentStatus(enrollment: StudentActivityData["enrollments"][number], nextStatus: string) {
+        if (enrollment.status === nextStatus || statusUpdatingId) return;
+        setStatusChange({
+            enrollmentId: enrollment.id,
+            className: enrollment.className,
+            currentStatus: enrollment.status,
+            nextStatus,
+            effectiveFrom: todayKst(),
+            reason: "",
+        });
+        setStatusFormError(null);
         setStatusFeedback(null);
+    }
+
+    async function submitEnrollmentStatusChange(event: FormEvent<HTMLFormElement>) {
+        event.preventDefault();
+        if (!statusChange || statusUpdatingId) return;
+        const { enrollmentId, nextStatus } = statusChange;
+        const formData = new FormData(event.currentTarget);
+        const effectiveFrom = String(formData.get("effectiveFrom") || "");
+        const reason = String(formData.get("reason") || "");
+        if (effectiveFrom > todayKst()) {
+            setStatusFormError("미래 효력일은 예약 변경으로 신청해 주세요.");
+            return;
+        }
+        setStatusUpdatingId(enrollmentId);
+        setStatusFormError(null);
 
         try {
-            await updateEnrollmentStatus(enrollmentId, nextStatus);
+            await updateEnrollmentStatus(enrollmentId, nextStatus, { effectiveFrom, reason });
             await loadData();
+            setStatusChange(null);
             setStatusFeedback({ type: "success", message: "수강 상태를 변경했습니다." });
             window.setTimeout(() => setStatusFeedback(null), 2500);
         } catch (statusError) {
-            setStatusFeedback({
-                type: "error",
-                message: getErrorMessage(statusError, "수강 상태 변경에 실패했습니다."),
-            });
+            setStatusFormError(getErrorMessage(statusError, "수강 상태 변경에 실패했습니다."));
         } finally {
             setStatusUpdatingId(null);
         }
@@ -836,7 +864,7 @@ export default function StudentDetailClient({
                 </div>
                 {/* 우측: 상태 세그먼트. 퇴원도 이력을 보존하는 상태 변경으로 처리한다. */}
                 <div className="flex items-center gap-2">
-                {/* 세그먼트 버튼: 상태 변경 — 기존 changeEnrollmentStatus 로직 그대로 */}
+                {/* 세그먼트 버튼: 입력 양식에서 반·효력일·사유를 확인한 뒤 저장한다. */}
                 <div className="inline-flex overflow-hidden rounded-lg border border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-950">
                     {ENROLLMENT_STATUS_OPTIONS.map((option) => {
                         const selected = enrollment.status === option.value;
@@ -844,7 +872,7 @@ export default function StudentDetailClient({
                             <button
                                 key={option.value}
                                 type="button"
-                                onClick={() => void changeEnrollmentStatus(enrollment.id, enrollment.status, option.value)}
+                                onClick={() => changeEnrollmentStatus(enrollment, option.value)}
                                 disabled={Boolean(statusUpdatingId)}
                                 className={`px-3 py-1.5 text-xs font-bold transition disabled:cursor-not-allowed disabled:opacity-60 ${
                                     selected
@@ -1653,6 +1681,54 @@ export default function StudentDetailClient({
                     )}
                 </section>
             </div>
+
+            {statusChange && (
+                <AdminModal
+                    titleId="enrollment-status-change-title"
+                    panelClassName="max-w-md p-6"
+                    onClose={() => { if (!statusUpdatingId) setStatusChange(null); }}
+                    closeOnBackdrop={!statusUpdatingId}
+                >
+                    <form onSubmit={(event) => void submitEnrollmentStatusChange(event)} className="space-y-4">
+                        <h2 id="enrollment-status-change-title" className="text-xl font-extrabold text-gray-900 dark:text-white">
+                            수강 상태 변경
+                        </h2>
+                        <p className="text-sm text-gray-600 dark:text-gray-300">
+                            {statusChange.className} · {getEnrollmentStatusInfo(statusChange.currentStatus).label} → {getEnrollmentStatusInfo(statusChange.nextStatus).label}
+                        </p>
+                        <label className="block text-sm font-bold text-gray-700 dark:text-gray-200">
+                            효력일
+                            <input
+                                type="date"
+                                name="effectiveFrom"
+                                required
+                                max={todayKst()}
+                                value={statusChange.effectiveFrom}
+                                onChange={(event) => setStatusChange((current) => current && ({ ...current, effectiveFrom: event.target.value }))}
+                                data-admin-modal-initial-focus="true"
+                                className="mt-1 min-h-11 w-full rounded-xl border border-gray-200 bg-white px-3 text-gray-950 dark:border-gray-700 dark:bg-gray-800 dark:text-white"
+                            />
+                        </label>
+                        <label className="block text-sm font-bold text-gray-700 dark:text-gray-200">
+                            변경 사유 (선택)
+                            <textarea
+                                name="reason"
+                                value={statusChange.reason}
+                                onChange={(event) => setStatusChange((current) => current && ({ ...current, reason: event.target.value }))}
+                                rows={3}
+                                className="mt-1 w-full rounded-xl border border-gray-200 bg-white p-3 text-gray-950 dark:border-gray-700 dark:bg-gray-800 dark:text-white"
+                            />
+                        </label>
+                        {statusFormError && <p role="alert" className="text-sm font-bold text-red-600">{statusFormError}</p>}
+                        <div className="flex justify-end gap-2">
+                            <button type="button" onClick={() => setStatusChange(null)} disabled={Boolean(statusUpdatingId)} className="min-h-11 rounded-xl border border-gray-200 px-4 font-bold disabled:opacity-60 dark:border-gray-700">취소</button>
+                            <button type="submit" disabled={Boolean(statusUpdatingId)} className="min-h-11 rounded-xl bg-brand-orange-500 px-5 font-black text-white disabled:opacity-60">
+                                {statusUpdatingId ? "저장 중…" : "변경 저장"}
+                            </button>
+                        </div>
+                    </form>
+                </AdminModal>
+            )}
 
             {/* 배차용 셔틀 위치 지도 선택 모달 — 핀(좌표) 확정 시에만 저장(서버가 좌표 필수 검증) */}
             {pickerKind && (

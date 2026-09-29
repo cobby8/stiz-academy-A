@@ -71,45 +71,15 @@
 
 ## 구현 기록 (developer) — 토스POS ↔ 사이트 결제 월별 대사 (2026-09-18)
 
-📝 구현한 기능: 토스플레이스 POS 카드결제(가맹점 324744)와 사이트 `Payment` 를 월 단위로 맞춰 보는 **읽기 전용** 대사 스크립트. 결과는 원장님이 읽는 마크다운 + 엑셀용 CSV.
-
-| 파일 경로 | 변경 내용 | 신규/수정 |
-|----------|----------|----------|
-| scripts/lib/tossplace-match.mjs | 순수 매칭·집계·리포트 렌더 로직(I/O·환경변수·네트워크 없음) | 신규 |
-| scripts/tossplace-reconcile.mjs | CLI: 토스 조회(GET 전용) + DB 읽기전용 조회 + 리포트 저장 | 신규 |
-| tests/tossplace-match.test.mjs | 순수 모듈 실행 테스트 26건(보류 규칙·KST 변환·합계 검증) | 신규 |
-| .gitignore | `outputs/reconcile/` 제외(리포트에 원생 이름 포함) | 수정 |
-
-설계 핵심(왜 이렇게 했나)
-- **추측 금지**: 주문번호 → 같은 날·같은 금액 순으로만 자동 매칭하고, ±3일 근접·금액 상이·건수 불일치는 전부 `확인 필요(HELD)` 로 빼서 후보만 보여준다. 잘못 묶인 1건은 아무도 못 찾지만 보류된 1건은 눈에 띈다.
-- **쓰기 불가 3중 방어**: ①`BEGIN READ ONLY` + 항상 ROLLBACK ②대사 전후 `Payment` 건수·최종수정시각 대조를 리포트에 증빙으로 기록 ③토스 HTTP 클라이언트가 GET·주문목록 경로 외 요청을 보내기 전에 예외.
-- **시간대**: `paidDate` 는 tz 없는 UTC 라 `(col AT TIME ZONE 'UTC') AT TIME ZONE 'Asia/Seoul'` 로 **두 번** 변환. 토스 응답은 실측 결과 UTC(Z) 표기(2026-09-18 확인). JS 쪽 KST 표기는 전부 `Intl.DateTimeFormat('en-CA', Asia/Seoul)`.
-- **비밀값 무유출**: 키·접속문자열은 화면·파일·에러 어디에도 안 나가고, 에러 문구는 `redactSecrets` 로 한 번 더 거른다. 카드번호는 API 가 마스킹한 값만 쓴다.
-
-2026-09 실행 결과(실데이터): 사이트 결제완료 16건 ₩1,525,000 · 토스 카드승인 21건 ₩3,042,000 → 차이 **₩1,517,000**(항목별 차이 합계와 일치). 토스에만 9건 ₩1,145,000 · 사이트에만 1건 ₩100,000 · 확인 필요 17건. 쓰기 없음 증빙: Payment 484 → 484, 최종수정 2026-09-17 15:07:39.059 동일.
-
-#### 수정 이력
-| 회차 | 날짜 | 수정 내용 | 수정 파일 | 사유 |
-|------|------|----------|----------|------|
-| 1차 | 2026-09-18 | **POS 메모 이름 매칭 추가** — 메모(`토4 이시윤 9월`)에서 반·청구월·주차를 걷어내고 이름만 뽑아 원생 명단과 대조. 매칭 순서를 `주문번호 → 메모이름 → 날짜·금액` 으로 바꿈. 성 생략(대건→김대건)은 후보가 1명일 때만 인정, 동명이인·형제합산(`정우준+정지유`)·금액 불일치는 전부 보류. 리포트에 `원생`·`메모` 표시, `메모 이름이 원생 명단에 없음`·`POS 메모가 없는 결제` 섹션과 CSV 2열 추가. 원생 명단 조회도 같은 READ ONLY 트랜잭션 안에서 수행 | scripts/lib/tossplace-match.mjs · scripts/tossplace-reconcile.mjs · tests/tossplace-match.test.mjs | PM 요청(원장 승인): 메모에 원생 이름이 있어 날짜·금액보다 강한 단서 |
-| 2차 | 2026-09-29 | **매일 자동 대사 + 관리자 화면** — 순수 매칭 모듈을 `src/lib/pos/tossplace-match.mjs` 로 옮겨 CLI·웹앱이 **한 벌만** 공유(사본 0). 토스 조회 클라이언트도 `src/lib/pos/tossplaceClient.ts` 로 분리(CLI 는 node 가 .ts 타입을 걷어내 그대로 import). 서버 실행부 `reconcileService.ts` 는 조회만 하고 `PosReconcileRun` 에 INSERT 한 줄만(Payment·청구서·수강·원생 무변경, 테스트가 소스로 단정). 크론 `/api/cron/pos-reconcile` 매일 KST 05:30, 화면 `/admin/pos-reconcile`(사이드바 NavItem + 경로배열 2곳 등록). 키 없음·조회 실패는 예외를 던지지 않고 FAILED 기록으로 남김 | src/lib/pos/* · src/app/admin/pos-reconcile/* · src/app/api/cron/pos-reconcile/route.ts · src/app/actions/pos-reconcile.ts · src/app/admin/AdminShellClient.tsx · vercel.json · tests/pos-reconcile-service.test.mjs | PM 요청(원장 승인): 월말에 몰아서 찾으면 원인을 못 되짚는다 |
-| 3차 | 2026-09-30 | **청구월 기준 대조 + 사이트 기존 기록 찾기** — ①메모의 `9월`·`10월`·`2026-10` 로 청구월 판정(`resolveTargetBillingMonth`, 연말·연초 보정, 없으면 결제일의 달) ②카드 범위에 없는 원생은 청구월(전달·이번·다음 달) 월 수강료 기록을 결제수단·결제일 무관하게 다시 찾음 → 신규 분류 `MATCHED_BY_MEMO_EXISTING_RECORD`(사이트 쪽에도 넣어 합계 검증 균형)·`POS_PAID_SITE_UNPAID`·`POS_ONLY_NO_SITE_INVOICE`·`HELD_MEMO_INVOICE_CONFLICT` ③메모 청구월이 다른 카드 기록은 짝짓지 않음. 2026-09 실행: 차이 ₩2,062,000→₩1,822,000, 토스에만 11→3 | src/lib/pos/tossplace-match.mjs · reconcileService.ts · scripts/tossplace-reconcile.mjs · admin/pos-reconcile/page.tsx · tests 2개 | 원장 확인(09-30): 랠리즈가 원본, 사이트는 뒤따르는 사본 |
-
-2차 실행 결과(2026-09): 토스에만 있던 9건 중 **5건이 원생으로 특정**(신하율·박찬민·김대건·이현일·손지형), 동명이인 2건(`시우`·`이현준`)·형제합산 1건(`정우준+정지유`)은 보류, 명단에 없는 이름 2건(`루나루희`·`박상원`)·메모 없는 결제 3건은 별도 섹션. 합계·차이(₩1,517,000)는 변동 없음. 테스트 38건 전부 통과.
-
-💡 tester 참고
-- 테스트: `node --test tests/tossplace-match.test.mjs` (26건). CLI 는 `node scripts/tossplace-reconcile.mjs --month 2026-09 --toss-json <픽스처>` 로 API 없이도 DB 경로까지 확인 가능.
-- 정상 동작: 리포트 2종 생성 + "쓰기 없음 증빙" 의 건수·최종수정시각이 전후 동일.
-- 주의 입력: `--month 2026-9`(형식 오류)·권한 없는 가맹점ID(401/403) → **리포트를 만들지 않고 종료코드 1**.
-
-⚠️ reviewer 참고
-- 매칭 3단계의 후보 풀 구성(이미 매칭된 건 제외, 버퍼 ±3일은 후보로만)과 `summarize().reconciles`(전체 차이 = 항목별 차이 합) 검증식을 봐 주세요.
-- 커밋하지 않았습니다(PM 지시).
+(완료·커밋됨 — 상세는 git log 참조: 5a9a793·ddbd479·eae8b702·522c913d·fa52192e 및 이번 슬랙 DM 커밋)
+- 핵심 규칙: 청구 원본=랠리즈(전달 3주차 발행), 사이트는 따라가는 기록. 대사는 읽기 전용, 돈 쓰기는 슬랙 [랠리즈 처리함 · 사이트 납부 반영] 버튼→재확인 선점 UPDATE→markPaymentPaid 한 경로뿐.
+- 매칭 로직 1벌: src/lib/pos/tossplace-match.mjs / 판단: payment-notice.mjs / 서명: webhookSignature.ts·slack/signature.ts
 
 ## 작업 로그 (최근 10건)
 
 | 날짜 | 작업 내용 | 상태 |
 |------|----------|------|
+| 2026-09-30 | **토스POS 결제 슬랙 DM + 버튼 답장(developer)** — 결제 1건=DM 1통, 원장만 버튼, 돈은 2단계 확인+선점 재확인 뒤 markPaymentPaid. tsc·1733 테스트·next build 통과. 미커밋·마이그레이션 미적용 | 검수 대기 |
 | 2026-09-30 | **POS 대사 정확도 수정 2건** — 이미 납부 기록된 결제가 '토스에만'으로 나오던 문제(결제수단 NULL·MANUAL) + 청구월 비교(9월 말 결제=10월분). tsc 0 / 테스트 **1692-0** / build 0 / 2026-09 실행: 박찬민·손지형=기존 기록 매칭, 유한빈·윤서연·정해담·신하율(9·10월)=사이트에 그 달 청구서 없음, 김대건=POS 받았는데 사이트 미납. 쓰기 없음 증빙 통과. 미커밋 | 완료 |
 | 2026-09-29 | **POS 결제 대사 자동화 + 관리자 화면** — 매칭 로직을 `src/lib/pos/` 로 이전해 CLI·웹앱이 한 벌 공유(저장소 내 사본 0을 테스트로 고정). 크론(KST 05:30)·서버 실행부·`/admin/pos-reconcile` 화면 신설. 대사는 **조회 + 기록표 INSERT 한 줄**만 — Payment/청구서/수강/원생 UPDATE·DELETE 부재를 테스트로 단정. 키 미설정 시 예외 대신 FAILED 기록(운영 환경변수 아직 미등록). tsc 0 / 테스트 **1661-0** / build 0 / CLI 실거래 재확인(2026-09: 사이트 17건 ₩1,675,000 vs 토스 25건 ₩3,737,000, 차이 ₩2,062,000, 쓰기 없음 증빙 통과). 미커밋 | 완료 |
 | 2026-09-29 | **갈라진 학부모 계정 4가족 정리(운영 DB 수정)** — 승인 로직이 전화번호를 글자 그대로 비교해 부모 계정을 새로 만들던 버그(9/28 수정·배포)로 이미 갈라진 4가족을 복구. 로그인 계정 쪽으로 자녀 4명(양시우·박윤우·신하율·최율찬)·청구서 3건·알림 4건 이전. 결제는 학생에 붙어 있어 자동으로 따라옴. 빈 껍데기가 된 자동생성 계정은 과거 기록이 가리킬 수 있어 **삭제하지 않음**. 되돌리기 SQL 을 실행 전 파일로 저장(scratchpad/parent-merge-rollback-20260929.sql). 검증: 4가족 모두 로그인 계정에 자녀 1명·앱 노출 조건 통과, 남은 분리 사고 **0건**, 배포 이후 새로 갈라진 계정 0건 | 완료·코드변경 없음 |

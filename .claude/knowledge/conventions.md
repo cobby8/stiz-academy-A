@@ -174,3 +174,9 @@
 - **발견자**: developer
 - **내용**: `tests/_ts-module.mjs` 는 순수 모듈 전용이라 `@/lib/prisma` 를 쓰는 파일에는 못 쓴다. 그렇다고 소스 문자열 검사만 하면 "키가 없을 때 예외를 던지는가 / 기록이 정확히 한 줄인가" 같은 **동작**은 절대 못 잡는다. 방법: 테스트에서 `ts.transpileModule` 로 서비스 파일을 올린 뒤 import 스펙(`"@/lib/prisma"`·`"./tossplaceClient"`)만 **가짜 모듈 data URL 로 치환**해 실행한다. 가짜 prisma 는 `$queryRawUnsafe`/`$executeRawUnsafe` 호출을 `globalThis` 배열에 기록해, 테스트가 **"쓰기는 1회, INSERT 대상은 이 표 하나"** 를 직접 세도록 한다. 환경변수는 `withEnv()` 로 잠깐 바꿨다가 `finally` 에서 반드시 되돌린다(다른 테스트가 같은 프로세스에서 돈다). 돈을 다루는 코드는 여기에 더해 **소스 계약**(`UPDATE "Payment"`·`DELETE FROM "Student"` 부재를 `doesNotMatch` 로)을 함께 단정한다 — 실행 검증은 "지금 경로"만, 소스 검증은 "앞으로 생길 경로"까지 막는다.
 - **참조횟수**: 0
+
+### [2026-09-30] 외부 버튼(슬랙 등)으로 돈을 쓸 때는 "선점 UPDATE 한 문장 = 재확인"으로 막는다
+- **분류**: convention
+- **발견자**: developer
+- **내용**: `markPaymentPaid` 는 트랜잭션 없이 여러 문장을 쓴다. 그래서 "읽고 확인 → 납부" 로 짜면 두 번 클릭·두 알림 동시 클릭에 뚫린다. 방법(`src/lib/pos/paymentNoticeActions.ts`): ①알림 행을 `UPDATE … SET status='CONFIRMED', "siteMarkedPaid"=true WHERE <상태 조건> AND EXISTS(<미납·같은 금액>) AND (SELECT count(*) …)=1 AND NOT EXISTS(<PAID 같은 금액>) RETURNING` **한 문장**으로 선점(행 잠금 덕에 두 번째 클릭은 0행) ②다른 알림과의 경합은 **부분 유일 인덱스**(`sitePaymentId WHERE siteMarkedPaid`)가 예외로 막음 ③선점 성공 뒤에만 `markPaymentPaid` ④실패 시 청구서가 실제로 PAID 인지 보고 아니면 선점을 되돌림. 슬랙은 3초 안에 답해야 하므로 라우트는 `after()` 로 먼저 200 을 준다. 서명 검증은 `req.text()` 원문 → `v0:ts:body` HMAC, secret 없으면 거부.
+- **참조횟수**: 0

@@ -53,7 +53,7 @@ export function createTossClient({ accessKey, secretKey }: { accessKey: string; 
         method: string,
         pathname: string,
         query?: Record<string, string | number | undefined>,
-    ): Promise<{ data: unknown[]; eventId: string }> {
+    ): Promise<{ data: unknown[]; eventId: string; success: unknown }> {
         assertReadOnlyTossRequest(method, pathname); // GET·주문목록 외에는 여기서 막힌다
         const url = new URL(`${TOSS_API_BASE}${pathname}`);
         for (const [key, value] of Object.entries(query ?? {})) {
@@ -98,7 +98,8 @@ export function createTossClient({ accessKey, secretKey }: { accessKey: string; 
                 error.eventId = eventId;
                 throw error;
             }
-            return { data: Array.isArray(body?.success) ? body.success : [], eventId };
+            // success 원본도 함께 돌려준다 — 주문 1건 조회는 배열이 아니라 객체 하나가 온다.
+            return { data: Array.isArray(body?.success) ? body.success : [], eventId, success: body?.success ?? null };
         }
         throw new Error(
             "토스플레이스 API 호출 제한(429)이 계속돼 조회를 포기했습니다. 잠시 후 다시 실행해 주세요.",
@@ -138,4 +139,27 @@ export async function fetchTossOrders(params: {
         if (list.length < TOSS_PAGE_SIZE) break; // 마지막 페이지
     }
     return { orders, eventId: lastEventId, pages };
+}
+
+/**
+ * 주문 한 건을 다시 받아온다(조회 전용).
+ * 웹훅 본문은 모양이 확정되지 않았다(실제 수신 0건). 그래서 알림에서는 주문 ID 만 뽑고,
+ * 금액·결제·메모 같은 **판단에 쓰는 값은 전부 여기서 토스에 직접 물어본 값**을 쓴다.
+ * 주문 ID 는 영숫자·-·_ 만 받는다(경로 조작 차단 — assertReadOnlyTossRequest 가 한 번 더 막는다).
+ */
+export async function fetchTossOrderById(params: {
+    merchantId: string;
+    orderId: string;
+    accessKey: string;
+    secretKey: string;
+}): Promise<{ order: unknown; eventId: string }> {
+    const { merchantId, orderId, accessKey, secretKey } = params;
+    if (!/^[A-Za-z0-9_-]{1,100}$/.test(orderId)) {
+        throw new Error(`주문 ID 형식이 올바르지 않습니다: ${orderId.slice(0, 40)}`);
+    }
+    const request = createTossClient({ accessKey, secretKey });
+    const { success, eventId } = await request("GET", `/merchants/${merchantId}/order/orders/${orderId}`);
+    // 문서상 객체 하나지만, 혹시 배열로 감싸 오면 첫 번째를 쓴다.
+    const order = Array.isArray(success) ? success[0] ?? null : success;
+    return { order, eventId };
 }

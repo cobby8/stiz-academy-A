@@ -388,7 +388,11 @@ test("GET 이외의 요청과 허용되지 않은 경로는 보내기 전에 막
   assert.equal(assertReadOnlyTossRequest("GET", "/merchants/324744/order/orders"), true);
   assert.throws(() => assertReadOnlyTossRequest("POST", "/merchants/324744/order/orders"), /조회 전용/);
   assert.throws(() => assertReadOnlyTossRequest("DELETE", "/merchants/324744/order/orders"), /조회 전용/);
-  assert.throws(() => assertReadOnlyTossRequest("GET", "/merchants/324744/order/orders/123"), /허용되지 않은 경로/);
+  // 주문 1건 조회(웹훅 확인용)는 GET 으로만 허용한다(2026-09-30).
+  assert.equal(assertReadOnlyTossRequest("GET", "/merchants/324744/order/orders/123"), true);
+  assert.throws(() => assertReadOnlyTossRequest("POST", "/merchants/324744/order/orders/123"), /조회 전용/);
+  assert.throws(() => assertReadOnlyTossRequest("GET", "/merchants/324744/order/orders/123/cancel"), /허용되지 않은 경로/);
+  assert.throws(() => assertReadOnlyTossRequest("GET", "/merchants/324744/order/orders/../payments"), /허용되지 않은 경로/);
 });
 
 test("비밀값은 어떤 문구에도 남지 않게 가려진다", () => {

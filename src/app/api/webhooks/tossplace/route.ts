@@ -1,17 +1,40 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { SIGNATURE_REASON_LABEL, verifyWebhookSignature } from "@/lib/pos/webhookSignature";
+import { processPosWebhookEvent } from "@/lib/pos/paymentNoticeService";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
+/** 알림 처리(토스 재조회 + 슬랙 DM)에 쓰는 최대 시간. 넘기면 응답부터 하고 나머지는 10분 스윕이 줍는다. */
+const PROCESS_TIMEOUT_MS = 4000;
+
 /**
- * 토스플레이스 웹훅 수신 — **기록만 한다.**
+ * 새로 저장된 알림을 바로 처리해 본다(원장에게 DM). **응답 내용은 절대 바꾸지 않는다.**
+ * 실패·시간초과여도 조용히 넘어간다 — 저장은 이미 끝났고 스윕(/api/cron/pos-notice-sweep)이 다시 시도한다.
+ */
+async function tryProcessNow(eventRowId: string) {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try {
+        const timeout = new Promise<"TIMEOUT">((resolve) => {
+            timer = setTimeout(() => resolve("TIMEOUT"), PROCESS_TIMEOUT_MS);
+        });
+        const result = await Promise.race([processPosWebhookEvent(eventRowId), timeout]);
+        if (result === "TIMEOUT") console.warn("[tossplace-webhook] 알림 처리 시간 초과 — 스윕이 이어서 처리", { eventRowId });
+    } catch (processError) {
+        console.error("[tossplace-webhook] 알림 처리 실패(스윕이 다시 시도):", (processError as Error).message, { eventRowId });
+    } finally {
+        if (timer) clearTimeout(timer);
+    }
+}
+
+/**
+ * 토스플레이스 웹훅 수신 — **기록 + 원장에게 슬랙 DM.** 이 라우트는 청구서를 건드리지 않는다.
  *
- * ■ 이 단계에서 청구서를 건드리지 않는 이유
- *   결제 알림을 받아 청구서를 자동으로 "납부 완료"로 바꾸는 것은 돈이 걸린 일이다.
- *   먼저 실제 알림이 어떤 모양으로 오는지 눈으로 확인한 뒤, 원장 승인을 받고 붙인다.
- *   지금은 받은 사실만 남긴다.
+ * ■ 청구서를 여기서 바꾸지 않는 이유
+ *   청구서의 원본은 랠리즈다. 사이트 납부 반영은 원장이 슬랙 DM 의 버튼
+ *   [랠리즈 처리함 · 사이트 납부 반영]을 눌렀을 때만 한다(/api/slack/interactions).
+ *   여기서는 저장 후 알림 처리(토스 재조회 → DM)만 시도한다. 실패해도 응답은 그대로다.
  *
  * ■ 같은 알림이 두 번 와도 한 번만 남는다
  *   토스는 2xx 응답을 못 받으면 재시도한다. 재시도마다 x-toss-delivery-id 는 바뀌지만
@@ -58,11 +81,13 @@ export async function POST(req: NextRequest) {
 
   try {
     // ON CONFLICT DO NOTHING: 재시도로 같은 사건이 또 와도 두 번째는 조용히 무시된다.
-    const inserted = await prisma.$executeRawUnsafe(
+    // RETURNING id: 새로 들어간 경우에만 id 가 돌아온다(중복이면 빈 배열) → 새 알림만 바로 처리한다.
+    const insertedRows = await prisma.$queryRawUnsafe<{ id: string }[]>(
       `INSERT INTO "PosWebhookEvent"
          ("webhookId", "deliveryId", "eventId", "eventType", "merchantId", "payload", "status")
        VALUES ($1, $2, $3, $4, $5, $6::jsonb, 'RECEIVED')
-       ON CONFLICT ("webhookId") DO NOTHING`,
+       ON CONFLICT ("webhookId") DO NOTHING
+       RETURNING id`,
       webhookId,
       req.headers.get("x-toss-delivery-id"),
       typeof parsed.id === "string" ? parsed.id : null,
@@ -70,6 +95,8 @@ export async function POST(req: NextRequest) {
       parsed.merchantId == null ? null : String(parsed.merchantId),
       rawBody.length > 900_000 ? JSON.stringify({ _truncated: true }) : rawBody,
     );
+    const inserted = insertedRows.length;
+    if (insertedRows[0]) await tryProcessNow(insertedRows[0].id);
     return NextResponse.json({ ok: true, stored: Number(inserted) === 1, duplicate: Number(inserted) === 0 });
   } catch (error) {
     // 저장이 실패해도 2xx 로 답한다(재시도 폭풍 방지). 대신 로그로 남겨 사람이 본다.

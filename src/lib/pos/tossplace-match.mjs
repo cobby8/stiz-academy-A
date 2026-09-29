@@ -81,6 +81,9 @@ export const NEAR_DATE_DAYS = 3;
 /** 토스플레이스 Open API 에서 이 스크립트가 호출을 허용하는 단 하나의 경로 */
 export const TOSS_API_BASE = "https://open-api.tossplace.com/api-public/openapi/v1";
 const ORDER_LIST_PATH_RE = /^\/merchants\/\d+\/order\/orders$/;
+// 주문 한 건 조회(웹훅이 알려준 주문을 다시 확인할 때). 주문 ID 는 영숫자·-·_ 만 허용한다
+// — "/orders/1/cancel" 같은 하위 경로가 끼어들 틈을 원천적으로 막는다.
+const ORDER_ONE_PATH_RE = /^\/merchants\/\d+\/order\/orders\/[A-Za-z0-9_-]{1,100}$/;
 
 // ───────────────────────── 날짜 유틸 (순수) ─────────────────────────
 
@@ -1484,8 +1487,8 @@ export function assertReadOnlyTossRequest(method, path) {
   if (method !== "GET") {
     throw new Error(`이 스크립트는 조회 전용입니다. ${method} 요청은 보낼 수 없습니다.`);
   }
-  if (!ORDER_LIST_PATH_RE.test(path)) {
-    throw new Error(`허용되지 않은 경로입니다(주문 목록 조회만 가능): ${path}`);
+  if (!ORDER_LIST_PATH_RE.test(path) && !ORDER_ONE_PATH_RE.test(path)) {
+    throw new Error(`허용되지 않은 경로입니다(주문 목록·주문 1건 조회만 가능): ${path}`);
   }
   return true;
 }

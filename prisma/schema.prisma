@@ -2928,3 +2928,36 @@ model PosWebhookEvent {
   @@index([receivedAt(sort: Desc)])
   @@index([eventType, receivedAt(sort: Desc)])
 }
+
+/// 토스POS 결제 1건 = 슬랙 DM 1통 (migration 20260930090000_add_pos_payment_notice 의 사본)
+/// 랠리즈가 청구서 원본이다. POS 결제마다 "랠리즈에서 현장결제 처리하셨나요?" 를 묻고 답을 남긴다.
+/// ⚠️ DB 에는 부분 유일 인덱스("sitePaymentId" WHERE "siteMarkedPaid" = true)가 더 있다.
+///    Prisma 로 표현할 수 없어 여기에 적지 않는다(적으면 반대 방향으로 어긋난다).
+model PosPaymentNotice {
+  id                 String    @id @default(dbgenerated("gen_random_uuid()::text"))
+  /// 토스 결제 ID — 주문·결제 알림이 둘 다 와도 DM 은 한 통(중복 판별 기준)
+  tossPaymentId      String    @unique
+  tossOrderId        String
+  amount             BigInt
+  approvedAt         DateTime? @db.Timestamptz(6)
+  lineItems          String?
+  memo               String?
+  resolvedStudentId  String?
+  targetYear         Int?
+  targetMonth        Int?
+  sitePaymentId      String?
+  kind               String // AUTO_CANDIDATE | NO_MEMO | AMBIGUOUS | NOT_IN_ROSTER | NO_SITE_INVOICE | ALREADY_PAID | AMOUNT_MISMATCH
+  pickedKind         String? // 원장이 원생을 고른 뒤의 분류(AUTO_CANDIDATE | NO_SITE_INVOICE | ALREADY_PAID | AMOUNT_MISMATCH)
+  status             String    @default("PENDING") // PENDING | NOTIFIED | STUDENT_CHOSEN | CONFIRMED | IGNORED | FAILED
+  slackChannel       String?
+  slackTs            String?
+  error              String?
+  decidedBySlackUser String?
+  decidedAt          DateTime? @db.Timestamptz(6)
+  siteMarkedPaid     Boolean   @default(false)
+  createdAt          DateTime  @default(now()) @db.Timestamptz(6)
+  updatedAt          DateTime  @default(now()) @db.Timestamptz(6)
+
+  @@index([status, createdAt(sort: Desc)])
+  @@index([tossOrderId])
+}

@@ -8,10 +8,13 @@ import {
   addDays,
   assertReadOnlyTossRequest,
   attachStudentResolution,
+  billingMonthsToLoad,
   buildReconciliation,
   classifyBranch,
   cleanMemoFragment,
   dayDiff,
+  extractMemoMonths,
+  resolveTargetBillingMonth,
   flattenTossOrders,
   formatWon,
   isValidMonth,
@@ -544,4 +547,259 @@ test("메모 매칭은 주문번호 매칭 다음, 날짜·금액 매칭보다 �
   for (const g of r.groups) {
     assert.equal(g.siteRows[0].studentName, g.tossRows[0].resolvedStudents[0].name);
   }
+});
+
+// ───────────── 청구월 + 사이트 청구서 대조 (2026-09-30 원장 확인 반영) ─────────────
+//
+// 배경: 랠리즈가 청구서 원본이고, 사이트 "Payment" 는 수기 동기화로 뒤따라 채워진다.
+// ① 사이트에 납부 기록이 있는데 결제수단이 NULL·MANUAL 이라 카드 범위 조회에 안 잡혀
+//    "토스에만 있음"으로 잘못 나왔다(박찬민·손지형 실측).
+// ② 9월 말 POS 결제는 대개 10월분인데 결제일의 달로만 비교했다.
+
+const INVOICE_MONTHS = ["2026-08", "2026-09", "2026-10"];
+
+function invoiceRow({ id, name, studentId, amount, status = "PAID", method = null, billing = "2026-09", paidKst = null }) {
+  return normalizeSiteRow({
+    id,
+    studentId,
+    amount,
+    status,
+    method,
+    paidProvider: null,
+    providerOrderId: null,
+    providerPaymentKey: null,
+    year: Number(billing.slice(0, 4)),
+    month: Number(billing.slice(5, 7)),
+    type: "MONTHLY",
+    description: "",
+    studentName: name,
+    branch: "2호점 : 다산",
+    mergedIntoStudentId: null,
+    kstDateTimeRaw: paidKst,
+  });
+}
+
+function reconcileWithInvoices({ siteRows = [], orders, invoices }) {
+  return buildReconciliation({
+    month: "2026-09",
+    siteRows,
+    tossPayments: tossRows(orders),
+    students: ROSTER,
+    invoiceRows: invoices,
+    invoiceMonths: INVOICE_MONTHS,
+  });
+}
+
+test("청구월: 메모의 '9월'·'10월'·'2026-10' 이 결제일보다 우선하고, 없으면 결제일의 달", () => {
+  assert.deepEqual(resolveTargetBillingMonth("박찬민 9월", "2026-09-08"), {
+    month: "2026-09",
+    months: ["2026-09"],
+    source: "MEMO",
+  });
+  assert.equal(resolveTargetBillingMonth("토4 이시윤 10월", "2026-09-28").month, "2026-10");
+  assert.equal(resolveTargetBillingMonth("이시윤 2026-10", "2026-09-28").month, "2026-10");
+  const none = resolveTargetBillingMonth("이시윤", "2026-09-28");
+  assert.deepEqual([none.month, none.source], ["2026-09", "PAID_DATE"]);
+  assert.equal(resolveTargetBillingMonth("", "2026-09-28").source, "PAID_DATE");
+});
+
+test("청구서를 불러올 달은 전달·이번 달·다음 달(연 경계 포함)", () => {
+  assert.deepEqual(billingMonthsToLoad("2026-09").map((m) => m.month), ["2026-08", "2026-09", "2026-10"]);
+  assert.deepEqual(billingMonthsToLoad("2026-12").map((m) => m.month), ["2026-11", "2026-12", "2027-01"]);
+  assert.deepEqual(billingMonthsToLoad("2027-01").map((m) => [m.year, m.monthNo]), [[2026, 12], [2027, 1], [2027, 2]]);
+});
+
+test("청구월: 연말·연초 경계 — 12월에 '1월'은 다음 해, 1월에 '12월'은 작년", () => {
+  assert.equal(resolveTargetBillingMonth("김대건 1월", "2026-12-20").month, "2027-01");
+  assert.equal(resolveTargetBillingMonth("김대건 12월", "2027-01-03").month, "2026-12");
+  // 6개월 이내 차이는 같은 해(7월에 "2월" = 밀린 2월분)
+  assert.equal(resolveTargetBillingMonth("김대건 2월", "2026-07-10").month, "2026-02");
+  // 연도가 적혀 있으면 그대로 쓴다
+  assert.equal(resolveTargetBillingMonth("김대건 2027-01", "2026-09-10").month, "2027-01");
+});
+
+test("청구월: 반 표기 '월4'·'월요일' 의 '월'을 달로 오인하지 않는다", () => {
+  assert.deepEqual(extractMemoMonths("월4 이시윤"), []);
+  assert.deepEqual(extractMemoMonths("월요일 4교시 이시윤 10월"), [{ year: null, month: 10 }]);
+  assert.deepEqual(extractMemoMonths("박찬민 9월 2주"), [{ year: null, month: 9 }]);
+  // 두 달을 한 번에 적으면 둘 다 돌려준다 — 한 달로 고르지 않는다
+  assert.deepEqual(resolveTargetBillingMonth("이시윤 9월 / 이시윤 10월", "2026-09-28").months, ["2026-09", "2026-10"]);
+});
+
+test("박찬민형: 사이트에 결제수단·결제일 없는 납부 기록이 있으면 '이미 납부 기록 있음'으로 맞춘다", () => {
+  // 토스 9/8 20:36 KST = 11:36Z
+  const orders = [tossOrder({ date: "2026-09-08", time: "11:36:00", amount: 120000, memo: "박찬민 9월" })];
+  const invoices = [invoiceRow({ id: "pay-chanmin-0001", studentId: "stu-1", name: "박찬민", amount: 120000 })];
+  const result = reconcileWithInvoices({ orders, invoices });
+
+  const toss = result.main.tossResults[0];
+  assert.equal(toss.category, CATEGORY.MATCHED_BY_MEMO_EXISTING_RECORD);
+  // 사이트 쪽에도 같은 돈이 들어가 합계 검증이 맞는다
+  assert.equal(result.main.siteResults.length, 1);
+  assert.equal(result.main.siteResults[0].category, CATEGORY.MATCHED_BY_MEMO_EXISTING_RECORD);
+  assert.equal(result.mainSummary.difference, 0);
+  assert.equal(result.mainSummary.reconciles, true);
+
+  // 품질 경고에 결제ID 앞자리·결제수단(없음)·결제일(없음)이 드러난다
+  assert.equal(result.quality.existingRecords.length, 1);
+  const md = renderMarkdown(result, { naiveTz: "KST", assumedCount: 0 });
+  assert.ok(md.includes("카드결제로 표시되지 않음"));
+  assert.ok(md.includes("결제ID pay-chan · 박찬민 · 청구월 2026-09 · ₩120,000 · 결제수단 (없음) · 결제일 (없음)"));
+  assert.ok(md.includes("청구월: 2026-09(메모)"));
+  // 결제일이 비어 있다고 "새벽 시각" 경고가 나면 안 된다
+  assert.equal(result.quality.dawn.length, 0);
+});
+
+test("손지형형: 결제수단 MANUAL 인 납부 기록도 같은 방식으로 맞춘다", () => {
+  const orders = [tossOrder({ date: "2026-09-12", time: "09:39:00", amount: 120000, memo: "이시윤 9월" })];
+  const invoices = [
+    invoiceRow({
+      id: "pay-siyun-0001",
+      studentId: "stu-2",
+      name: "이시윤",
+      amount: 120000,
+      method: "MANUAL",
+      paidKst: "2026-09-12 21:05:00.000",
+    }),
+  ];
+  const result = reconcileWithInvoices({ orders, invoices });
+  assert.equal(result.main.tossResults[0].category, CATEGORY.MATCHED_BY_MEMO_EXISTING_RECORD);
+  const md = renderMarkdown(result, { naiveTz: "KST", assumedCount: 0 });
+  assert.ok(md.includes("결제수단 MANUAL · 결제일 2026-09-12 21:05:00"));
+  assert.equal(result.mainSummary.reconciles, true);
+});
+
+test("9/28 '10월' 결제 + 사이트에 10월 청구서 없음 → '그 달 청구서가 아직 없음' (9월분 기록은 가져가지 않는다)", () => {
+  const orders = [tossOrder({ date: "2026-09-28", amount: 120000, memo: "박찬민 10월" })];
+  // 9월분 납부 기록은 금액이 같아도 10월분 결제의 짝이 아니다
+  const invoices = [invoiceRow({ id: "pay-sept-0001", studentId: "stu-1", name: "박찬민", amount: 120000, billing: "2026-09" })];
+  const result = reconcileWithInvoices({ orders, invoices });
+
+  const toss = result.main.tossResults[0];
+  assert.equal(toss.category, CATEGORY.POS_ONLY_NO_SITE_INVOICE);
+  assert.equal(toss.row.targetBillingMonth, "2026-10");
+  assert.equal(result.main.siteResults.length, 0);
+  assert.equal(result.mainSummary.reconciles, true);
+
+  const md = renderMarkdown(result, { naiveTz: "KST", assumedCount: 0 });
+  assert.ok(md.includes("## 사이트에 그 달 청구서가 아직 없음 (랠리즈→사이트 미반영) (1건)"));
+  assert.ok(md.includes("랠리즈에서 발행된 청구서가 아직 사이트로 옮겨지지 않은 경우입니다."));
+  assert.ok(md.includes("청구월: 2026-10(메모)"));
+  assert.ok(renderCsv(result).includes("POS_ONLY_NO_SITE_INVOICE"));
+});
+
+test("'10월' 결제 + 사이트 10월 청구서가 미납(PENDING) → 'POS로 받았는데 사이트는 미납'", () => {
+  const orders = [tossOrder({ date: "2026-09-28", amount: 120000, memo: "박찬민 10월" })];
+  const invoices = [
+    invoiceRow({ id: "pay-oct-00001", studentId: "stu-1", name: "박찬민", amount: 120000, billing: "2026-10", status: "PENDING" }),
+  ];
+  const result = reconcileWithInvoices({ orders, invoices });
+  assert.equal(result.main.tossResults[0].category, CATEGORY.POS_PAID_SITE_UNPAID);
+  // 사이트는 돈을 기록하지 않았으므로 사이트 합계에 넣지 않는다
+  assert.equal(result.main.siteResults.length, 0);
+  assert.equal(result.mainSummary.reconciles, true);
+  const md = renderMarkdown(result, { naiveTz: "KST", assumedCount: 0 });
+  assert.ok(md.includes("## POS로 받았는데 사이트는 미납 (1건)"));
+  assert.ok(md.includes("결제ID pay-oct- · 청구월 2026-10 · PENDING · ₩120,000"));
+});
+
+test("같은 미납 청구서를 POS 결제 두 건이 함께 가져가지 않는다(두 번째는 확인 필요)", () => {
+  const orders = [
+    tossOrder({ date: "2026-09-27", amount: 120000, memo: "박찬민 10월" }),
+    tossOrder({ date: "2026-09-28", amount: 120000, memo: "박찬민 10월" }),
+  ];
+  const invoices = [
+    invoiceRow({ id: "pay-oct-00001", studentId: "stu-1", name: "박찬민", amount: 120000, billing: "2026-10", status: "OVERDUE" }),
+  ];
+  const result = reconcileWithInvoices({ orders, invoices });
+  const cats = result.main.tossResults.map((e) => e.category);
+  assert.deepEqual(cats, [CATEGORY.POS_PAID_SITE_UNPAID, CATEGORY.HELD_MEMO_INVOICE_CONFLICT]);
+  assert.match(result.main.tossResults[1].reason, /이미 다른 결제와 짝지어져/);
+});
+
+test("그 달 납부 기록의 금액이 다르거나 같은 금액이 여러 건이면 보류하고 후보를 보여준다", () => {
+  const diff = reconcileWithInvoices({
+    orders: [tossOrder({ date: "2026-09-08", amount: 120000, memo: "박찬민 9월" })],
+    invoices: [invoiceRow({ id: "pay-diff-0001", studentId: "stu-1", name: "박찬민", amount: 90000 })],
+  });
+  const held = diff.main.tossResults[0];
+  assert.equal(held.category, CATEGORY.HELD_MEMO_INVOICE_CONFLICT);
+  assert.match(held.reason, /금액이 다릅니다/);
+  assert.equal(held.candidates.length, 1);
+  assert.equal(diff.mainSummary.reconciles, true);
+  const md = renderMarkdown(diff, { naiveTz: "KST", assumedCount: 0 });
+  assert.ok(md.includes("(사이트 청구서)"));
+
+  const many = reconcileWithInvoices({
+    orders: [tossOrder({ date: "2026-09-08", amount: 120000, memo: "박찬민 9월" })],
+    invoices: [
+      invoiceRow({ id: "pay-dup-00001", studentId: "stu-1", name: "박찬민", amount: 120000 }),
+      invoiceRow({ id: "pay-dup-00002", studentId: "stu-1", name: "박찬민", amount: 120000, status: "PENDING" }),
+    ],
+  });
+  assert.equal(many.main.tossResults[0].category, CATEGORY.HELD_MEMO_INVOICE_CONFLICT);
+  assert.equal(many.main.tossResults[0].candidates.length, 2);
+});
+
+test("카드 기록이 9월분뿐이면 '10월' 결제가 먼저 와도 9월분 결제의 짝을 빼앗지 않는다", () => {
+  // 신하율형: 9월분·10월분을 따로 냄. 사이트엔 9월분 카드 기록만 있음.
+  const site = [siteRow({ date: "2026-09-05", amount: 120000, name: "이시윤" })]; // 청구월 2026-09
+  const orders = [
+    tossOrder({ date: "2026-09-04", amount: 120000, memo: "이시윤 10월" }), // 시간상 먼저
+    tossOrder({ date: "2026-09-05", amount: 120000, memo: "이시윤 9월" }),
+  ];
+  const result = reconcileWithInvoices({ siteRows: site, orders, invoices: [] });
+  const byMonth = Object.fromEntries(result.main.tossResults.map((e) => [e.row.targetBillingMonth, e.category]));
+  assert.equal(byMonth["2026-09"], CATEGORY.MATCHED_BY_MEMO_NAME);
+  assert.equal(byMonth["2026-10"], CATEGORY.POS_ONLY_NO_SITE_INVOICE);
+  assert.equal(result.mainSummary.reconciles, true);
+});
+
+test("불러오지 않은 청구월(예: 7월)은 '청구서 없음'으로 단정하지 않고 종전 흐름을 탄다", () => {
+  const orders = [tossOrder({ date: "2026-09-08", amount: 120000, memo: "박찬민 7월" })];
+  const result = reconcileWithInvoices({ orders, invoices: [] });
+  assert.equal(result.main.tossResults[0].category, CATEGORY.POS_ONLY);
+});
+
+test("청구서 자료를 넘기지 않으면 종전 동작 그대로다(카드 범위만 대조)", () => {
+  const payments = memoRows([tossOrder({ date: "2026-09-08", amount: 120000, memo: "박찬민 9월" })]);
+  const result = buildReconciliation({ month: "2026-09", siteRows: [], tossPayments: payments, students: ROSTER });
+  assert.equal(result.main.tossResults[0].category, CATEGORY.POS_ONLY);
+});
+
+test("합계 검증: 새 분류가 섞여도 전체 차이 = 항목별 차이 합", () => {
+  const site = [
+    siteRow({ date: "2026-09-03", amount: 110000, name: "김대건" }), // 날짜·금액으로 맞을 카드 기록
+    siteRow({ date: "2026-09-20", amount: 50000, name: "정지유" }), // 사이트에만 있음
+  ];
+  const orders = [
+    tossOrder({ date: "2026-09-03", amount: 110000, memo: "" }),
+    tossOrder({ date: "2026-09-08", amount: 120000, memo: "박찬민 9월" }), // 기존 기록
+    tossOrder({ date: "2026-09-28", amount: 130000, memo: "박찬민 10월" }), // 미납
+    tossOrder({ date: "2026-09-29", amount: 140000, memo: "이시윤 10월" }), // 청구서 없음
+    tossOrder({ date: "2026-09-29", amount: 99000, memo: "" }), // 토스에만
+  ];
+  const invoices = [
+    invoiceRow({ id: "pay-a", studentId: "stu-1", name: "박찬민", amount: 120000 }),
+    invoiceRow({ id: "pay-b", studentId: "stu-1", name: "박찬민", amount: 130000, billing: "2026-10", status: "PENDING" }),
+  ];
+  const result = reconcileWithInvoices({ siteRows: site, orders, invoices });
+  const s = result.mainSummary;
+  const cats = new Set(result.main.tossResults.map((e) => e.category));
+  for (const c of [
+    CATEGORY.MATCHED_BY_MEMO_EXISTING_RECORD,
+    CATEGORY.POS_PAID_SITE_UNPAID,
+    CATEGORY.POS_ONLY_NO_SITE_INVOICE,
+    CATEGORY.POS_ONLY,
+  ]) {
+    assert.ok(cats.has(c), `${c} 가 섞여 있어야 검증 의미가 있다`);
+  }
+  assert.equal(s.reconciles, true);
+  // 사이트 합계 = 카드 기록 160,000 + 끌어온 기존 기록 120,000
+  assert.equal(s.siteTotal, 280000);
+  assert.equal(s.tossTotal, 599000);
+  assert.equal(s.difference, 599000 - 280000);
+  assert.equal(summarize(result.main).difference, s.difference);
+  const md = renderMarkdown(result, { naiveTz: "KST", assumedCount: 0 });
+  assert.ok(md.includes("(전체 차이와 일치)"));
 });

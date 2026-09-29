@@ -25,6 +25,10 @@
 export const CATEGORY = {
   MATCHED_BY_ID: "MATCHED_BY_ID",
   MATCHED_BY_MEMO_NAME: "MATCHED_BY_MEMO_NAME",
+  MATCHED_BY_MEMO_EXISTING_RECORD: "MATCHED_BY_MEMO_EXISTING_RECORD",
+  POS_PAID_SITE_UNPAID: "POS_PAID_SITE_UNPAID",
+  POS_ONLY_NO_SITE_INVOICE: "POS_ONLY_NO_SITE_INVOICE",
+  HELD_MEMO_INVOICE_CONFLICT: "HELD_MEMO_INVOICE_CONFLICT",
   HELD_MEMO_NAME_AMOUNT_MISMATCH: "HELD_MEMO_NAME_AMOUNT_MISMATCH",
   HELD_MEMO_NAME_AMBIGUOUS: "HELD_MEMO_NAME_AMBIGUOUS",
   HELD_MULTI_STUDENT_ORDER: "HELD_MULTI_STUDENT_ORDER",
@@ -43,6 +47,10 @@ export const CATEGORY = {
 export const CATEGORY_LABEL = {
   MATCHED_BY_ID: "정상 매칭 — 주문번호 일치",
   MATCHED_BY_MEMO_NAME: "정상 매칭 — POS 메모의 원생 이름 + 금액 일치",
+  MATCHED_BY_MEMO_EXISTING_RECORD: "사이트에 이미 납부 기록 있음 — 결제수단이 카드로 표시되지 않음",
+  POS_PAID_SITE_UNPAID: "POS로 받았는데 사이트는 아직 미납",
+  POS_ONLY_NO_SITE_INVOICE: "사이트에 그 달 청구서가 아직 없음 (랠리즈→사이트 미반영)",
+  HELD_MEMO_INVOICE_CONFLICT: "확인 필요 — 원생의 그 달 청구서와 금액·건수가 맞지 않음",
   HELD_MEMO_NAME_AMOUNT_MISMATCH: "확인 필요 — 메모 이름은 맞는데 금액이 다름",
   HELD_MEMO_NAME_AMBIGUOUS: "확인 필요 — 메모 이름만으로 원생을 특정할 수 없음",
   HELD_MULTI_STUDENT_ORDER: "확인 필요 — 한 결제에 원생이 여럿(형제·합산 결제)",
@@ -61,6 +69,8 @@ export const CATEGORY_LABEL = {
 export const MATCHED_CATEGORIES = new Set([
   CATEGORY.MATCHED_BY_ID,
   CATEGORY.MATCHED_BY_MEMO_NAME,
+  // 사이트의 기존 납부 기록(카드 표시 없음)과 짝지은 건. 합계 검증에서 양쪽 모두에 들어간다(summarize 참고).
+  CATEGORY.MATCHED_BY_MEMO_EXISTING_RECORD,
   CATEGORY.MATCHED_BY_DATE_AMOUNT,
   CATEGORY.MATCHED_AS_GROUP,
 ]);
@@ -137,6 +147,24 @@ export function monthRange(month, bufferDays = NEAR_DATE_DAYS) {
     fetchFromIso: `${addDays(first, -bufferDays)}T00:00:00+09:00`,
     fetchToIso: `${addDays(last, bufferDays + 1)}T00:00:00+09:00`,
   };
+}
+
+/**
+ * 청구월 기준으로 불러올 사이트 청구서의 달 목록: 전달·이번 달·다음 달.
+ *  - 다음 달: 랠리즈는 다음 달 청구서를 이번 달 셋째 주쯤 발행한다 → 월말 POS 결제는 대개 다음 달분.
+ *  - 전달: 월초에 밀린 전달분을 내는 경우("8월" 메모로 9/2 결제).
+ * @returns {{ month: string, year: number, monthNo: number }[]}
+ */
+export function billingMonthsToLoad(month) {
+  if (!isValidMonth(month)) throw new Error(`월 형식이 올바르지 않습니다(YYYY-MM): ${month}`);
+  const y = Number(month.slice(0, 4));
+  const m = Number(month.slice(5, 7));
+  return [-1, 0, 1].map((delta) => {
+    const index = y * 12 + (m - 1) + delta; // 달력 숫자만으로 계산(시간대 무관)
+    const year = Math.floor(index / 12);
+    const monthNo = (index % 12) + 1;
+    return { month: `${year}-${pad2(monthNo)}`, year, monthNo };
+  });
 }
 
 export function isInMonth(ymd, month) {
@@ -261,6 +289,76 @@ export function cleanMemoFragment(fragment) {
   return text.replace(/\s+/g, " ").trim();
 }
 
+// ───────────────── 청구월(어느 달 수강료인가) 판정 ─────────────────
+//
+// 랠리즈가 청구서의 원본이다. 다음 달 청구서는 이번 달 셋째 주쯤 발행되므로,
+// 9월 말 POS 결제는 대개 **10월분**이다. 그래서 결제일의 달로만 비교하면 틀린다.
+// 현장에서 메모에 "10월" 을 적어 두므로, 메모의 달을 결제일보다 우선한다.
+
+const MEMO_YEAR_MONTH_RE = /(?<!\d)(\d{4})\s*[-.]\s*(\d{1,2})(?!\d)/g;
+// "월요일" 의 '월' 은 달이 아니다 → 뒤에 '요' 가 오면 제외한다.
+const MEMO_MONTH_RE = /(?<!\d)(\d{1,2})\s*월(?!요)/g;
+
+const pad2 = (n) => String(n).padStart(2, "0");
+
+/**
+ * 메모 원문에서 달 표기를 모두 뽑는다. 예: "토4 이시윤 10월" → [{year:null, month:10}]
+ * "2026-10" 처럼 연도가 붙어 있으면 연도까지 돌려준다.
+ */
+export function extractMemoMonths(memoText) {
+  const found = [];
+  const seen = new Set();
+  const push = (year, month) => {
+    if (!(month >= 1 && month <= 12)) return;
+    const key = `${year ?? ""}-${month}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    found.push({ year, month });
+  };
+  // 여러 메모는 " / " 로 이어 붙어 있다(parseMemoNames 참고).
+  for (const fragment of String(memoText ?? "").split(/[\n\r,]+|\s+\/\s+/)) {
+    // "월4"(월요일 4교시) 같은 반 표기를 먼저 떼야 달로 오인하지 않는다.
+    let text = fragment.trim().replace(CLASS_PREFIX_RE, "");
+    for (const m of text.matchAll(MEMO_YEAR_MONTH_RE)) push(Number(m[1]), Number(m[2]));
+    text = text.replace(MEMO_YEAR_MONTH_RE, " ");
+    for (const m of text.matchAll(MEMO_MONTH_RE)) push(null, Number(m[1]));
+  }
+  return found;
+}
+
+/**
+ * 토스 결제 1건의 청구월("YYYY-MM")을 정한다.
+ *  1) 메모에 달 표기가 있으면 그 달. 연도는 결제일(KST)의 연도를 쓰되,
+ *     메모 달이 결제 달보다 6개월 넘게 **앞서면** 다음 해로 본다(12월에 "1월" → 다음 해 1월),
+ *     6개월 넘게 **뒤면** 전년도로 본다(1월에 "12월" → 작년 12월, 밀린 납부).
+ *  2) 메모에 달이 없으면 결제일(KST)의 달.
+ * 메모에 달이 여럿이면(예: "9월, 10월") months 에 모두 담는다 — 한 달로 고르지 않는다.
+ * @returns {{ month: string, months: string[], source: "MEMO"|"PAID_DATE"|"UNKNOWN" }}
+ */
+export function resolveTargetBillingMonth(memoText, kstDate) {
+  const valid = typeof kstDate === "string" && YMD_RE.test(kstDate);
+  const payYear = valid ? Number(kstDate.slice(0, 4)) : NaN;
+  const payMonth = valid ? Number(kstDate.slice(5, 7)) : NaN;
+  const tokens = extractMemoMonths(memoText);
+
+  const months = [];
+  for (const token of tokens) {
+    let year = token.year;
+    if (year == null) {
+      if (!valid) continue;
+      year = payYear;
+      if (payMonth - token.month > 6) year += 1;
+      else if (token.month - payMonth > 6) year -= 1;
+    }
+    const ym = `${year}-${pad2(token.month)}`;
+    if (!months.includes(ym)) months.push(ym);
+  }
+  if (months.length > 0) return { month: months[0], months, source: "MEMO" };
+  if (!valid) return { month: "", months: [], source: "UNKNOWN" };
+  const ym = kstDate.slice(0, 7);
+  return { month: ym, months: [ym], source: "PAID_DATE" };
+}
+
 /**
  * 주문(order)의 메모를 모아 이름 후보를 뽑는다.
  * 줄바꿈과 쉼표로 자른다 — 한 줄에 여러 원생이 적히는 경우가 실제로 있다("정우준 9월\n정지유 9월").
@@ -341,6 +439,10 @@ function toIntAmount(value) {
   return Math.round(n);
 }
 
+function billingFields(target) {
+  return { targetBillingMonth: target.month, billingMonths: target.months, billingMonthSource: target.source };
+}
+
 /**
  * 토스 주문 배열(Order[]) → 결제 1건 = 1행으로 펴낸다.
  * 취소 건은 승인 시각(approvedAt)을 날짜 기준으로 삼는다(사이트의 paidDate 와 같은 성격).
@@ -404,6 +506,8 @@ export function flattenTossOrders(orders, options = {}) {
         installmentMonth: payment?.cardDetails?.installmentMonth ?? null,
         items,
         memoRaw: memo.memoRaw,
+        // 어느 달 수강료인지(메모 우선 → 없으면 결제일의 달)
+        ...billingFields(resolveTargetBillingMonth(memo.memoRaw, kst.kstDate)),
         memoNames: memo.names,
         memoUnparsed: memo.unparsed,
         // 아래 세 필드는 원생 명단을 받은 뒤 attachStudentResolution 이 채운다.
@@ -436,7 +540,8 @@ export function normalizeSiteRow(row) {
   const flags = [];
   // 09:00:00 KST = UTC 00:00 → 시각 없이 "날짜만" 저장된 것으로 본다.
   if (/^09:00:00(\.0+)?$/.test(raw.slice(11))) flags.push("시각 없음(날짜만 기록)");
-  const hour = Number(kstDateTime.slice(11, 13));
+  // 결제일이 비어 있는 기록(수기 동기화분)은 시각 판정을 하지 않는다 — 빈 문자열이 0시로 읽혀 "새벽"으로 오탐된다.
+  const hour = kstDateTime.length >= 13 ? Number(kstDateTime.slice(11, 13)) : NaN;
   if (Number.isFinite(hour) && hour >= 0 && hour <= 6) flags.push("새벽 시각 — 시간대 입력 오류 의심");
   if (row.mergedIntoStudentId) flags.push("병합된 원생");
 
@@ -455,6 +560,9 @@ export function normalizeSiteRow(row) {
     providerPaymentKey: row.providerPaymentKey == null ? "" : String(row.providerPaymentKey).trim(),
     year: row.year ?? null,
     month: row.month ?? null,
+    // 청구월(year/month 칸). 결제일과 다를 수 있다 — 9월 말에 낸 10월분 등.
+    billingMonth: billingMonthOf(row.year, row.month),
+    type: row.type == null ? "" : String(row.type),
     description: row.description == null ? "" : String(row.description),
     studentName: String(row.studentName ?? row.student_name ?? ""),
     branch: row.branch == null ? "" : String(row.branch),
@@ -465,7 +573,16 @@ export function normalizeSiteRow(row) {
   };
 }
 
+function billingMonthOf(year, month) {
+  const y = Number(year);
+  const m = Number(month);
+  if (!Number.isInteger(y) || !Number.isInteger(m) || y < 2000 || m < 1 || m > 12) return "";
+  return `${y}-${pad2(m)}`;
+}
+
 const CANCEL_STATUSES = new Set(["CANCELED", "CANCELLED", "REFUNDED"]);
+/** 사이트 청구서 중 "아직 돈을 못 받은" 상태 */
+const UNPAID_STATUSES = new Set(["PENDING", "OVERDUE", "UNPAID"]);
 
 /** 사이트 행을 월/상태/지점 기준으로 나눈다. */
 export function partitionSiteRows(rows, month) {
@@ -598,6 +715,96 @@ export function matchSets(siteRows, tossRows, options = {}) {
     (siteRow.studentId && student.id && siteRow.studentId === student.id) ||
     baseName(siteRow.studentName) === baseName(student.name);
 
+  // 메모로 청구월을 알면 **다른 달 기록과는 짝짓지 않는다**
+  // (예: 9/28 "10월" 결제가 9월분 기록을 가져가면 9월분 결제가 엉뚱하게 '토스에만 있음'이 된다).
+  // 청구월을 결제일로 추정한 경우엔 확실하지 않으므로 종전처럼 막지 않는다.
+  const billingCompatible = (siteRow, t) =>
+    t.billingMonthSource !== "MEMO" || !siteRow.billingMonth || (t.billingMonths ?? []).includes(siteRow.billingMonth);
+
+  // ②-b 사이트 청구서(청구월 기준) 대조 — invoiceRows 를 받았을 때만 켠다.
+  //   사이트 "Payment" 는 랠리즈를 뒤따라 채워지는 사본이라, 카드로 표시되지 않았거나(결제수단 NULL·MANUAL)
+  //   결제일이 비어 있는 납부 기록이 있다. 카드 범위 조회에 안 잡혀 "토스에만 있음"으로 잘못 나오던 것을
+  //   원생 + 청구월로 다시 찾아본다.
+  const invoiceMode = Array.isArray(options.invoiceRows);
+  const invoiceRows = invoiceMode ? options.invoiceRows : [];
+  const invoiceMonths = new Set(options.invoiceMonths ?? []);
+  // 카드 범위(sites·버퍼)에 이미 들어 있는 기록은 합계에 이미 잡혀 있으므로 여기서 다시 끌어오지 않는다.
+  const universeIds = new Set([...sites, ...siteBuffer].map((row) => row.id));
+  const usedInvoiceIds = new Set();
+  const extraSiteEntries = [];
+
+  const matchByInvoice = (t, student) => {
+    const months = t.billingMonths ?? [];
+    // 불러오지 않은 달이면 "청구서가 없다"고 단정할 수 없다 → 종전 흐름(③·④)에 맡긴다.
+    if (months.length === 0 || !months.every((m) => invoiceMonths.has(m))) return false;
+
+    const inMonths = (r) => r.billingMonth && months.includes(r.billingMonth) && !CANCEL_STATUSES.has(r.status);
+    const byId = new Map();
+    for (const r of [...invoiceRows, ...sites, ...siteBuffer]) {
+      if (!byId.has(r.id) && sameStudent(r, student) && inMonths(r)) byId.set(r.id, r);
+    }
+    const monthRows = [...byId.values()].sort(sortSite);
+    const monthLabel = months.join("·");
+
+    if (monthRows.length === 0) {
+      assign(
+        tossResult,
+        t,
+        CATEGORY.POS_ONLY_NO_SITE_INVOICE,
+        `원생 ${student.name} 의 ${monthLabel} 청구서가 사이트에 아직 없습니다(랠리즈에서 옮겨지지 않은 것으로 보입니다)`,
+      );
+      return true;
+    }
+
+    const claimable = monthRows.filter((r) => !universeIds.has(r.id) && !usedInvoiceIds.has(r.id));
+    const paidSame = claimable.filter((r) => r.status === "PAID" && r.amount === t.amount);
+    const unpaidSame = claimable.filter((r) => UNPAID_STATUSES.has(r.status) && r.amount === t.amount);
+
+    if (paidSame.length === 1 && unpaidSame.length === 0) {
+      const s = paidSame[0];
+      usedInvoiceIds.add(s.id);
+      const groupId = `EXISTING:${t.paymentId}`;
+      const reason =
+        `POS 메모 "${t.memoRaw}" → 원생 ${student.name} · ${s.billingMonth} 청구서가 사이트에 이미 납부로 기록돼 있습니다 ` +
+        `(결제수단 ${s.method || "(없음)"}, 결제일 ${s.kstDateTime || "(없음)"}, 결제ID ${s.id.slice(0, 8)})`;
+      // 사이트 쪽 결과에도 넣는다 — 합계 검증이 양쪽에서 같은 돈을 "맞춰진 돈"으로 봐야 균형이 맞는다(summarize 참고).
+      extraSiteEntries.push({ row: s, category: CATEGORY.MATCHED_BY_MEMO_EXISTING_RECORD, reason, candidates: [], groupId });
+      assign(tossResult, t, CATEGORY.MATCHED_BY_MEMO_EXISTING_RECORD, reason, [], groupId);
+      groups.push({ id: groupId, kind: "EXISTING", kstDate: t.kstDate, amount: t.amount, siteRows: [s], tossRows: [t] });
+      return true;
+    }
+
+    if (paidSame.length === 0 && unpaidSame.length === 1) {
+      const s = unpaidSame[0];
+      usedInvoiceIds.add(s.id); // 같은 청구서를 두 번째 POS 결제가 또 가져가지 못하게
+      const reason =
+        `POS로 ${formatWon(t.amount)} 받았는데 사이트의 ${student.name} ${s.billingMonth} 청구서는 아직 ${s.status} 입니다 ` +
+        `(결제ID ${s.id.slice(0, 8)})`;
+      assign(tossResult, t, CATEGORY.POS_PAID_SITE_UNPAID, reason, [candidateOf(s, t, "INVOICE")]);
+      return true;
+    }
+
+    // 여기부터는 사람이 봐야 한다(추측 금지).
+    let why;
+    if (paidSame.length + unpaidSame.length > 1) {
+      why = `같은 금액(${formatWon(t.amount)})의 청구서가 ${paidSame.length + unpaidSame.length}건이라 어느 건인지 고를 수 없습니다`;
+    } else if (claimable.length === 0) {
+      why = "그 달 청구서가 이미 다른 결제와 짝지어져 있습니다(중복 결제 여부 확인)";
+    } else {
+      why = `금액이 다릅니다(토스 ${formatWon(t.amount)} / 사이트 ${claimable
+        .map((r) => `${r.status} ${formatWon(r.amount)}`)
+        .join(", ")})`;
+    }
+    assign(
+      tossResult,
+      t,
+      CATEGORY.HELD_MEMO_INVOICE_CONFLICT,
+      `메모 이름 → 원생 ${student.name} · ${monthLabel} 청구서와 맞지 않습니다 — ${why}`,
+      monthRows.map((r) => candidateOf(r, t, "INVOICE")),
+    );
+    return true;
+  };
+
   for (const t of tosses) {
     if (tossResult.has(t.paymentId)) continue;
     const names = t.memoNames ?? [];
@@ -636,10 +843,20 @@ export function matchSets(siteRows, tossRows, options = {}) {
     if (resolution.status !== "EXACT" && resolution.status !== "SUFFIX") continue; // 명단에 없는 이름은 뒤 단계로
 
     const student = resolution.students[0];
-    const candidates = sites.filter((s) => !siteResult.has(s.id) && sameStudent(s, student));
-    if (candidates.length === 0) continue; // 사이트에 기록 자체가 없음 → 뒤에서 "토스POS에만 있음"
+    const candidates = sites.filter((s) => !siteResult.has(s.id) && sameStudent(s, student) && billingCompatible(s, t));
+    if (candidates.length === 0) {
+      // 카드 범위에 이 원생의 (그 달) 기록이 없다 → 청구월 기준으로 사이트 청구서를 다시 찾아본다.
+      // 청구서 자료를 안 받았으면 종전처럼 뒤 단계(③·④)로 넘어가 "토스POS에만 있음" 등이 된다.
+      if (invoiceMode) matchByInvoice(t, student);
+      continue;
+    }
 
-    const exactAmount = candidates.filter((s) => s.amount === t.amount);
+    let exactAmount = candidates.filter((s) => s.amount === t.amount);
+    if (exactAmount.length > 1) {
+      // 같은 금액이 여러 달치 있으면(9월분·10월분) 메모의 청구월로 좁혀 본다.
+      const sameMonth = exactAmount.filter((s) => s.billingMonth && (t.billingMonths ?? []).includes(s.billingMonth));
+      if (sameMonth.length === 1) exactAmount = sameMonth;
+    }
     if (exactAmount.length === 1) {
       const s = exactAmount[0];
       const groupId = `MEMO:${t.paymentId}`;
@@ -773,7 +990,8 @@ export function matchSets(siteRows, tossRows, options = {}) {
   for (const t of tosses) if (!tossResult.has(t.paymentId)) resolveLeftover(t, sitePool, tossResult);
 
   return {
-    siteResults: sites.map((s) => siteResult.get(s.id)),
+    // 기존 납부 기록으로 짝지은 사이트 행(카드 범위 밖)을 뒤에 붙인다 — 합계 검증 균형용.
+    siteResults: [...sites.map((s) => siteResult.get(s.id)), ...extraSiteEntries],
     tossResults: tosses.map((t) => tossResult.get(t.paymentId)),
     groups,
   };
@@ -807,6 +1025,12 @@ export function summarize(matchResult) {
   const unmatchedTossSum = matchResult.tossResults
     .filter((e) => !MATCHED_CATEGORIES.has(e.category))
     .reduce((a, e) => a + e.row.amount, 0);
+  // 합계 검증: 전체 차이(토스 − 사이트) == 짝 못 찾은 토스 − 짝 못 찾은 사이트.
+  // "기존 납부 기록" 매칭은 카드 범위 밖의 사이트 행을 끌어온 것이라, 토스 쪽만 '맞춰짐'으로 빼면
+  // 사이트 합계에는 그 돈이 없어 식이 어긋난다. 그래서 matchSets 가 그 사이트 행을 siteResults 에도
+  // 같은 분류로 넣는다 → 양쪽 합계에 같은 금액이 더해지고 양쪽 '못 찾은 돈'에서는 똑같이 빠져 균형이 맞는다.
+  // 미납 청구서(POS_PAID_SITE_UNPAID)·청구서 없음(POS_ONLY_NO_SITE_INVOICE)은 사이트가 돈을 기록하지
+  // 않은 것이므로 사이트 쪽에 넣지 않는다(토스 쪽 '못 찾은 돈'으로만 남는다).
   const difference = tossTotal - siteTotal;
   const itemLevelDifference = unmatchedTossSum - unmatchedSiteSum;
 
@@ -836,8 +1060,14 @@ export function collectQualityWarnings(siteRows) {
   };
 }
 
-/** 대사 전체를 한 번에 계산한다(CLI·테스트 공용 진입점). */
-export function buildReconciliation({ month, siteRows, tossPayments, students = [] }) {
+/**
+ * 대사 전체를 한 번에 계산한다(CLI·테스트 공용 진입점).
+ *
+ * invoiceRows(선택): 청구월(year/month) 기준으로 불러온 사이트 월 수강료 기록(결제수단·결제일 무관, NULL 포함).
+ * invoiceMonths(선택): invoiceRows 를 불러온 청구월 목록. 이 밖의 달은 "청구서 없음"이라고 단정하지 않는다.
+ * 둘 다 없으면 종전 동작(카드 범위만 대조)과 같다.
+ */
+export function buildReconciliation({ month, siteRows, tossPayments, students = [], invoiceRows, invoiceMonths }) {
   if (!isValidMonth(month)) throw new Error(`월 형식이 올바르지 않습니다(YYYY-MM): ${month}`);
   const range = monthRange(month);
   const site = partitionSiteRows(siteRows, month);
@@ -847,6 +1077,9 @@ export function buildReconciliation({ month, siteRows, tossPayments, students = 
   const main = matchSets(site.paid, toss.approved, {
     siteBuffer: site.paidBuffer,
     tossBuffer: toss.approvedBuffer,
+    // 다른 지점 원생의 청구서는 이름이 같아도 쓰지 않는다.
+    invoiceRows: Array.isArray(invoiceRows) ? invoiceRows.filter((r) => r.branchClass !== "OTHER") : undefined,
+    invoiceMonths: invoiceMonths ?? [],
   });
   const cancel = matchSets(site.canceled, toss.cancelled, {
     siteBuffer: site.canceledBuffer,
@@ -862,7 +1095,13 @@ export function buildReconciliation({ month, siteRows, tossPayments, students = 
     mainSummary: summarize(main),
     cancel,
     cancelSummary: summarize(cancel),
-    quality: collectQualityWarnings([...site.paid, ...site.canceled, ...site.otherStatus]),
+    quality: {
+      ...collectQualityWarnings([...site.paid, ...site.canceled, ...site.otherStatus]),
+      // 메모로 찾은 기존 납부 기록 — 결제수단/결제일을 나중에 바로잡아야 할 목록
+      existingRecords: main.siteResults
+        .filter((e) => e.category === CATEGORY.MATCHED_BY_MEMO_EXISTING_RECORD)
+        .map((e) => e.row),
+    },
     // 메모에 적힌 이름이 원생 명단에 아예 없는 건 — 리포트에서 크게 드러낸다.
     unknownMemoNamePayments: [...toss.approved, ...toss.cancelled].filter(
       (row) => (row.unknownMemoNames ?? []).length > 0 || (row.memoUnparsed ?? []).length > 0,
@@ -881,7 +1120,9 @@ export function formatWon(amount) {
 }
 
 function siteLabel(row) {
-  const parts = [row.kstDateTime, formatWon(row.amount), row.studentName || "이름 없음"];
+  const parts = [row.kstDateTime || "(결제일 없음)", formatWon(row.amount), row.studentName || "이름 없음"];
+  if (row.billingMonth) parts.push(`청구월: ${row.billingMonth}`);
+  if (row.status && row.status !== "PAID") parts.push(`상태 ${row.status}`);
   if (row.description) parts.push(row.description);
   const provider = row.paidProvider || `${row.method || "-"}(제공자 없음)`;
   parts.push(provider);
@@ -904,6 +1145,12 @@ export function resolvedStudentLabel(row) {
 function tossLabel(row) {
   const parts = [row.kstDateTime, formatWon(row.amount)];
   parts.push(`원생 ${resolvedStudentLabel(row)}`);
+  // 어느 달 수강료로 보고 대조했는지 — 메모에서 읽었는지, 결제일로 추정했는지까지 밝힌다.
+  if (row.targetBillingMonth) {
+    const how = row.billingMonthSource === "MEMO" ? "메모" : "결제일 기준";
+    const months = (row.billingMonths ?? []).length > 1 ? row.billingMonths.join("·") : row.targetBillingMonth;
+    parts.push(`청구월: ${months}(${how})`);
+  }
   if (row.memoRaw) parts.push(`메모 "${row.memoRaw.replace(/\n/g, " / ")}"`);
   if (row.items) parts.push(row.items);
   if (row.approvedNo) parts.push(`승인번호 ${row.approvedNo}`);
@@ -918,6 +1165,8 @@ export function describeRow(row) {
 
 function candidateLines(candidates) {
   return candidates.map((c) => {
+    // 청구서 후보는 결제일이 비어 있을 수 있어 날짜 차이 대신 청구월·상태로 보여준다.
+    if (c.kind === "INVOICE") return `    - (사이트 청구서) ${describeRow(c.row)}`;
     const where = c.outOfMonth ? " [이번 달 밖]" : "";
     const diff = c.dayDiff === 0 ? "같은 날" : `${c.dayDiff > 0 ? "+" : ""}${c.dayDiff}일`;
     const kind = c.kind === "SAME_DATE_DIFF_AMOUNT" ? "금액 다름" : "금액 같음";
@@ -933,6 +1182,7 @@ function entriesOf(matchResult, category) {
 }
 
 const HELD_ORDER = [
+  CATEGORY.HELD_MEMO_INVOICE_CONFLICT,
   CATEGORY.HELD_MEMO_NAME_AMOUNT_MISMATCH,
   CATEGORY.HELD_MULTI_STUDENT_ORDER,
   CATEGORY.HELD_MEMO_NAME_AMBIGUOUS,
@@ -1013,6 +1263,23 @@ export function renderMarkdown(result, meta = {}) {
       L.push("  - ⚠️ POS 메모가 없어 누구 결제인지 단서가 없습니다.");
     }
   });
+  // 앞으로 자동 처리 후보가 될 목록 — 돈은 받았는데 사이트 청구서가 아직 미납인 건
+  section("POS로 받았는데 사이트는 미납", entriesOf(result.main, CATEGORY.POS_PAID_SITE_UNPAID), (e) => {
+    L.push(`- ${describeRow(e.row)}`);
+    for (const c of e.candidates) {
+      L.push(`  - 사이트 청구서: 결제ID ${c.row.id.slice(0, 8)} · 청구월 ${c.row.billingMonth || "-"} · ${c.row.status} · ${formatWon(c.row.amount)}`);
+    }
+  });
+
+  const noInvoice = entriesOf(result.main, CATEGORY.POS_ONLY_NO_SITE_INVOICE);
+  L.push(`## 사이트에 그 달 청구서가 아직 없음 (랠리즈→사이트 미반영) (${noInvoice.length}건)`);
+  L.push("");
+  L.push("랠리즈에서 발행된 청구서가 아직 사이트로 옮겨지지 않은 경우입니다.");
+  L.push("");
+  if (noInvoice.length === 0) L.push("- 없음");
+  noInvoice.forEach((e) => L.push(`- ${describeRow(e.row)}`));
+  L.push("");
+
   section("사이트에만 있음", entriesOf(result.main, CATEGORY.SITE_ONLY), (e) => L.push(`- ${describeRow(e.row)}`));
 
   const held = HELD_ORDER.flatMap((cat) => entriesOf(result.main, cat));
@@ -1039,7 +1306,13 @@ export function renderMarkdown(result, meta = {}) {
   L.push("");
   if (result.main.groups.length === 0) L.push("- 없음");
   for (const g of result.main.groups) {
-    const kind = g.kind === "ID" ? "주문번호 일치" : g.kind === "DATE_AMOUNT" ? "날짜·금액 1:1" : "날짜·금액 묶음";
+    const kind =
+      {
+        ID: "주문번호 일치",
+        MEMO: "메모 이름 + 금액",
+        EXISTING: "메모 이름 + 사이트 기존 납부 기록",
+        DATE_AMOUNT: "날짜·금액 1:1",
+      }[g.kind] ?? "날짜·금액 묶음";
     L.push(`- ${g.kstDate} · ${formatWon(g.amount)} · ${kind}`);
     g.siteRows.forEach((r) => L.push(`  - 사이트: ${describeRow(r)}`));
     g.tossRows.forEach((r) => L.push(`  - 토스POS: ${describeRow(r)}`));
@@ -1093,6 +1366,15 @@ export function renderMarkdown(result, meta = {}) {
   qBlock("새벽(00~06시) 시각 — 시간대 입력 오류 의심", q.dawn);
   qBlock("지점 미상", q.unknownBranch);
   qBlock("병합된 원생", q.merged);
+  // 대사로는 "맞음"이지만 사이트 기록의 결제수단/결제일이 비어 있거나 카드가 아닌 건 — 나중에 바로잡을 목록
+  const existing = q.existingRecords ?? [];
+  L.push(`- 사이트에 납부 기록은 있으나 카드결제로 표시되지 않음(메모 이름으로 찾음): ${existing.length}건`);
+  existing.forEach((r) =>
+    L.push(
+      `  - 결제ID ${r.id.slice(0, 8)} · ${r.studentName || "이름 없음"} · 청구월 ${r.billingMonth || "-"} · ${formatWon(r.amount)} · ` +
+        `결제수단 ${r.method || "(없음)"} · 결제일 ${r.kstDateTime || "(없음)"}`,
+    ),
+  );
   L.push("");
 
   L.push("## 참고 (대사 대상 아님)");
@@ -1123,6 +1405,7 @@ const CSV_HEADER = [
   "note",
   "memo",
   "resolved_student",
+  "billing_month",
 ];
 
 function csvCell(value) {
@@ -1153,6 +1436,7 @@ function csvRowFor(entry, categoryPrefix = "") {
       note,
       "",
       row.studentName,
+      row.billingMonth ?? "",
     ];
   }
   return [
@@ -1171,6 +1455,7 @@ function csvRowFor(entry, categoryPrefix = "") {
     note,
     (row.memoRaw ?? "").replace(/\n/g, " / "),
     resolvedStudentLabel(row),
+    row.targetBillingMonth ?? "",
   ];
 }
 

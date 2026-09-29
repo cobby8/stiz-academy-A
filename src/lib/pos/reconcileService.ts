@@ -24,6 +24,7 @@ import { todayKst } from "@/lib/datetime/kst";
 import { fetchTossOrders } from "./tossplaceClient";
 import {
     MATCHED_CATEGORIES,
+    billingMonthsToLoad,
     buildReconciliation,
     classifyBranch,
     flattenTossOrders,
@@ -47,6 +48,8 @@ const reconcile = buildReconciliation as (input: {
     siteRows: unknown[];
     tossPayments: unknown[];
     students: unknown[];
+    invoiceRows?: unknown[];
+    invoiceMonths?: string[];
 }) => any;
 
 /** 대조표가 아무리 커도 이 길이까지만 저장한다(화면·DB 를 지키는 안전선). */
@@ -104,6 +107,36 @@ const SITE_ROWS_SQL = `SELECT p.id,
                           AND ((p."paidDate" AT TIME ZONE 'UTC') AT TIME ZONE 'Asia/Seoul')::date
                               BETWEEN $1::date AND $2::date
                         ORDER BY p."paidDate" ASC`;
+
+/**
+ * 청구월(year/month) 기준 월 수강료 기록 — 전달·이번 달·다음 달. 조회 전용.
+ * 결제수단·결제일과 **무관하게**(NULL 포함) 가져온다. 사이트는 랠리즈를 뒤따라 채워지는 사본이라
+ * 카드로 표시되지 않은 납부 기록이 있고(박찬민·손지형 실측), 월말 POS 결제는 대개 다음 달분이기 때문이다.
+ * 파라미터: $1·$2 = 전달 년·월, $3·$4 = 이번 달, $5·$6 = 다음 달.
+ */
+const INVOICE_ROWS_SQL = `SELECT p.id,
+                                 p."studentId",
+                                 p.amount,
+                                 p.status,
+                                 p.method,
+                                 p."paidProvider",
+                                 p."providerOrderId",
+                                 p."providerPaymentKey",
+                                 p.year,
+                                 p.month,
+                                 p.type,
+                                 p.description,
+                                 to_char((p."paidDate" AT TIME ZONE 'UTC') AT TIME ZONE 'Asia/Seoul',
+                                         'YYYY-MM-DD HH24:MI:SS.MS') AS kst_date_time,
+                                 s.name AS student_name,
+                                 s.branch,
+                                 s."mergedIntoStudentId"
+                            FROM "Payment" p
+                            JOIN "Student" s ON s.id = p."studentId"
+                           WHERE p.type = 'MONTHLY'
+                             AND ((p.year = $1::int AND p.month = $2::int)
+                               OR (p.year = $3::int AND p.month = $4::int)
+                               OR (p.year = $5::int AND p.month = $6::int))`;
 
 /** POS 메모에 적힌 이름을 대조할 원생 명단(수강 중인 반 이름 포함). 조회 전용. */
 const ROSTER_SQL = `SELECT s.id,
@@ -225,6 +258,11 @@ export async function runPosReconcile(options: {
             range.bufferTo,
         );
         const rosterRaw = await prisma.$queryRawUnsafe<RosterRow[]>(ROSTER_SQL);
+        const invoiceMonths = billingMonthsToLoad(targetMonth) as Array<{ month: string; year: number; monthNo: number }>;
+        const invoiceRaw = await prisma.$queryRawUnsafe<SiteRow[]>(
+            INVOICE_ROWS_SQL,
+            ...invoiceMonths.flatMap((m) => [m.year, m.monthNo]),
+        );
 
         // 메모 이름 대조는 2호점(및 지점 미상) 원생만 본다 — 다른 지점 동명이인이 섞이면 오히려 흐려진다.
         const students = rosterRaw
@@ -236,18 +274,14 @@ export async function runPosReconcile(options: {
                 classes: String(s.classes ?? ""),
             }));
 
-        const siteRows = siteRaw.map((row) =>
+        const toSiteRow = (row: SiteRow) =>
             normalizeSiteRow({
                 ...row,
-                studentId: row.studentId,
-                paidProvider: row.paidProvider,
-                providerOrderId: row.providerOrderId,
-                providerPaymentKey: row.providerPaymentKey,
-                mergedIntoStudentId: row.mergedIntoStudentId,
                 studentName: row.student_name,
                 kstDateTimeRaw: row.kst_date_time,
-            }),
-        );
+            });
+        const siteRows = siteRaw.map(toSiteRow);
+        const invoiceRows = invoiceRaw.map(toSiteRow);
 
         // ③ 대조
         const result = reconcile({
@@ -255,6 +289,8 @@ export async function runPosReconcile(options: {
             siteRows,
             tossPayments: flattened.rows,
             students,
+            invoiceRows,
+            invoiceMonths: invoiceMonths.map((m) => m.month),
         });
 
         const s = result.mainSummary;
@@ -262,11 +298,16 @@ export async function runPosReconcile(options: {
         const tossResults = result.main.tossResults as Array<{ category: string }>;
         // "맞춰진 건수"는 POS 기준으로 센다(짝이므로 양쪽을 더하면 중복된다).
         const matchedCount = tossResults.filter((e) => MATCHED_CATEGORIES.has(e.category)).length;
-        const heldCount = [...siteResults, ...tossResults].filter((e) =>
-            e.category.startsWith("HELD"),
+        // 기록표 칸은 고정(스키마 변경 없음)이라 새 분류를 가까운 칸에 합쳐 센다. 세부는 대조표 전문에 있다.
+        //  - 확인 필요 = HELD* + "POS로 받았는데 사이트는 미납"(사람이 사이트 청구서를 납부 처리해야 함)
+        //  - 토스POS에만 있음 = POS_ONLY + "사이트에 그 달 청구서가 아직 없음"(랠리즈→사이트 미반영)
+        const heldCount = [...siteResults, ...tossResults].filter(
+            (e) => e.category.startsWith("HELD") || e.category === "POS_PAID_SITE_UNPAID",
         ).length;
         const siteOnlyCount = siteResults.filter((e) => e.category === "SITE_ONLY").length;
-        const posOnlyCount = tossResults.filter((e) => e.category === "POS_ONLY").length;
+        const posOnlyCount = tossResults.filter(
+            (e) => e.category === "POS_ONLY" || e.category === "POS_ONLY_NO_SITE_INVOICE",
+        ).length;
 
         let markdown = renderMarkdown(result, {
             generatedAtKst: formatKstDateTime(new Date()),
@@ -452,6 +493,7 @@ type SiteRow = {
     providerPaymentKey: string | null;
     year: number | null;
     month: number | null;
+    type?: string | null;
     description: string | null;
     kst_date_time: string | null;
     student_name: string | null;

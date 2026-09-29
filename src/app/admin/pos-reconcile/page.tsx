@@ -112,7 +112,7 @@ export default async function PosReconcilePage() {
                                     <td className="p-3 font-bold">사이트 기록</td>
                                     <td className="p-3 text-right tabular-nums">{latest.siteCount}건</td>
                                     <td className="p-3 text-right font-bold tabular-nums">{formatWonText(latest.siteAmount)}</td>
-                                    <td className="p-3 text-xs text-gray-500 dark:text-gray-400">사이트에 결제완료로 적힌 카드결제</td>
+                                    <td className="p-3 text-xs text-gray-500 dark:text-gray-400">사이트에 결제완료로 적힌 카드결제 + POS 메모로 찾은 기존 납부 기록</td>
                                 </tr>
                                 <tr className="border-t border-gray-100 bg-gray-50 dark:border-gray-800 dark:bg-gray-800">
                                     <td className="p-3 font-black">차이 (POS − 사이트)</td>
@@ -124,19 +124,19 @@ export default async function PosReconcilePage() {
                                     <td className="p-3">자동으로 맞춰진 결제</td>
                                     <td className="p-3 text-right tabular-nums">{latest.matchedCount}건</td>
                                     <td className="p-3" />
-                                    <td className="p-3 text-xs text-gray-500 dark:text-gray-400">POS 기준. 주문번호·메모 이름·날짜+금액이 맞은 건</td>
+                                    <td className="p-3 text-xs text-gray-500 dark:text-gray-400">POS 기준. 주문번호·메모 이름·날짜+금액이 맞았거나 사이트에 이미 납부 기록이 있는 건</td>
                                 </tr>
                                 <tr className="border-t border-gray-100 dark:border-gray-800">
                                     <td className="p-3">확인 필요</td>
                                     <td className="p-3 text-right tabular-nums">{latest.heldCount}건</td>
                                     <td className="p-3" />
-                                    <td className="p-3 text-xs text-gray-500 dark:text-gray-400">비슷하지만 확실하지 않아 사람이 봐야 하는 건</td>
+                                    <td className="p-3 text-xs text-gray-500 dark:text-gray-400">확실하지 않아 사람이 봐야 하는 건 + POS로 받았는데 사이트 청구서가 아직 미납인 건</td>
                                 </tr>
                                 <tr className="border-t border-gray-100 dark:border-gray-800">
                                     <td className="p-3">토스POS에만 있음</td>
                                     <td className="p-3 text-right tabular-nums">{latest.posOnlyCount}건</td>
                                     <td className="p-3" />
-                                    <td className="p-3 text-xs text-gray-500 dark:text-gray-400">단말기로 받았는데 사이트에 기록이 없는 결제</td>
+                                    <td className="p-3 text-xs text-gray-500 dark:text-gray-400">단말기로 받았는데 사이트에 기록이 없는 결제 (그 달 청구서가 아직 랠리즈에서 안 옮겨진 건 포함)</td>
                                 </tr>
                                 <tr className="border-t border-gray-100 dark:border-gray-800">
                                     <td className="p-3">사이트에만 있음</td>

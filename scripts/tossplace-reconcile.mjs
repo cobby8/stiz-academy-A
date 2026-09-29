@@ -20,6 +20,7 @@ import process from "node:process";
 import nextEnv from "@next/env";
 import pg from "pg";
 import {
+  billingMonthsToLoad,
   buildReconciliation,
   classifyBranch,
   flattenTossOrders,
@@ -135,6 +136,39 @@ const ROWS_SQL = `SELECT p.id,
                          BETWEEN $1::date AND $2::date
                    ORDER BY p."paidDate" ASC`;
 
+// 청구월(year/month) 기준 월 수강료 기록 — 결제수단·결제일과 무관하게(NULL 포함) 가져온다.
+// 사이트는 랠리즈를 뒤따라 채워지는 사본이라, 카드로 표시되지 않은 납부 기록이 있다(박찬민·손지형 실측).
+// 년·월은 숫자 검증을 거친 값만 리터럴로 넣는다(PgBouncer 에서도 그대로 동작).
+function invoiceSql(months) {
+  const pairs = months
+    .map(({ year, monthNo }) => {
+      if (!Number.isInteger(year) || !Number.isInteger(monthNo)) throw new Error("청구월 형식 오류");
+      return `(p.year = ${year} AND p.month = ${monthNo})`;
+    })
+    .join(" OR ");
+  return `SELECT p.id,
+                 p."studentId",
+                 p.amount,
+                 p.status,
+                 p.method,
+                 p."paidProvider",
+                 p."providerOrderId",
+                 p."providerPaymentKey",
+                 p.year,
+                 p.month,
+                 p.type,
+                 p.description,
+                 to_char((p."paidDate" AT TIME ZONE 'UTC') AT TIME ZONE 'Asia/Seoul',
+                         'YYYY-MM-DD HH24:MI:SS.MS') AS kst_date_time,
+                 s.name AS student_name,
+                 s.branch,
+                 s."mergedIntoStudentId"
+            FROM "Payment" p
+            JOIN "Student" s ON s.id = p."studentId"
+           WHERE p.type = 'MONTHLY'
+             AND (${pairs})`;
+}
+
 /** PgBouncer(트랜잭션 모드)에서 파라미터 쿼리가 막히면 검증된 리터럴로 되돌린다. */
 function inlineDateLiteralSql(sql, from, to) {
   for (const value of [from, to]) {
@@ -143,7 +177,7 @@ function inlineDateLiteralSql(sql, from, to) {
   return sql.replace("$1::date", `'${from}'::date`).replace("$2::date", `'${to}'::date`);
 }
 
-async function readSiteRows({ connectionString, from, to }) {
+async function readSiteRows({ connectionString, from, to, invoiceMonths }) {
   const client = new pg.Client({ connectionString, query_timeout: 30_000 });
   await client.connect();
   try {
@@ -162,13 +196,14 @@ async function readSiteRows({ connectionString, from, to }) {
       rows = (await client.query(inlineDateLiteralSql(ROWS_SQL, from, to))).rows;
     }
     const students = (await client.query(ROSTER_SQL)).rows;
+    const invoices = (await client.query(invoiceSql(invoiceMonths))).rows;
     await client.query("ROLLBACK");
 
     await client.query("BEGIN READ ONLY");
     const after = (await client.query(SNAPSHOT_SQL)).rows[0];
     await client.query("ROLLBACK");
 
-    return { rows, students, before, after, columnTypes, queryMode };
+    return { rows, students, invoices, before, after, columnTypes, queryMode };
   } finally {
     await client.end();
   }
@@ -225,8 +260,12 @@ async function main() {
   const connectionString = readEnv("DATABASE_URL");
   if (!connectionString) throw new Error("DATABASE_URL 이 없습니다. .env.local 을 확인하세요.");
   console.log(`[2/4] 사이트 DB에서 ${range.bufferFrom} ~ ${range.bufferTo} 결제를 읽습니다(읽기 전용).`);
-  const db = await readSiteRows({ connectionString, from: range.bufferFrom, to: range.bufferTo });
+  const invoiceMonths = billingMonthsToLoad(options.month);
+  const db = await readSiteRows({ connectionString, from: range.bufferFrom, to: range.bufferTo, invoiceMonths });
   console.log(`      → 결제 ${db.rows.length}건, 원생 명단 ${db.students.length}명 (조회 방식: ${db.queryMode})`);
+  console.log(
+    `      → 청구월 ${invoiceMonths.map((m) => m.month).join("·")} 월 수강료 기록 ${db.invoices.length}건(결제수단·결제일 무관)`,
+  );
 
   const paidDateType = db.columnTypes.find((c) => c.column_name === "paidDate")?.data_type ?? "(확인 불가)";
   if (paidDateType !== "timestamp without time zone") {
@@ -241,22 +280,25 @@ async function main() {
     .filter((s) => classifyBranch(s.branch) !== "OTHER")
     .map((s) => ({ id: String(s.id), name: String(s.name ?? ""), branch: s.branch ?? "", classes: String(s.classes ?? "") }));
 
-  const siteRows = db.rows.map((row) =>
+  const toSiteRow = (row) =>
     normalizeSiteRow({
       ...row,
-      studentId: row.studentId,
-      paidProvider: row.paidProvider,
-      providerOrderId: row.providerOrderId,
-      providerPaymentKey: row.providerPaymentKey,
-      mergedIntoStudentId: row.mergedIntoStudentId,
       studentName: row.student_name,
       kstDateTimeRaw: row.kst_date_time,
-    }),
-  );
+    });
+  const siteRows = db.rows.map(toSiteRow);
+  const invoiceRows = db.invoices.map(toSiteRow);
 
   // 3) 대사 계산
   console.log("[3/4] 대사 계산 중…");
-  const result = buildReconciliation({ month: options.month, siteRows, tossPayments: flattened.rows, students });
+  const result = buildReconciliation({
+    month: options.month,
+    siteRows,
+    tossPayments: flattened.rows,
+    students,
+    invoiceRows,
+    invoiceMonths: invoiceMonths.map((m) => m.month),
+  });
 
   const sameCount = db.before.payment_count === db.after.payment_count;
   const sameUpdated = db.before.max_updated === db.after.max_updated;
@@ -300,6 +342,12 @@ async function main() {
   console.log(`토스POS에만 있음 ${result.main.tossResults.filter((e) => e.category === "POS_ONLY").length}건 · ` +
     `사이트에만 있음 ${result.main.siteResults.filter((e) => e.category === "SITE_ONLY").length}건 · ` +
     `확인 필요 ${[...result.main.siteResults, ...result.main.tossResults].filter((e) => e.category.startsWith("HELD")).length}건`);
+  const tossCount = (category) => result.main.tossResults.filter((e) => e.category === category).length;
+  console.log(
+    `사이트 기존 납부 기록과 맞춤 ${tossCount("MATCHED_BY_MEMO_EXISTING_RECORD")}건 · ` +
+      `POS로 받았는데 사이트는 미납 ${tossCount("POS_PAID_SITE_UNPAID")}건 · ` +
+      `사이트에 그 달 청구서 없음 ${tossCount("POS_ONLY_NO_SITE_INVOICE")}건`,
+  );
   console.log(`다른 지점 제외 ${result.site.otherBranch.length}건 (${formatWon(sumAmount(result.site.otherBranch))})`);
   console.log(`쓰기 없음 증빙: ${noWriteProof}`);
 }

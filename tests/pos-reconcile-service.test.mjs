@@ -153,11 +153,19 @@ test("정상 실행되면 'OK' 기록 한 줄과 요약 숫자가 남는다", as
     assert.equal(writes.length, 1);
     assert.match(writes[0].sql, /INSERT INTO "PosReconcileRun"/);
 
-    // 조회는 "결제"와 "원생 명단" 두 번뿐이고, 결제 조회는 KST 변환을 두 번 건다.
+    // 조회는 "카드 결제(결제일 기준)"·"원생 명단"·"청구월 기준 월 수강료" 세 번뿐이고,
+    // 결제 조회는 KST 변환을 두 번 건다.
     const queries = globalThis.__posReconcileCalls.filter((c) => c.kind === "query");
-    assert.equal(queries.length, 2);
-    const paymentSql = queries.find((q) => /FROM "Payment"/.test(q.sql)).sql;
+    assert.equal(queries.length, 3);
+    const paymentSql = queries.find((q) => /p\.method = 'CARD'/.test(q.sql)).sql;
     assert.match(paymentSql, /AT TIME ZONE 'UTC'\) AT TIME ZONE 'Asia\/Seoul'/);
+
+    // 청구월 조회: 결제수단·결제일과 무관(NULL 포함)하게 전달·이번 달·다음 달을 가져온다.
+    const invoice = queries.find((q) => /p\.type = 'MONTHLY'/.test(q.sql));
+    assert.ok(invoice, "청구월 기준 조회가 있어야 카드로 표시되지 않은 납부 기록을 찾는다");
+    assert.doesNotMatch(invoice.sql, /p\.method = 'CARD'/);
+    assert.doesNotMatch(invoice.sql, /"paidDate" IS NOT NULL/);
+    assert.deepEqual(invoice.args, [2026, 8, 2026, 9, 2026, 10]);
 });
 
 test("토스 조회가 실패해도 예외를 밖으로 던지지 않고 실패 기록을 남긴다", async () => {

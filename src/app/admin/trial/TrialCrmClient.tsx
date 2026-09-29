@@ -301,7 +301,8 @@ function getTodayLocalDateTime() {
 function matchesTrialDateFilter(lead: TrialLead, dateFilter: TrialDateFilter) {
     if (dateFilter === "ALL") return true;
 
-    const trialDate = getLocalDateTime(lead.trialDate);
+    // 확정 후에는 실제 수업일로 필터링한다. 희망일은 신청 기록으로만 남긴다.
+    const trialDate = getLocalDateTime(getTrialListDateValue(lead));
     if (dateFilter === "MISSING") return trialDate === null;
     if (trialDate === null) return false;
 

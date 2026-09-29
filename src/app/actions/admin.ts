@@ -4260,6 +4260,7 @@ export async function updateTrialLead(
     history?: {
         action?: ApplicationHistoryAction;
         note?: string | null;
+        sendScheduleNotification?: boolean;
     },
 ) {
     const admin = await requireAdmin();
@@ -4279,8 +4280,12 @@ export async function updateTrialLead(
         id,
     );
     const previousLead = previousRows[0];
+    if (!previousLead) throw new Error("체험 신청을 찾지 못했습니다. 목록을 새로고침해 주세요.");
 
     if (data.status === "SCHEDULED") {
+        if (typeof data.scheduledClassId !== "string" || !data.scheduledClassId.trim()) {
+            throw new Error("해당 날짜의 수업을 선택해 주세요.");
+        }
         const explicitScheduledDate = data.scheduledDate;
         const hasExplicitScheduledTime = explicitScheduledDate instanceof Date
             ? !Number.isNaN(explicitScheduledDate.getTime())
@@ -4369,8 +4374,8 @@ export async function updateTrialLead(
             });
         }
 
-        // SCHEDULED로 변경되면 학부모에게 체험 일정 확정 SMS 발송
-        if (data.status === "SCHEDULED") {
+        // 일정 저장과 외부 발송은 별도 승인 대상이다. 기본 저장은 절대 문자를 보내지 않는다.
+        if (data.status === "SCHEDULED" && history?.sendScheduleNotification === true) {
             scheduledSmsResult.attempted = true;
             try {
             // 해당 리드의 학부모 전화번호와 변수 조회

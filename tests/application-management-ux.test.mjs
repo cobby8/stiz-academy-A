@@ -39,7 +39,7 @@ test("체험 신청은 수정, 일정 변경, 취소 모달로 관리할 수 있
   assert.match(trialModals, /function TrialEditModal/);
   assert.match(trialModals, /function TrialScheduleModal/);
   assert.match(trialModals, /function TrialCancelModal/);
-  assert.match(trialModals, /label="확정 수업"/);
+  assert.match(trialModals, /label="선택한 날짜의 수업 \*"/);
   assert.match(trialModals, /label="확정 날짜 \*"/);
   assert.match(trialModals, /label="확정 시간 \*"/);
   assert.match(trialModals, /scheduledClassId/);
@@ -47,6 +47,22 @@ test("체험 신청은 수정, 일정 변경, 취소 모달로 관리할 수 있
   assert.match(adminAction, /"childSchool",\s*"basketballExp"/);
   assert.match(adminAction, /"preferredDay",\s*"preferredPeriod"/);
   assert.match(adminAction, /"trialDate",\s*"trialFeeConfirmed"/);
+});
+
+test("체험 일정 변경은 선택 날짜의 운영 수업만 조회하고 실제 확정값을 저장한다", () => {
+  const scheduleOptionsRoute = readFileSync(new URL("../src/app/api/admin/trial/schedule-options/route.ts", import.meta.url), "utf8");
+  const scheduleServer = readFileSync(new URL("../src/lib/trial-schedule-server.ts", import.meta.url), "utf8");
+  assert.match(scheduleOptionsRoute, /await requireAdmin\(\)/);
+  assert.match(scheduleOptionsRoute, /listTrialScheduleOptionsForDate\(date\)/);
+  assert.match(scheduleServer, /resolveTrialScheduleFromRow\(row/);
+  assert.match(trialModals, /fetch\(`\/api\/admin\/trial\/schedule-options\?date=/);
+  assert.match(trialModals, /options\.map\(\(option\) =>/);
+  assert.match(trialModals, /setScheduledClassId\(""\);[\s\S]*setScheduledTime\(""\);/);
+  assert.match(trialModals, /options\.some\(\(option\) => option\.classId === scheduledClassId\)/);
+  assert.match(adminAction, /if \(typeof data\.scheduledClassId !== "string" \|\| !data\.scheduledClassId\.trim\(\)\)/);
+  assert.match(trialClient, /getLocalDateTime\(getTrialListDateValue\(lead\)\)/);
+  assert.match(adminAction, /history\?\.sendScheduleNotification === true/);
+  assert.doesNotMatch(trialModals, /sendScheduleNotification:\s*true/);
 });
 
 test("체험 신청 수정은 최신 목록 반영을 확인한 뒤에만 성공으로 처리한다", () => {
@@ -86,7 +102,7 @@ test("체험 신청 일정은 DB 수업 정보와 연결해 실제 수업 시간
   assert.match(trialClient, /function getPreferredSlotKeyCandidates/);
   assert.match(trialClient, /function getPreferredClass/);
   assert.match(trialModals, /function isDateOnlySchedulePlaceholder/);
-  assert.match(trialModals, /function resolveConfirmedTrialScheduleStartTime/);
+  assert.match(trialModals, /option\.startTime/);
   assert.match(trialModals, /function normalizeSlotKey/);
   assert.match(trialModals, /function getPreferredSlotKeyCandidates/);
   assert.match(trialModals, /getPreferredClass\(lead, classes\)/);

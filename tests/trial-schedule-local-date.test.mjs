@@ -82,16 +82,15 @@ test("시간 우선순위는 보정값, 활성 정규 시간표, 커스텀 시�
 });
 
 test("날짜·반 변경은 적용 시간을 다시 계산하고 저장값에는 한국 오프셋을 명시한다", () => {
-  assert.match(trialModals, /handleDateChange[\s\S]*resolveConfirmedTrialScheduleStartTime\(selectedClass,\s*date\)/);
-  assert.match(trialModals, /handleClassChange[\s\S]*resolveConfirmedTrialScheduleStartTime\(selectedClass,\s*scheduledDate\)/);
-  assert.match(trialModals, /resolveTrialScheduleStartTime\(classInfo \? \{ \.\.\.classInfo, startTime: "" \}/);
+  assert.match(trialModals, /handleDateChange[\s\S]*setScheduledClassId\(""\);[\s\S]*setScheduledTime\(""\)/);
+  assert.match(trialModals, /handleClassChange[\s\S]*options\.find\(\(option\) => option\.classId === classId\)\?\.startTime/);
   assert.match(scheduleTimeHelper, /`\$\{selectedDate\}T\$\{normalizedTime\}\+09:00`/);
 });
 
 test("이미 확정한 수동 시간은 모달을 다시 열어도 반 기본 시간으로 덮지 않는다", () => {
   assert.match(
     trialModals,
-    /lead\.scheduledDate && !isDateOnlySchedulePlaceholder\(lead\.scheduledDate\)[\s\S]*timeInputValue\(lead\.scheduledDate\)[\s\S]*resolveConfirmedTrialScheduleStartTime/,
+    /lead\.scheduledDate && !isDateOnlySchedulePlaceholder\(lead\.scheduledDate\)[\s\S]*timeInputValue\(lead\.scheduledDate\)/,
   );
 });
 

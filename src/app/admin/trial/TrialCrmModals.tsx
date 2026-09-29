@@ -1,10 +1,9 @@
 "use client";
 
-import { useState, type FormEvent, type ReactNode } from "react";
+import { useEffect, useState, type FormEvent, type ReactNode } from "react";
 import { createTrialLead, convertTrialToStudent, updateTrialLead } from "@/app/actions/admin";
 import AdminModal from "@/components/admin/AdminModal";
 import {
-    resolveTrialScheduleStartTime,
     seoulDateInputValue,
     seoulTimeInputValue,
     toSeoulScheduledDateTime,
@@ -59,6 +58,7 @@ export default function TrialCrmModals({
         onDone: () => void,
         successMessage: string,
         resultMessage?: (result: unknown) => { type: "success" | "error"; message: string } | null,
+        showValidationError = false,
     ) {
         setBusy(true);
         try {
@@ -71,8 +71,10 @@ export default function TrialCrmModals({
             onDone();
             const feedback = resultMessage?.(result);
             onFeedback(feedback?.type ?? "success", feedback?.message ?? successMessage);
-        } catch {
-            onFeedback("error", "처리 중 문제가 생겼습니다. 잠시 후 다시 시도해주세요.");
+        } catch (error) {
+            onFeedback("error", showValidationError && error instanceof Error
+                ? error.message
+                : "처리 중 문제가 생겼습니다. 잠시 후 다시 시도해주세요.");
         } finally {
             setBusy(false);
         }
@@ -119,16 +121,8 @@ export default function TrialCrmModals({
                             }),
                             onCloseSchedule,
                             "체험 일정을 저장했습니다.",
-                            (result) => {
-                                const scheduledSms = (
-                                    result as Awaited<ReturnType<typeof updateTrialLead>>
-                                )?.scheduledSms;
-                                if (!scheduledSms?.attempted || scheduledSms.errors.length === 0) return null;
-                                return {
-                                    type: "error",
-                                    message: `일정은 저장됐지만 일부 문자가 발송되지 않았습니다. ${scheduledSms.errors[0]}`,
-                                };
-                            },
+                            undefined,
+                            true,
                         )
                     }
                     busy={busy}
@@ -216,11 +210,6 @@ function timeInputValue(dateStr: string | null) {
 
 function isDateOnlySchedulePlaceholder(dateStr: string | null) {
     return Boolean(dateStr && /^\d{4}-\d{2}-\d{2}$/.test(dateStr.trim()));
-}
-
-/** 자동 입력에서는 오래된 Class.startTime fallback을 확정값으로 사용하지 않는다. */
-function resolveConfirmedTrialScheduleStartTime(classInfo: ClassInfo | null | undefined, selectedDate: string) {
-    return resolveTrialScheduleStartTime(classInfo ? { ...classInfo, startTime: "" } : null, selectedDate);
 }
 
 const MODAL_INPUT_CLASS = "w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-brand-orange-500 dark:border-gray-700 dark:bg-gray-900 dark:text-white dark:focus:ring-brand-neon-lime";
@@ -520,38 +509,70 @@ function TrialScheduleModal({
     onSubmit: (data: Record<string, unknown>) => void;
     busy: boolean;
 }) {
-    const initialClass =
-        (lead.scheduledClassId ? classes.find((classInfo) => classInfo.id === lead.scheduledClassId) : null) ||
-        getPreferredClass(lead, classes) ||
-        null;
-    const [scheduledClassId, setScheduledClassId] = useState(initialClass?.id ?? "");
     const initialScheduledDate = dateInputValue(lead.scheduledDate || lead.trialDate);
     const [scheduledDate, setScheduledDate] = useState(initialScheduledDate);
+    const [scheduledClassId, setScheduledClassId] = useState("");
     const [scheduledTime, setScheduledTime] = useState(
         lead.scheduledDate && !isDateOnlySchedulePlaceholder(lead.scheduledDate)
             ? timeInputValue(lead.scheduledDate)
-            : resolveConfirmedTrialScheduleStartTime(initialClass, initialScheduledDate),
+            : "",
     );
+    const [options, setOptions] = useState<Array<{ classId: string; className: string; startTime: string }>>([]);
+    const [optionsLoading, setOptionsLoading] = useState(Boolean(initialScheduledDate));
+    const [optionsError, setOptionsError] = useState("");
     const [memo, setMemo] = useState(lead.memo ?? "");
     const [formError, setFormError] = useState("");
     const preferredSchedule = formatPreferredSchedule(lead, classes);
 
+    useEffect(() => {
+        if (!scheduledDate) return;
+        const controller = new AbortController();
+        fetch(`/api/admin/trial/schedule-options?date=${encodeURIComponent(scheduledDate)}`, {
+            cache: "no-store",
+            signal: controller.signal,
+        })
+            .then(async (response) => {
+                const payload = await response.json();
+                if (!response.ok) throw new Error(payload.error || "수업 목록을 불러오지 못했습니다.");
+                return payload.options as Array<{ classId: string; className: string; startTime: string }>;
+            })
+            .then((available) => {
+                setOptions(available);
+                // 이미 확정된 일정만 재선택한다. 희망일의 반을 확정 반으로 추측하지 않는다.
+                if (dateInputValue(lead.scheduledDate) === scheduledDate
+                    && available.some((option) => option.classId === lead.scheduledClassId)) {
+                    setScheduledClassId(lead.scheduledClassId || "");
+                    setScheduledTime(lead.scheduledDate ? timeInputValue(lead.scheduledDate) : "");
+                }
+            })
+            .catch((error) => {
+                if (controller.signal.aborted) return;
+                setOptions([]);
+                setOptionsError(error instanceof Error ? error.message : "수업 목록을 불러오지 못했습니다.");
+            })
+            .finally(() => { if (!controller.signal.aborted) setOptionsLoading(false); });
+        return () => controller.abort();
+    }, [scheduledDate, lead.scheduledDate, lead.scheduledClassId]);
+
     function handleClassChange(classId: string) {
         setScheduledClassId(classId);
-        const selectedClass = classes.find((classInfo) => classInfo.id === classId);
-        setScheduledTime(resolveConfirmedTrialScheduleStartTime(selectedClass, scheduledDate));
+        setScheduledTime(options.find((option) => option.classId === classId)?.startTime || "");
     }
 
     function handleDateChange(date: string) {
         setScheduledDate(date);
-        const selectedClass = classes.find((classInfo) => classInfo.id === scheduledClassId);
-        if (selectedClass) setScheduledTime(resolveConfirmedTrialScheduleStartTime(selectedClass, date));
+        setScheduledClassId("");
+        setScheduledTime("");
+        setOptions([]);
+        setOptionsError("");
+        setOptionsLoading(Boolean(date));
     }
 
     function handleSubmit(event: FormEvent) {
         event.preventDefault();
-        if (!scheduledDate || !scheduledTime) {
-            setFormError("확정할 날짜와 시간을 모두 입력해주세요.");
+        if (!scheduledDate || !scheduledClassId || !scheduledTime
+            || !options.some((option) => option.classId === scheduledClassId)) {
+            setFormError("날짜를 선택한 뒤 해당 날짜의 수업과 시간을 확인해 주세요.");
             return;
         }
         const scheduledAt = toSeoulScheduledDateTime(scheduledDate, scheduledTime);
@@ -563,7 +584,7 @@ function TrialScheduleModal({
         onSubmit({
             status: "SCHEDULED",
             scheduledDate: scheduledAt,
-            scheduledClassId: scheduledClassId || null,
+            scheduledClassId,
             memo: memo.trim() || null,
         });
     }
@@ -597,35 +618,39 @@ function TrialScheduleModal({
                             <p className="mt-1 font-black">{preferredSchedule}</p>
                         </div>
                     </div>
-                    <FormField label="확정 수업">
+                    <FormField label="확정 날짜 *">
+                        <input type="date" value={scheduledDate} onChange={(e) => handleDateChange(e.target.value)} className={MODAL_INPUT_CLASS} />
+                    </FormField>
+                    <FormField label="선택한 날짜의 수업 *">
                         <select
                             value={scheduledClassId}
                             onChange={(event) => handleClassChange(event.target.value)}
                             className={MODAL_INPUT_CLASS}
+                            disabled={!scheduledDate || optionsLoading || Boolean(optionsError) || options.length === 0}
                         >
-                            <option value="">반 선택 안 함</option>
-                            {classes.map((classInfo) => (
-                                <option key={classInfo.id} value={classInfo.id}>
-                                    {formatClassLabel(classInfo)}
+                            <option value="">수업 선택</option>
+                            {options.map((option) => (
+                                <option key={option.classId} value={option.classId}>
+                                    {option.startTime} · {option.className}
                                 </option>
                             ))}
                         </select>
                     </FormField>
-                    <div className="grid gap-3 sm:grid-cols-2">
-                        <FormField label="확정 날짜 *">
-                            <input type="date" value={scheduledDate} onChange={(e) => handleDateChange(e.target.value)} className={MODAL_INPUT_CLASS} />
-                        </FormField>
-                        <FormField label="확정 시간 *">
-                            <input type="time" value={scheduledTime} onChange={(e) => setScheduledTime(e.target.value)} className={MODAL_INPUT_CLASS} />
-                        </FormField>
-                    </div>
+                    {optionsLoading && <p className="text-sm text-gray-500">해당 날짜의 수업을 확인 중입니다...</p>}
+                    {optionsError && <p className="text-sm font-semibold text-red-600">{optionsError}</p>}
+                    {!optionsLoading && !optionsError && scheduledDate && options.length === 0 && (
+                        <p className="text-sm text-gray-500">해당 날짜에 확정할 수 있는 수업이 없습니다.</p>
+                    )}
+                    <FormField label="확정 시간 *">
+                        <input type="time" value={scheduledTime} onChange={(e) => setScheduledTime(e.target.value)} className={MODAL_INPUT_CLASS} disabled={!scheduledClassId} />
+                    </FormField>
                     <p className="rounded-lg bg-gray-50 px-3 py-2 text-xs font-semibold text-gray-500 dark:bg-gray-900 dark:text-gray-400">
-                        확정 수업을 선택하면 해당 반의 시작 시간이 자동으로 들어갑니다. 실제 체험 시간이 다르면 시간만 직접 바꿔주세요.
+                        선택한 날짜에 운영되는 수업만 표시됩니다. 반을 고르면 시작 시간이 자동으로 들어가며, 실제 체험 시간이 다르면 시간만 직접 바꿔주세요. 저장만으로 문자는 발송되지 않습니다.
                     </p>
                     <FormField label="관리 메모">
                         <textarea value={memo} onChange={(e) => setMemo(e.target.value)} rows={3} className={`${MODAL_INPUT_CLASS} resize-none`} />
                     </FormField>
-                    <ModalActions onClose={onClose} busy={busy} submitLabel="일정 저장" busyLabel="저장 중..." accent="sky" />
+                    <ModalActions onClose={onClose} busy={busy || optionsLoading || Boolean(optionsError) || !scheduledClassId} submitLabel="일정 저장" busyLabel="저장 중..." accent="sky" />
                 </form>
         </AdminModal>
     );

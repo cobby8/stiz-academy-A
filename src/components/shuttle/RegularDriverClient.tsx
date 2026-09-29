@@ -283,7 +283,7 @@ export default function RegularDriverClient({ token, date, classes, initialBoard
                     </div>
                   )}
                 </div>
-                {isEditing && <p className="mb-2 rounded-xl bg-blue-50 px-3 py-2 text-[13px] font-bold text-blue-700">↕ 버튼으로 순서를 바꾼 뒤 "순서 고정 요청"을 눌러주세요</p>}
+                {isEditing && <p className="mb-2 rounded-xl bg-blue-50 px-3 py-2 text-[13px] font-bold text-blue-700">↕ 버튼으로 순서를 바꾼 뒤 &quot;순서 고정 요청&quot;을 눌러주세요</p>}
                 <StopList stops={stops} boarding={boarding} setStatus={setStatus}
                   isEditing={isEditing}
                   onMoveStop={(si, dir) => moveStop(key, c.board, si, dir)}
@@ -320,7 +320,7 @@ export default function RegularDriverClient({ token, date, classes, initialBoard
                     </div>
                   )}
                 </div>
-                {isEditing && <p className="mb-2 rounded-xl bg-blue-50 px-3 py-2 text-[13px] font-bold text-blue-700">↕ 버튼으로 순서를 바꾼 뒤 "순서 고정 요청"을 눌러주세요</p>}
+                {isEditing && <p className="mb-2 rounded-xl bg-blue-50 px-3 py-2 text-[13px] font-bold text-blue-700">↕ 버튼으로 순서를 바꾼 뒤 &quot;순서 고정 요청&quot;을 눌러주세요</p>}
                 <StopList stops={stops} boarding={boarding} setStatus={setStatus}
                   isEditing={isEditing}
                   onMoveStop={(si, dir) => moveStop(key, c.alight, si, dir)}

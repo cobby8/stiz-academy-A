@@ -107,7 +107,7 @@ export default function DriverRequestPanel({ onClose }: { onClose: () => void })
               <p className="text-[12px] text-gray-500 dark:text-gray-400 mb-1">운행일: {req.serviceDate}</p>
               {req.note && (
                 <p className="rounded-lg bg-white px-3 py-2 text-[13px] font-semibold text-gray-800 dark:bg-gray-800 dark:text-gray-200 mb-3">
-                  "{req.note}"
+                  &quot;{req.note}&quot;
                 </p>
               )}
               {req.type === "ORDER" && (
@@ -148,7 +148,7 @@ export default function DriverRequestPanel({ onClose }: { onClose: () => void })
                         {STATUS_LABEL[req.status] ?? req.status}
                       </span>
                     </div>
-                    {req.note && <p className="mt-1 text-[12px] text-gray-400">"{req.note}"</p>}
+                    {req.note && <p className="mt-1 text-[12px] text-gray-400">&quot;{req.note}&quot;</p>}
                   </div>
                 ))}
               </div>

@@ -174,7 +174,7 @@ async function planRun(run: Run, direction: DispatchDirection, academy: Geo, dep
   // 순서는 최근접(NN)으로 정한다. routeOptimization(최적경로) API는 제공량이 작아 429가 잦으므로 쓰지 않고,
   // 제공량이 넉넉한 /routes(다중경로)로 그 순서의 실도로 경로·시간을 받는다(순서 변경 재계산과 동일 방식).
   // ★ keepOrder면 재정렬 없이 이미 잡힌 순서를 그대로 유지한다(증분 삽입 결과 보존).
-  let order = keepOrder ? [...run.stops] : nnOrder(run.stops, startPt);
+  const order = keepOrder ? [...run.stops] : nnOrder(run.stops, startPt);
 
   // ★ 선파괴 금지: 진입 시 기존 실도로 경로/제공자/시간을 보관해 둔다.
   //   T맵이 "성공했을 때만" 새 값으로 갈아끼우고, T맵을 호출했는데 실패하면 이 이전값을 복원한다.

@@ -5104,7 +5104,7 @@ export async function approveEnrollApplication(
         }
     }
 
-    let smsResult = {
+    const smsResult = {
         parentSent: false,
         parentFailed: false,
         adminFailed: 0,

@@ -5,6 +5,7 @@ import { revalidatePath, revalidateTag } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { isKstYmd, todayKst } from "@/lib/datetime/kst";
 import { normalizeApprovalClassIds } from "@/lib/enrollment/approval-classes";
+import { isUsablePhoneKey, parentPhoneDigits } from "@/lib/enrollment/parentIdentity";
 import { requireAdmin, requireOwner, requireVerifiedParent } from "@/lib/auth-guard";
 import {
     createNotificationRecord,
@@ -2538,9 +2539,15 @@ export async function bulkCreateStudents(
 
             if (student.guardian1Phone) {
                 // 전화번호로 기존 보호자 검색 (같은 전화번호 = 같은 보호자)
+                // 숫자만 남겨 비교한다 — 저장 형식이 '010-1234-5678'과 '01012345678'로 섞여 있어
+                // 글자 그대로 비교하면 같은 사람을 못 찾고 보호자·학생이 복제된다.
                 const existingParent = await prisma.$queryRawUnsafe<any[]>(
-                    `SELECT id FROM "User" WHERE phone = $1 AND role = 'PARENT' LIMIT 1`,
-                    student.guardian1Phone,
+                    `SELECT id FROM "User"
+                      WHERE role = 'PARENT'
+                        AND regexp_replace(COALESCE(phone, ''), '[^0-9]', '', 'g') = $1
+                      ORDER BY ("authUserId" IS NOT NULL) DESC, "createdAt" ASC
+                      LIMIT 1`,
+                    parentPhoneDigits(student.guardian1Phone),
                 );
 
                 if (existingParent.length > 0) {
@@ -5194,29 +5201,55 @@ export async function approveEnrollApplication(
         }
         const shouldCopyShuttleLocations = shuttleNeeded && completeLocations && hasCompleteCurrentConsent;
 
-        // 2. 학부모 User 조회/생성 — parentPhone 기준으로 찾기
-        // 전화번호로 검색: 동일 번호의 기존 학부모가 있으면 재사용
+        // 2. 학부모 User 조회/생성
+        //    ⚠️ 여기서 기존 학부모를 놓치면 계정과 학생이 통째로 복제된다.
+        //    그러면 학부모가 로그인하는 계정에는 자녀가 0명으로 남아 앱에서 아무것도 못 본다
+        //    (2026-08~09 실측 4가족). 그래서 두 가지를 순서대로 본다.
         const parentPhone = app.parentPhone ?? app.parentphone;
         const parentName = app.parentName ?? app.parentname;
+        const parentPhoneDigitsValue = parentPhoneDigits(parentPhone);
+        const linkedParentUserId = app.parentUserId ?? app.parentuserid ?? null;
         let parentId: string;
 
-        const existingUsers = await tx.$queryRawUnsafe<any[]>(
-            `SELECT id FROM "User" WHERE phone = $1 AND role = 'PARENT' LIMIT 1`,
-            parentPhone
-        );
+        // (1) 신청서에 이미 연결된 가입 계정이 있으면 그것이 정답이다.
+        //     가입 절차에서 번호를 확인하고 연결해 둔 값이라 전화번호 조회보다 믿을 수 있다.
+        const linkedUsers = linkedParentUserId
+            ? await tx.$queryRawUnsafe<any[]>(
+                `SELECT id FROM "User" WHERE id = $1 AND role = 'PARENT' LIMIT 1`,
+                linkedParentUserId,
+            )
+            : [];
 
-        if (existingUsers.length > 0) {
-            // 기존 학부모가 있으면 재사용
+        // (2) 없으면 전화번호로 찾되 **숫자만 남겨** 비교한다.
+        //     저장 형식이 '010-1234-5678'(신청서)과 '01012345678'(가입)로 섞여 있어
+        //     글자 그대로 비교하면 기존 학부모 90%를 못 찾는다.
+        //     빈 번호·자리채움 번호는 열쇠로 쓰지 않는다(빈 값끼리 묶이면 남의 자녀가 붙는다).
+        const existingUsers = linkedUsers.length === 0 && isUsablePhoneKey(parentPhoneDigitsValue)
+            ? await tx.$queryRawUnsafe<any[]>(
+                `SELECT id FROM "User"
+                  WHERE role = 'PARENT'
+                    AND regexp_replace(COALESCE(phone, ''), '[^0-9]', '', 'g') = $1
+                  ORDER BY ("authUserId" IS NOT NULL) DESC, "createdAt" ASC
+                  LIMIT 1`,
+                parentPhoneDigitsValue,
+            )
+            : [];
+
+        if (linkedUsers.length > 0) {
+            parentId = linkedUsers[0].id;
+        } else if (existingUsers.length > 0) {
+            // 실제로 로그인에 쓰이는 계정(authUserId 연결)을 우선한다.
             parentId = existingUsers[0].id;
         } else {
-            // 없으면 새로 생성 — email은 전화번호 기반 placeholder
+            // 정말 처음 보는 학부모일 때만 새로 만든다.
+            // 번호는 숫자만으로 저장한다 — 가입 경로와 형식을 맞춰 다음 조회가 또 어긋나지 않게 한다.
             const newUsers = await tx.$queryRawUnsafe<any[]>(
                 `INSERT INTO "User" (id, email, name, phone, role, "createdAt", "updatedAt")
                  VALUES (gen_random_uuid()::text, $1, $2, $3, 'PARENT', NOW(), NOW())
                  RETURNING id`,
-                `parent_${parentPhone.replace(/[^0-9]/g, "")}@stiz.local`,
+                `parent_${parentPhoneDigitsValue}@stiz.local`,
                 parentName,
-                parentPhone,
+                parentPhoneDigitsValue || parentPhone,
             );
             parentId = newUsers[0].id;
         }

@@ -27,7 +27,9 @@ interface TrialCrmModalsProps {
     onCloseLost: () => void;
     onCloseMemo: () => void;
     classes: ClassInfo[];
-    onSaved: () => Promise<void> | void;
+    // 목록을 새로 읽은 결과까지 받아야 저장 성공을 사용자에게 보여줄 수 있다.
+    // false면 DB 저장은 끝났어도 화면 반영을 확인하지 못한 상태다.
+    onSaved: () => Promise<boolean> | boolean;
     onFeedback: (type: "success" | "error", message: string) => void;
 }
 
@@ -61,8 +63,12 @@ export default function TrialCrmModals({
         setBusy(true);
         try {
             const result = await action();
+            const refreshed = await onSaved();
+            if (!refreshed) {
+                onFeedback("error", "수정은 저장됐지만 목록을 새로 불러오지 못했습니다. 새로고침 후 변경 내용을 확인해주세요.");
+                return;
+            }
             onDone();
-            await onSaved();
             const feedback = resultMessage?.(result);
             onFeedback(feedback?.type ?? "success", feedback?.message ?? successMessage);
         } catch {
@@ -462,6 +468,7 @@ function TrialEditModal({
                                 <option value="WEBSITE">홈페이지</option>
                                 <option value="NAVER">네이버</option>
                                 <option value="NAVER_SEARCH">네이버 키워드 검색</option>
+                                <option value="NAVER_AD">네이버 검색광고</option>
                                 <option value="PORTAL_OTHER">네이버 외 포털검색</option>
                                 <option value="NAVER_BLOG">스티즈 네이버블로그</option>
                                 <option value="INSTAGRAM">인스타그램</option>
@@ -784,6 +791,7 @@ function AddLeadModal({
                             <option value="WEBSITE">홈페이지</option>
                             <option value="NAVER">네이버</option>
                             <option value="NAVER_SEARCH">네이버 키워드 검색</option>
+                            <option value="NAVER_AD">네이버 검색광고</option>
                             <option value="PORTAL_OTHER">네이버 외 포털검색</option>
                             <option value="NAVER_BLOG">스티즈 네이버블로그</option>
                             <option value="INSTAGRAM">인스타그램</option>

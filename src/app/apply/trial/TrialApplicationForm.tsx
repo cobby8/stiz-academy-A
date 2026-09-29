@@ -13,6 +13,7 @@ import FontFreeIcon from "@/components/ui/FontFreeIcon";
 interface Props {
     availableSlots: AvailableSlot[];
     contactPhone: string;
+    initialSource: string;
 }
 
 interface FormData {
@@ -31,6 +32,7 @@ interface FormData {
 
 const GRADE_OPTIONS = ["6세", "7세", "초1", "초2", "초3", "초4", "초5", "초6", "중1", "중2", "중3", "고1", "고2", "고3", "성인"];
 const SOURCE_OPTIONS = [
+    { value: "NAVER_AD", label: "네이버 검색광고" },
     { value: "NAVER_SEARCH", label: "네이버 키워드 검색" },
     { value: "PORTAL_OTHER", label: "네이버 외 포털검색" },
     { value: "NAVER_BLOG", label: "스티즈 네이버블로그" },
@@ -83,9 +85,9 @@ function orderedUniqueDays(slots: AvailableSlot[]) {
     return TRIAL_DAY_ORDER.filter((day) => days.has(day));
 }
 
-export default function TrialApplicationForm({ availableSlots, contactPhone }: Props) {
+export default function TrialApplicationForm({ availableSlots, contactPhone, initialSource }: Props) {
     const [step, setStep] = useState(1);
-    const [form, setForm] = useState<FormData>(INITIAL_FORM);
+    const [form, setForm] = useState<FormData>({ ...INITIAL_FORM, source: initialSource });
     const [error, setError] = useState("");
     const [completed, setCompleted] = useState(false);
     const [existingLeadId, setExistingLeadId] = useState<string | null>(null);

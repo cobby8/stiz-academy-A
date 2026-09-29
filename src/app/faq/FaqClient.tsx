@@ -8,7 +8,6 @@
  * DB에 데이터가 없으면 기본 FAQ(DEFAULT_FAQ_DATA)를 보여준다.
  */
 
-import { useState } from "react";
 import Card from "@/components/ui/Card";
 import AnimateOnScroll from "@/components/ui/AnimateOnScroll";
 
@@ -76,19 +75,15 @@ const DEFAULT_FAQ_DATA = [
 
 // --- FAQ 아코디언 아이템 --- 질문을 클릭하면 답변이 토글된다
 function FAQItem({ question, answer }: { question: string; answer: string }) {
-  const [isOpen, setIsOpen] = useState(false);
-
   return (
-    <div className="border-b border-gray-100 dark:border-gray-800 last:border-b-0">
-      {/* 질문 버튼 — 클릭 시 답변 토글 */}
-      <button
-        onClick={() => setIsOpen(!isOpen)}
+    <details className="group border-b border-gray-100 dark:border-gray-800 last:border-b-0">
+      <summary
         className="w-full flex items-center justify-between py-5 px-1 text-left hover:text-brand-orange-500 dark:text-brand-neon-lime transition-colors cursor-pointer"
       >
         <span className="font-semibold text-gray-900 dark:text-white pr-4">{question}</span>
         {/* 화살표 아이콘 — 열림/닫힘 상태에 따라 회전 */}
         <svg
-          className={`w-5 h-5 text-gray-400 shrink-0 transition-transform duration-200 ${isOpen ? "rotate-180" : ""}`}
+          className="w-5 h-5 text-gray-400 shrink-0 transition-transform duration-200 group-open:rotate-180"
           fill="none"
           stroke="currentColor"
           viewBox="0 0 24 24"
@@ -100,14 +95,11 @@ function FAQItem({ question, answer }: { question: string; answer: string }) {
             d="M19 9l-7 7-7-7"
           />
         </svg>
-      </button>
-      {/* 답변 영역 — isOpen일 때만 표시 */}
-      {isOpen && (
-        <div className="pb-5 px-1">
-          <p className="text-gray-600 dark:text-gray-300 text-base leading-relaxed">{answer}</p>
-        </div>
-      )}
-    </div>
+      </summary>
+      <div className="pb-5 px-1">
+        <p className="text-gray-600 dark:text-gray-300 text-base leading-relaxed">{answer}</p>
+      </div>
+    </details>
   );
 }
 

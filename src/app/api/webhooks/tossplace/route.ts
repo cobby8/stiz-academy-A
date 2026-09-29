@@ -50,7 +50,9 @@ export async function POST(req: NextRequest) {
   const rawBody = await req.text();
 
   const verdict = verifyWebhookSignature({
-    secret: process.env.TOSS_PLACE_WEBHOOK_SECRET,
+    // 앞뒤 공백·줄바꿈을 뗀다. PowerShell 로 `값 | vercel env add` 하면 끝에 \r\n 이 붙어 저장된다
+    // (2026-09-30 실측). 떼지 않으면 서명이 영원히 안 맞아 실제 결제 알림이 전부 조용히 거부된다.
+    secret: (process.env.TOSS_PLACE_WEBHOOK_SECRET ?? "").trim(),
     signatureHeader: req.headers.get("x-toss-signature"),
     timestampHeader: req.headers.get("x-toss-timestamp"),
     rawBody,

@@ -26,7 +26,9 @@ export async function POST(req: NextRequest) {
 
     // ② 서명 검증
     const verdict = verifySlackSignature({
-        secret: process.env.SLACK_SIGNING_SECRET,
+        // 앞뒤 공백·줄바꿈을 뗀다. PowerShell 로 `값 | vercel env add` 하면 끝에 \r\n 이 붙어 저장된다
+        // (2026-09-30 실측). 떼지 않으면 서명이 영원히 안 맞아 모든 버튼 요청이 조용히 거부된다.
+        secret: (process.env.SLACK_SIGNING_SECRET ?? "").trim(),
         signatureHeader: req.headers.get("x-slack-signature"),
         timestampHeader: req.headers.get("x-slack-request-timestamp"),
         rawBody,

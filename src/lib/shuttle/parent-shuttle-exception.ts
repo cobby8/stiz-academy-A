@@ -106,7 +106,7 @@ export async function submitShuttleException(parentUserId: string, input: Submit
     `SELECT s.id, s.name
        FROM "Student" s
        JOIN "Enrollment" e ON e."studentId" = s.id AND e.status = 'ACTIVE'
-      WHERE s.id = $1 AND s."parentId" = $2
+      WHERE s.id = $1 AND s."parentId" = $2 AND ${notMergedStudent("s")}
       LIMIT 1`,
     studentId, parentUserId,
   );

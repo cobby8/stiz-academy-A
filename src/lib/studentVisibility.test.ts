@@ -46,7 +46,7 @@ const ALLOWED_WITHOUT_FILTER: Record<string, { count: number; reason: string }> 
     // 2026-10-02 실측: 흡수된 학생 8명에게 Payment 4건이 남아 있다(연월 동결 규칙으로 안 옮긴 것).
     "lib/payments/parent-payment-request.ts": {
         count: 3,
-        reason: "학부모 납부 요청 목록·제출·취소 — 흡수 쪽에 남은 청구 4건에 대한 요청을 막지 않는다",
+        reason: "납부 요청 이력 + 청구 id 지정 제출·취소(부모 소유 확인 포함). 청구 목록 자체는 이미 필터됨",
     },
     "lib/payments/admin-payment-request.ts": { count: 1, reason: "원장 납부 요청 처리 목록" },
     "lib/billing/monthly-class-ledger-read.ts": {
@@ -125,11 +125,6 @@ const ALLOWED_WITHOUT_FILTER: Record<string, { count: number; reason: string }> 
     "lib/auth-guard.ts": { count: 1, reason: "직원 겸 학부모 판정 게이트(막는 방향이라 위험)" },
     "app/auth/continue/page.tsx": { count: 1, reason: "로그인 후 학부모 화면 분기 판정(막는 방향이라 위험)" },
 
-    // 병합 자체를 관리하는 자리.
-    "app/api/admin/cleanup-duplicates/route.ts": {
-        count: 1,
-        reason: "고아 학부모 판정 — 흡수된 학생도 세야 FK가 안 깨진다",
-    },
 };
 
 function collectTsFiles(dir: string, out: string[] = []): string[] {

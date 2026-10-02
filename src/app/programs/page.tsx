@@ -114,6 +114,18 @@ export default async function ProgramsPage() {
                         <p className="text-sm mt-2">문의: {phone}</p>
                     </div>
                 ) : (
+                    <>
+                    {/* 판매정책 표시 — 결제사 심사 필수(서비스 제공기간이 상품 화면에 명확히 보여야 함) */}
+                    <div className="mb-6 rounded-xl border border-gray-200 bg-gray-50 p-4 text-sm leading-6 text-gray-700 break-keep dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300">
+                        <p>
+                            <strong className="text-gray-900 dark:text-white">수강 기간</strong> 월 수강료는 <strong>4주(1개월) 단위</strong>로 결제하며,
+                            서비스 제공기간은 결제한 달의 수업 4주입니다. 셔틀비는 별도입니다.
+                        </p>
+                        <p className="mt-1">
+                            <strong className="text-gray-900 dark:text-white">환불</strong> 「학원법 시행령」 교습비 반환기준에 따릅니다 —{" "}
+                            <a href="/terms" className="font-bold text-brand-orange-500 underline underline-offset-2 dark:text-brand-neon-lime">환불 규정 보기</a>
+                        </p>
+                    </div>
                     <div data-tour-target="program-cards" className="grid md:grid-cols-2 gap-6">
                         {programs.map((program, i) => {
                             const days = program.days
@@ -249,6 +261,7 @@ export default async function ProgramsPage() {
                             );
                         })}
                     </div>
+                    </>
                 )}
             </SectionLayout>
 

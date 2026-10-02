@@ -3,6 +3,9 @@
 // DB나 `@/` 별칭에 의존하지 않게 만들어야 node 내장 테스트 러너로 직접 돌려볼 수 있다.
 // (프로젝트 관례: 돈이 걸린 계산 규칙은 순수 모듈로 분리해 회귀 테스트한다.)
 
+// 타입만 가져온다 — 실행 시에는 지워지므로 node 테스트 러너에서도 그대로 돈다.
+import type { StudentRefTable } from "./tables";
+
 /** 수강 상태 우선순위. 숫자가 클수록 "더 살아있는" 상태다. */
 export const ENROLLMENT_STATUS_PRIORITY: Record<string, number> = {
   ACTIVE: 3,
@@ -205,4 +208,54 @@ export function isBillingRowMovable(year: number, month: number): boolean {
   if (year > BILLING_FREEZE_FROM.year) return false;
   if (year < BILLING_FREEZE_FROM.year) return true;
   return month < BILLING_FREEZE_FROM.month;
+}
+
+/**
+ * 흡수 학생의 행(별칭 src) 중 "대표에게 옮겨도 되는 행"만 남기는 WHERE 조각.
+ * `SELECT src.id FROM "T" src WHERE src."col" = <흡수> ${moveGuardSql(...)}` 형태로 붙인다.
+ * winnerLiteral 은 이미 이스케이프된 SQL 문자열 리터럴이어야 한다.
+ *
+ * - UNIQUE 충돌: 대표 쪽에 같은 조합이 있으면 옮기지 않는다(부분 UNIQUE면 양쪽이 조건을 만족할 때만).
+ * - 남기기 고정: keepOnLoser 가 있으면 한 행도 옮기지 않는다.
+ * - 부모 따라가기: 부모 행이 대표 소유일 때만 옮긴다. 부모 연결이 비어 있으면 옮긴다.
+ */
+export function moveGuardSql(t: StudentRefTable, winnerLiteral: string): string {
+  if (t.keepOnLoser) return " AND false";
+  let guard = "";
+
+  if (t.conflictKeys?.length) {
+    const on = t.conflictKeys
+      .map((k) => `(rival."${k}" IS NOT DISTINCT FROM src."${k}")`)
+      .join(" AND ");
+    const rivalWhere = t.conflictWhere ? ` AND ${t.conflictWhere("rival")}` : "";
+    const rivalExists = `EXISTS (
+      SELECT 1 FROM "${t.table}" rival
+      WHERE rival."${t.column}" = ${winnerLiteral} AND ${on}${rivalWhere}
+    )`;
+    guard += t.conflictWhere
+      ? ` AND NOT (${t.conflictWhere("src")} AND ${rivalExists})`
+      : ` AND NOT ${rivalExists}`;
+  }
+
+  for (const p of t.followsParents ?? []) {
+    guard += ` AND (src."${p.column}" IS NULL OR EXISTS (
+      SELECT 1 FROM "${p.parentTable}" parent
+      WHERE parent.id = src."${p.column}" AND parent."studentId" = ${winnerLiteral}
+    ))`;
+  }
+
+  return guard;
+}
+
+/** 옮기지 못하고 흡수 쪽에 남긴 행의 로그 사유 */
+export function moveSkipNote(t: StudentRefTable): string {
+  if (t.keepOnLoser) return t.keepOnLoser;
+  const reasons: string[] = [];
+  if (t.conflictKeys?.length) reasons.push(`UNIQUE(${t.conflictKeys.join(",")}) 충돌`);
+  if (t.followsParents?.length) {
+    reasons.push(
+      `부모 행(${t.followsParents.map((p) => p.parentTable).join("/")})이 흡수 쪽에 남음`,
+    );
+  }
+  return `${reasons.join(" 또는 ") || "이동 조건 불충족"}으로 이동하지 않음`;
 }

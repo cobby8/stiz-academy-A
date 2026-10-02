@@ -75,26 +75,12 @@
 - 핵심 규칙: 청구 원본=랠리즈(전달 3주차 발행), 사이트는 따라가는 기록. 대사는 읽기 전용, 돈 쓰기는 슬랙 [랠리즈 처리함 · 사이트 납부 반영] 버튼→재확인 선점 UPDATE→markPaymentPaid 한 경로뿐.
 - 매칭 로직 1벌: src/lib/pos/tossplace-match.mjs / 판단: payment-notice.mjs / 서명: webhookSignature.ts·slack/signature.ts
 
-## 리뷰 결과 (reviewer) — 토스 가맹 심사용 테스트 결제 + SHOP 판매자 안내 (2026-10-02)
-
-📊 종합 판정: 통과 (필수 수정 없음 · tsc 0 · node --test 8-0)
-
-✅ 잘된 점:
-- 키 분리(TOSS_REVIEW_*)·`test_` 접두 둘 다 아니면 null → API 404·성공화면 승인 거부·버튼 숨김 3곳 모두 같은 함수로 판정
-- 심사 경로는 Program SELECT 1회뿐, 청구서·Payment 쓰기 없음(테스트로 고정). 금액은 DB 가격으로 결정
-- `/payments/review/*` 는 정적 세그먼트라 `[invoiceId]` 보다 우선. proxy matcher 에 걸리지만 updateSession 은 admin/staff/mypage 만 로그인 강제 → 비로그인 접근 가능
-- orderId `REVIEW-`+32자(39자, 규칙 충족)·customerKey `guest-uuid`(42자, 허용문자)·requestPayment v2 옵션 정상
-
-🟡 권장 수정(심사 통과엔 무관):
-- success/page.tsx: 서버가 orderId↔금액을 기억하지 않아, 공개 clientKey 로 임의 금액 결제창을 직접 열면 승인됨(토스는 "결제창 금액=승인 금액"만 확인). 테스트 키 전용·DB 무관이라 실害 0. 라이브 전환 시엔 HMAC 서명 또는 DB 기록 필요
-- checkout/route.ts: Program 조회가 deletedAt 만 거름(비공개·종료 프로그램도 결제창 가능). 영향 미미
-- success/page.tsx: ALREADY_PROCESSED 시 URL 금액을 그대로 표시(표시만)
-
 ## 작업 로그 (최근 10건)
 
 | 날짜 | 작업 내용 | 상태 |
 |------|----------|------|
-| 2026-10-02 | **[reviewer] 토스 가맹 심사용 테스트 결제·SHOP 판매자 안내 검수** — 청구서/DB 분리·라이브키 차단·경로 충돌·비로그인 접근·SDK 옵션 확인. 필수 0, 권장 3(금액 서명 없음은 테스트키 전용이라 무해) | ✅ 통과 |
+| 2026-10-02 | **학생 병합 엔진 참조 목록 보강** — 운영 DB 재실측(SELECT 만)으로 7/26 이후 생긴 학생 참조 12곳(보강권·정규결석·셔틀당일예외·수강변경신청·납부요청·POS알림 등)+운영 미반영 4곳을 `studentMerge/tables.ts` 에 추가. UNIQUE 충돌키·부분 UNIQUE·청구 계열은 Payment 를 따라가게(동결분은 같이 남음)·월별수강대장은 payload CHECK 때문에 흡수 쪽 고정. schema.prisma 대조 누락 가드 테스트 신설. 기병합 8명 잔여 참조 0건이라 재이관 불필요. 발견: studentVisibility 가드 기존 실패(27파일) | 완료 |
+| 2026-10-02 | **결제 절차 문서 테스트 정상화** — SKILL.md 가 9/30 방침(사이트 기준·10월 시트 장부 중단)으로 바뀌었는데 테스트가 옛 문장을 찾아 실패. 같은 안전 계약(완료조건·HELD 해제조건·대상 특정·실행 후 재확인)을 새 문장으로 검사 + first-registration.md 초대 1회·재발송 금지 추가. 이제 `npm test` 전체 1736/1736 통과 | ✅ de22a07e 배포 |
 | 2026-10-02 | **학생 병합 필터 가드 정상화** — 27파일 56건 분류: 학부모 «새 신청» 자녀 선택 5곳에 notMergedStudent(운영 실측 흡수 8명·진행 수강 0건이라 화면 변화 0), 나머지는 사유 붙여 예외 등록(청구·POS 대조·id 단건·게이트·병합엔진이 안 옮기는 기록 목록). `npm test`·`test:guards` 신설 + release-preflight 에 가드 편입. 후속: tables.ts 에 MakeupCredit 등 신규 테이블 추가 필요 | ✅ 667c73be 배포(검수 승인·런타임 오류 0) |
 | 2026-10-02 | **Phase 0 마무리 — 중복 학생 영구삭제 API 차단** — `cleanup-duplicates` POST(이름만으로 청구·출석까지 DELETE)를 410 으로 막고 병합 도구 안내, GET 유지, 재등장 방지 테스트. RLS 는 127개 전부 켜짐·공개권한 0 확인(타 세션 처리). 발견: studentVisibility 가드 테스트가 정규 실행에서 빠져 27파일 누적 위반(별도 작업 분리), 결제 스킬 문서 테스트 1건 기존 실패 | ✅ b3407054 배포 |
 | 2026-10-01 | **토스POS 결제 슬랙 DM 연동 완성·실동작 확인** — 슬랙 앱 `STIZ 결제 알림` 생성·설치(chat:write·im:write), PosPaymentNotice 표 운영 적용, 토스 웹훅이 **비활성**이던 것 발견해 켬. 테스트 DM 첫 시도 `invalid_auth` → 비밀값 3개가 명령어 글자로 저장된 것 발견(클립보드 덮어쓰기·PowerShell 파이프 
@@ -105,4 +91,3 @@
 | 2026-09-29 | **POS 결제 대사 자동화 + 관리자 화면** — 매칭 로직을 `src/lib/pos/` 로 이전해 CLI·웹앱이 한 벌 공유(저장소 내 사본 0을 테스트로 고정). 크론(KST 05:30)·서버 실행부·`/admin/pos-reconcile` 화면 신설. 대사는 **조회 + 기록표 INSERT 한 줄**만 — Payment/청구서/수강/원생 UPDATE·DELETE 부재를 테스트로 단정. 키 미설정 시 예외 대신 FAILED 기록(운영 환경변수 아직 미등록). tsc 0 / 테스트 **1661-0** / build 0 / CLI 실거래 재확인(2026-09: 사이트 17건 ₩1,675,000 vs 토스 25건 ₩3,737,000, 차이 ₩2,062,000, 쓰기 없음 증빙 통과). 미커밋 | 완료 |
 | 2026-09-29 | **갈라진 학부모 계정 4가족 정리(운영 DB 수정)** — 승인 로직이 전화번호를 글자 그대로 비교해 부모 계정을 새로 만들던 버그(9/28 수정·배포)로 이미 갈라진 4가족을 복구. 로그인 계정 쪽으로 자녀 4명(양시우·박윤우·신하율·최율찬)·청구서 3건·알림 4건 이전. 결제는 학생에 붙어 있어 자동으로 따라옴. 빈 껍데기가 된 자동생성 계정은 과거 기록이 가리킬 수 있어 **삭제하지 않음**. 되돌리기 SQL 을 실행 전 파일로 저장(scratchpad/parent-merge-rollback-20260929.sql). 검증: 4가족 모두 로그인 계정에 자녀 1명·앱 노출 조건 통과, 남은 분리 사고 **0건**, 배포 이후 새로 갈라진 계정 0건 | 완료·코드변경 없음 |
 | 2026-09-18 | **토스POS ↔ 사이트 결제 월별 대사 스크립트(읽기 전용)** — `scripts/lib/tossplace-match.mjs`(순수 매칭)+`scripts/tossplace-reconcile.mjs`(CLI)+테스트 26건 신규. 2026-09 실행: 사이트 16건 ₩1,525,000 vs 토스 21건 ₩3,042,000, 차이 ₩1,517,000(토스에만 9건·사이트에만 1건·확인필요 17건). DB 무변경 증빙 통과. 미커밋 | 완료 |
-| 2026-08-16 | **대시보드 "오늘" KST 고정 (8/12 에 남겨둔 빚 상환)** — `adminReadPayloads.ts` 3곳(`getTodayLabel`·`getTodayClasses`·`loadDashboardPrimaryPayload`)이 `new Date().getDay()` 로 요일을 구해, Vercel(UTC)에서 **KST 00~09시에 전날 요일의 수업표·라벨**이 떴다. `kstDow(todayKst())` 로 교체(라벨 함수는 인자를 Date→"YYYY-MM-DD"). 가드 테스트 `R3_ALLOW` 에서 해당 파일 삭제 + 상한 3→2 하향(빚 목록은 줄어들기만 한다). 남은 R3 빚 2건(`queries.ts`·`staff-session-queries.ts`)은 `T12:00` 기준점이라 현재는 맞지만 위태로움. **같은 파일 `getMonthLabels()` 의 `getFullYear/getMonth` 는 미처리** — 매월 1일 새벽에 차트 월 라벨이 밀릴 수 있고 R3 정규식이 잡지 못함. tsc 0 / 테스트 **1138-0** / build 0 | 완료·커밋 b774967 |

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import type { RegularShuttleStop } from "@/lib/shuttle/regularSheet";
 import AdminModal from "@/components/admin/AdminModal";
@@ -15,6 +15,8 @@ import {
   type RosterStudentEntry,
 } from "@/lib/shuttle/regularRosterEditLogic";
 import type { RosterStudentSearchResult } from "@/lib/shuttle/regularRosterEdit";
+import { checkRosterRows } from "@/lib/shuttle/regularRosterCheckLogic";
+import DriverOrderView from "./DriverOrderView";
 
 // 셔틀 명단 — 사이트가 정규 셔틀 명단의 원장이다. 월 → 요일 → 수업시간별 학생(등원·하원 정류장).
 // 학생 추가·빼기·반이동·정류장 수정은 /api/admin/shuttle/regular-roster 로 바로 저장한다.
@@ -110,6 +112,13 @@ export default function RegularShuttleClient({ initialStops, initialMonth, month
   const [dialog, setDialog] = useState<Dialog | null>(null);
   const [dialogErr, setDialogErr] = useState<string | null>(null);
   const [picker, setPicker] = useState<PickerTarget | null>(null);
+  // 보기 전환: 학생별 목록 / 기사님 화면(운행 순서). 기사님 화면 보기에서 고친 뒤 저장 안 했으면 전환 전에 묻는다.
+  const [view, setView] = useState<"students" | "driver">("students");
+  const [orderDirty, setOrderDirty] = useState(false);
+  const onOrderDirty = useCallback((d: boolean) => setOrderDirty(d), []);
+  const confirmLeaveOrder = () => !orderDirty || window.confirm("기사님 화면 보기에서 저장하지 않은 순서·시각 변경이 있습니다. 이동하면 사라집니다. 계속할까요?");
+  // 그 요일 기사님 화면이 정규 배차 저장 노선을 쓰는지(방향별). null = 아직 모름/조회 실패.
+  const [routeStatus, setRouteStatus] = useState<{ PICKUP: boolean; DROPOFF: boolean } | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -145,6 +154,19 @@ export default function RegularShuttleClient({ initialStops, initialMonth, month
   const groups = useMemo(() => groupRosterDay(stops, active), [stops, active]);
   // 이 달에 쓰인 수업시간(추가·반이동 입력 자동완성용).
   const classTimes = useMemo(() => [...new Set(stops.map((s) => s.classTime).filter((c): c is string => Boolean(c)))].sort(), [stops]);
+  // 명단 점검(기사님 화면에서 빠지거나 어긋나 보일 행). 자동으로 고치지 않고 알리기만 한다.
+  const issues = useMemo(() => checkRosterRows(stops), [stops]);
+  const laterMonths = useMemo(() => availableMonths.filter((m) => m > serviceMonth).sort(), [availableMonths, serviceMonth]);
+
+  // 요일·월이 바뀌면 그 요일의 정규 배차 저장 노선 사용 여부를 다시 확인한다(조회 전용).
+  useEffect(() => {
+    let cancelled = false;
+    setRouteStatus(null);
+    void fetch(`/api/admin/shuttle/regular-roster?routeStatus=1&month=${encodeURIComponent(serviceMonth)}&weekday=${active}`, { cache: "no-store" })
+      .then(async (r) => { const j = await r.json().catch(() => null); if (!cancelled && r.ok && j?.status) setRouteStatus(j.status); })
+      .catch(() => { /* 표시용 정보라 실패해도 조용히 넘어간다 */ });
+    return () => { cancelled = true; };
+  }, [serviceMonth, active]);
 
   async function loadMonth(month: string) {
     setBusy(true); setErr(null);
@@ -237,7 +259,7 @@ export default function RegularShuttleClient({ initialStops, initialMonth, month
       classTime: dialog.classTime,
       board: dialog.useBoard ? toStopBody(dialog.board) : null,
       alight: dialog.useAlight ? toStopBody(alight) : null,
-    }, `${dialog.student?.name ?? dialog.manualName} 학생을 명단에 추가했습니다.`);
+    }, `${dialog.student?.name ?? dialog.manualName} 학생을 명단에 추가했습니다(그 수업 맨 뒤). 「기사님 화면」 보기에서 순서·시각을 맞춰 주세요.`);
   }
 
   // 정류장 입력값 갱신(추가 폼의 등원·하원, 정류장 수정 폼 공용).
@@ -560,7 +582,7 @@ export default function RegularShuttleClient({ initialStops, initialMonth, month
             <p className="mt-0.5 text-[11.5px] text-gray-400">이번 달·다음 달 명단은 직전 달을 복사해 자동으로 만들어집니다. 다음 달 변경은 월을 바꿔 미리 고쳐 두세요.</p>
           </div>
           <label className="flex flex-col gap-1 text-[11px] font-bold text-gray-500">월
-            <select value={serviceMonth} disabled={busy} onChange={(e) => void loadMonth(e.target.value)} className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-bold dark:border-gray-600 dark:bg-gray-900">
+            <select value={serviceMonth} disabled={busy} onChange={(e) => { if (confirmLeaveOrder()) void loadMonth(e.target.value); }} className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-bold dark:border-gray-600 dark:bg-gray-900">
               {monthOptions.map((month) => <option key={month} value={month}>{month}{month === currentMonth ? " (이번 달)" : ""}</option>)}
             </select>
           </label>
@@ -578,10 +600,16 @@ export default function RegularShuttleClient({ initialStops, initialMonth, month
 
         {err && <p className="mt-2 rounded-lg bg-red-50 px-3 py-2 text-xs font-bold text-red-600">⚠ {err}</p>}
         {msg && <p className="mt-2 rounded-lg bg-green-50 px-3 py-2 text-xs font-bold text-green-700 dark:bg-green-900/30 dark:text-green-200">✓ {msg}</p>}
-        {showDispatchHint && (
+        {/* 저장 노선이 있는 요일만 정규 배차에서 다시 배정해야 한다. 없으면 기사님 화면이 이 명단 순서를 바로 쓴다. */}
+        {showDispatchHint && (routeStatus?.PICKUP || routeStatus?.DROPOFF) && (
           <p className="mt-2 flex flex-wrap items-center gap-2 rounded-lg bg-amber-50 px-3 py-2 text-xs font-bold text-amber-800 dark:bg-amber-950/30 dark:text-amber-200">
             정규 배차 화면에서 새 학생을 차량에 배정하고 저장해야 기사님 화면에 반영됩니다.
             <Link href="/admin/shuttle/regular-dispatch" className="underline">정규 배차로 가기</Link>
+          </p>
+        )}
+        {showDispatchHint && routeStatus && !routeStatus.PICKUP && !routeStatus.DROPOFF && (
+          <p className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-xs font-bold text-amber-800 dark:bg-amber-950/30 dark:text-amber-200">
+            기사님 화면은 이 명단 순서로 운행합니다. 「기사님 화면」 보기에서 순서·시각을 맞춰 주세요.
           </p>
         )}
         {locationLink && <div className="mt-2 rounded-xl border border-blue-200 bg-blue-50 p-3 text-xs dark:border-blue-800 dark:bg-blue-950/30">
@@ -603,16 +631,62 @@ export default function RegularShuttleClient({ initialStops, initialMonth, month
             {/* 요일 탭 */}
             <div className="mt-3 flex flex-wrap items-center gap-1 rounded-xl bg-gray-100 p-1 dark:bg-gray-900">
               {weekdays.map((w) => (
-                <button key={w.weekday} type="button" onClick={() => setActive(w.weekday)}
+                <button key={w.weekday} type="button" onClick={() => { if (w.weekday !== active && confirmLeaveOrder()) setActive(w.weekday); }}
                   className={`min-h-9 rounded-lg px-3 text-sm font-black ${active === w.weekday ? "bg-white text-brand-navy-900 shadow dark:bg-gray-700 dark:text-white" : "text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"}`}>
                   {WEEKDAY_LABELS[w.weekday]}<span className="ml-1 text-[11px] font-bold text-gray-400">{w.count}</span>
                 </button>
               ))}
             </div>
 
-            {groups.length === 0 && <div className="mt-3 rounded-xl border border-dashed border-gray-300 p-6 text-center text-sm text-gray-400 dark:border-gray-600">{WEEKDAY_LABELS[active]}요일 셔틀 이용 학생이 없습니다.</div>}
+            {/* 보기 전환 — 학생별 / 기사님 화면(운행 순서) */}
+            <div className="mt-2 flex flex-wrap items-center gap-1" role="tablist" aria-label="명단 보기">
+              {([["students", "학생별"], ["driver", "기사님 화면(운행 순서)"]] as const).map(([v, label]) => (
+                <button key={v} type="button" role="tab" aria-selected={view === v}
+                  onClick={() => {
+                    if (v === view || (v === "students" && !confirmLeaveOrder())) return;
+                    setView(v);
+                    // 기사님 화면 보기가 닫히면(언마운트) 고친 내용도 사라지므로 「저장 안 됨」 표시를 내린다.
+                    if (v === "students") setOrderDirty(false);
+                  }}
+                  className={`min-h-8 rounded-lg px-3 text-[12.5px] font-black ${view === v ? "bg-brand-navy-900 text-white dark:bg-brand-neon-lime dark:text-brand-navy-900" : "border border-gray-200 text-gray-600 dark:border-gray-600 dark:text-gray-300"}`}>{label}</button>
+              ))}
+            </div>
 
-            <div className="mt-3 space-y-4">
+            {/* 정규 배차 저장 노선이 있는 방향은 기사님 화면이 그 노선을 쓴다 → 여기 순서는 쓰이지 않는다(조회만). */}
+            {routeStatus && (routeStatus.PICKUP || routeStatus.DROPOFF) && (
+              <p className="mt-2 flex flex-wrap items-center gap-2 rounded-lg border border-violet-200 bg-violet-50 px-3 py-2 text-xs font-bold text-violet-800 dark:border-violet-800 dark:bg-violet-950/30 dark:text-violet-200">
+                이 요일 {[routeStatus.PICKUP && "등원", routeStatus.DROPOFF && "하원"].filter(Boolean).join("·")}은 정규 배차 저장 노선으로 운행 중 — 여기 순서는 기사님 화면에 쓰이지 않습니다.
+                <Link href="/admin/shuttle/regular-dispatch" className="underline">정규 배차 보기</Link>
+              </p>
+            )}
+
+            {/* 명단 점검 — 기사님 화면에서 빠지거나 어긋나 보일 행(이 달 전체). 자동으로 고치지 않는다. */}
+            {issues.length > 0 && (
+              <details className="mt-2 rounded-xl border border-amber-300 bg-amber-50 p-3 text-xs text-amber-900 dark:border-amber-700 dark:bg-amber-950/30 dark:text-amber-100">
+                <summary className="cursor-pointer font-black">⚠ 명단 점검 {issues.length}건 — 기사님 화면에서 빠지거나 어긋나 보일 수 있습니다</summary>
+                <ul className="mt-2 space-y-1">
+                  {issues.map((issue, i) => <li key={`${issue.kind}-${i}`} className={issue.weekday === active ? "font-bold" : ""}>· {issue.message}</li>)}
+                </ul>
+                <p className="mt-2 font-bold">자동으로 고치지 않았습니다. 학생별 보기에서 반이동·정류장 수정·빼기로 고쳐 주세요.</p>
+              </details>
+            )}
+
+            {view === "driver" && (
+              <DriverOrderView
+                stops={stops}
+                weekday={active}
+                serviceMonth={serviceMonth}
+                laterMonths={laterMonths}
+                defaultScope={defaultScope}
+                savedRoute={routeStatus}
+                onDirtyChange={onOrderDirty}
+                onSaved={async (message) => { setMsg(message); setErr(null); await loadMonth(serviceMonth); }}
+              />
+            )}
+
+            {view === "students" && groups.length === 0 && <div className="mt-3 rounded-xl border border-dashed border-gray-300 p-6 text-center text-sm text-gray-400 dark:border-gray-600">{WEEKDAY_LABELS[active]}요일 셔틀 이용 학생이 없습니다.</div>}
+
+            {view === "students" && <div className="mt-3 space-y-4">
               {groups.map((g) => (
                 <section key={g.classTime || "none"}>
                   <h4 className="text-[13px] font-black text-gray-800 dark:text-gray-100">{g.classTime || "수업시간 미지정"} <span className="text-[11px] font-bold text-gray-400">{g.students.length}명</span></h4>
@@ -650,7 +724,7 @@ export default function RegularShuttleClient({ initialStops, initialMonth, month
                   </ul>
                 </section>
               ))}
-            </div>
+            </div>}
           </>
         )}
       </div>

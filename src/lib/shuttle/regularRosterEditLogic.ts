@@ -489,3 +489,129 @@ export function idPairArrays(pairs: readonly { oldId: string; newId: string }[])
   }
   return { oldIds, newIds };
 }
+
+// ── 기사님 화면 순서·시각 편집(정차 단위) ───────────────────────────
+
+/** 한 정차 = 같은 정류장에 묶인 명단 행들 + 그 정차의 시각. 기사님 화면(groupSheetStops)과 같은 묶음이다. */
+export type RosterReorderStop = { rowIds: string[]; arriveTime: string | null };
+
+export type RosterReorderInput = {
+  serviceMonth: string;
+  scope: RosterScope;
+  weekday: number;
+  classTime: string;
+  direction: RosterDirection;
+  /** 새 운행 순서대로의 정차 목록. 그 수업·방향의 모든 학생 행이 정확히 한 번씩 들어 있어야 한다. */
+  stops: RosterReorderStop[];
+};
+
+const MAX_REORDER_STOPS = 100;
+const MAX_REORDER_ROWS = 300;
+
+/**
+ * 순서 편집의 수업시간은 **글자 그대로** 비교한다(공백 정리 안 함).
+ * 왜: 기사님 화면은 classTime 글자가 같은 행끼리 한 섹션으로 묶는다. 여기서 공백을 정리하면
+ *     '17:00 ~ 18:00'(가져오기 잔재) 행을 못 찾아 저장이 막힌다.
+ */
+function exactClassTime(v: unknown): string {
+  if (typeof v !== "string" || !v.trim()) throw new RosterInputError("수업시간을 입력해 주세요.");
+  if (v.length > 40) throw new RosterInputError("수업시간이 너무 깁니다.");
+  return v;
+}
+
+export function validateReorderInput(raw: unknown): RosterReorderInput {
+  const o = obj(raw);
+  const direction = o.direction === "BOARD" || o.direction === "ALIGHT" ? o.direction : null;
+  if (!direction) throw new RosterInputError("방향(등원·하원)이 올바르지 않습니다.");
+  if (!Array.isArray(o.stops) || o.stops.length === 0) throw new RosterInputError("저장할 정차가 없습니다.");
+  if (o.stops.length > MAX_REORDER_STOPS) throw new RosterInputError("정차가 너무 많습니다.");
+  const seen = new Set<string>();
+  const stops = o.stops.map((s) => {
+    const so = obj(s);
+    const rowIds = normalizeIds(so.rowIds);
+    // 한 행이 두 정차에 들어 있으면 순서가 모호하다 → 화면과 서버가 어긋난 상태로 본다.
+    for (const id of rowIds) {
+      if (seen.has(id)) throw new RosterInputError("같은 학생 행이 두 정차에 들어 있습니다. 화면을 새로고침해 주세요.");
+      seen.add(id);
+    }
+    return { rowIds, arriveTime: normalizeArriveTime(so.arriveTime) };
+  });
+  if (seen.size > MAX_REORDER_ROWS) throw new RosterInputError("한 번에 처리할 수 있는 행이 너무 많습니다.");
+  return {
+    serviceMonth: normalizeRosterMonth(o.serviceMonth),
+    scope: normalizeRosterScope(o.scope),
+    weekday: normalizeWeekday(o.weekday),
+    classTime: exactClassTime(o.classTime),
+    direction,
+    stops,
+  };
+}
+
+/** 그 요일·수업·방향의 학생 행(기사님 화면 한 칸에 들어가는 행들). */
+export function reorderGroupRows<T extends Pick<RosterExistingRow, "weekday" | "direction" | "classTime" | "studentName">>(
+  rows: readonly T[], weekday: number, classTime: string, direction: RosterDirection,
+): T[] {
+  return rows.filter((r) => r.weekday === weekday && r.direction === direction && (r.classTime ?? "") === classTime && !!r.studentName);
+}
+
+export type RosterReorderUpdate = { id: string; sortOrder: number; arriveTime: string | null };
+
+/**
+ * 「슬롯 재배정」 — 대상 행들이 원래 갖고 있던 sortOrder 값(오름차순)을 새 순서대로 다시 나눠 준다.
+ * 왜: sortOrder 는 요일 안의 번호라 다른 수업·방향 행과 섞여 있다. 우리 행들이 쓰던 번호만 돌려 쓰면
+ *     다른 수업·방향의 순서는 전혀 바뀌지 않는다(정규 배차 RegularRouteSection 과 같은 방식).
+ * 같은 번호가 겹쳐 있으면(가져오기 잔재) 정렬이 흔들리므로, 앞 번호보다 반드시 1 이상 크게 맞춘다.
+ * ordered: 새 순서의 (행 id, 시각). sortOrderById: 그 행들의 현재 sortOrder.
+ */
+export function reassignSortSlots(
+  ordered: readonly { id: string; arriveTime: string | null }[],
+  sortOrderById: ReadonlyMap<string, number>,
+): RosterReorderUpdate[] {
+  const slots = ordered.map((o) => {
+    const v = sortOrderById.get(o.id);
+    if (v == null) throw new RosterInputError("일부 행을 이 달 명단에서 찾지 못했습니다. 화면을 새로고침해 주세요.");
+    return v;
+  }).sort((a, b) => a - b);
+  for (let i = 1; i < slots.length; i++) if (slots[i] <= slots[i - 1]) slots[i] = slots[i - 1] + 1;
+  return ordered.map((o, i) => ({ id: o.id, sortOrder: slots[i], arriveTime: o.arriveTime }));
+}
+
+/** 정차 목록 → (행 id, 그 정차 시각) 을 운행 순서대로 펼친다. */
+export function flattenReorderStops(stops: readonly RosterReorderStop[]): { id: string; arriveTime: string | null }[] {
+  return stops.flatMap((s) => s.rowIds.map((id) => ({ id, arriveTime: s.arriveTime })));
+}
+
+/**
+ * 이 달(고른 달) 순서 저장 계획. 보낸 행 집합이 그 수업·방향의 현재 학생 행 집합과 **정확히 같아야** 한다
+ * (다른 사람이 그사이 학생을 추가·삭제했으면 순서가 어긋나므로 저장을 막고 새로고침을 안내).
+ */
+export function buildReorderUpdates(input: Pick<RosterReorderInput, "weekday" | "classTime" | "direction" | "stops">, existing: readonly RosterExistingRow[]): RosterReorderUpdate[] {
+  const group = reorderGroupRows(existing, input.weekday, input.classTime, input.direction);
+  const ordered = flattenReorderStops(input.stops);
+  const groupIds = new Set(group.map((r) => r.id));
+  if (ordered.length !== groupIds.size || ordered.some((o) => !groupIds.has(o.id))) {
+    throw new RosterInputError("그사이 명단이 바뀌었습니다. 화면을 새로고침한 뒤 다시 맞춰 주세요.");
+  }
+  return reassignSortSlots(ordered, new Map(group.map((r) => [r.id, r.sortOrder])));
+}
+
+/**
+ * 이후 달 순서 반영 계획(적용 범위 FROM_THIS_MONTH).
+ * 이 달 행마다 그 달의 대응 행(같은 학생·요일·방향·수업시간 = findCounterpartRows)을 찾아 같은 순서·시각으로 맞춘다.
+ * 대응 행끼리만 그들이 쓰던 번호를 돌려 쓰고, 그 달에만 있는 학생 행은 손대지 않는다. 대응 행이 없으면 빈 배열(건너뜀).
+ */
+export function buildCounterpartReorderUpdates(
+  orderedSource: readonly (RosterRowIdentity & { arriveTime: string | null })[],
+  laterRows: readonly RosterExistingRow[],
+): RosterReorderUpdate[] {
+  const used = new Set<string>();
+  const ordered: { id: string; arriveTime: string | null }[] = [];
+  for (const src of orderedSource) {
+    const hit = findCounterpartRows(src, laterRows).find((r) => !used.has(r.id));
+    if (!hit) continue;
+    used.add(hit.id);
+    ordered.push({ id: hit.id, arriveTime: src.arriveTime });
+  }
+  if (ordered.length === 0) return [];
+  return reassignSortSlots(ordered, new Map(laterRows.map((r) => [r.id, r.sortOrder])));
+}

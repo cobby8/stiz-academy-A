@@ -88,6 +88,11 @@ export default function RegularDispatchClient({ weekdays, initialDay, initialPic
             </select>
           </label>
         </div>
+        {/* 원장 결정(2026-10-02): 지금 기사님 화면은 「셔틀 명단」 순서(폴백)로 운행 중이 기준이다.
+            여기서 저장하면 그 요일·방향 기사님 화면이 저장 노선으로 바뀌므로 먼저 알린다. */}
+        <p className="mt-2 rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-[12.5px] font-bold text-amber-900 dark:border-amber-700 dark:bg-amber-950/30 dark:text-amber-100">
+          ⚠ 지금 기사님 화면은 「셔틀 명단」 순서로 운행 중입니다. 여기서 💾 저장하면 그 요일·방향의 기사님 화면이 이 노선으로 바뀝니다.
+        </p>
         {/* 조작 설명은 뺐다. 좌표의 출처(학생 신청서)는 데이터 출처 정보라 반드시 남긴다. */}
         <p className="mt-0.5 text-[12.5px] text-gray-500 dark:text-gray-400">
           좌표는 <b>학생 신청서</b>에서 자동으로 가져옵니다.

@@ -264,6 +264,17 @@ export function buildFallbackDirectionSections(
   return out;
 }
 
+/**
+ * 그 요일의 기사님 화면 재료 행 — 학생 정차행(승차/하차)만, 명단 순서(sortOrder) 그대로.
+ * 기사님 화면(서버)과 관리자 「기사님 화면」 보기가 **같은 함수**로 고르게 한곳에 둔다
+ * (한쪽만 고쳐져 관리자가 보는 순서와 기사님이 보는 순서가 어긋나는 사고 방지).
+ */
+export function selectDriverDayRows<T extends Pick<RegularShuttleStop, "weekday" | "direction" | "studentName" | "sortOrder">>(stops: readonly T[], weekday: number): T[] {
+  return stops
+    .filter((s) => s.weekday === weekday && (s.direction === "BOARD" || s.direction === "ALIGHT") && s.studentName)
+    .sort((a, b) => a.sortOrder - b.sortOrder);
+}
+
 /** 두 방향 모두 저장본이 없을 때 — 종전 화면 그대로(수업시간별 등원+하원 한 섹션). */
 export function buildFallbackClasses(dayRows: RegularShuttleStop[], isAbsent: AbsentPredicate): DriverClass[] {
   const classTimes = [...new Set(dayRows.map((s) => s.classTime).filter((c): c is string => !!c))]

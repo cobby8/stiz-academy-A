@@ -85,10 +85,43 @@
 💡 tester: tsc 0 · 단위 121 중 실패 1(contracts legacy text-only, 기준선) · tests 1756 중 실패 1(POS 매칭 한 벌, 기준선). 화면 렌더 금지(운영 DB).
 ⚠️ reviewer: 관리자 화면에서 DriverLocationPanel·DriverRequestPanel(기사 실시간 위치·기사 요청 처리) 진입점이 사라진 상태 — 파일은 남김, PM 판단 대기.
 
+## 구현 기록 (developer) — 「셔틀 명단 = 기사님 화면」 (2026-10-02)
+
+📝 셔틀 명단에 「기사님 화면(운행 순서)」 보기 + 정차 단위 순서·시각 저장, 명단 점검 경고, 저장 노선 운행 표시, 정규 배차 저장 경고. 스키마 변경 없음.
+
+| 파일 | 변경 | 신규/수정 |
+|---|---|---|
+| src/lib/shuttle/regularDriverRouteLogic.ts | `selectDriverDayRows`(요일 학생행 고르기·정렬) 추가 — 기사 화면·관리자 보기 공용 | 수정 |
+| src/lib/shuttle/regularDriverRoute.ts | 같은 필터를 `selectDriverDayRows` 호출로 교체(동작 동일) | 수정 |
+| src/lib/shuttle/regularRosterEditLogic.ts | reorder 검증·슬롯 재배정·이후 달 대응 행 반영 순수 함수 | 수정 |
+| src/lib/shuttle/regularRosterCheckLogic.ts (+test) | 명단 점검 5종(중복·등원 늦음·하원 이른·수업시간 없음·같은 정류장 다른 시각) | 신규 |
+| src/lib/shuttle/regularRosterEdit.ts | `reorderRosterStops`(lock·audit REGULAR_ROSTER_REORDER) · `getRegularRouteStatus`(조회 전용) | 수정 |
+| src/app/api/admin/shuttle/regular-roster/route.ts | PATCH action:"reorder", GET ?routeStatus=1 | 수정 |
+| src/app/admin/shuttle/regular/DriverOrderView.tsx | 기사님 화면 보기(buildFallbackClasses 재사용, ↑↓·time·칸별 저장·저장 안 됨) | 신규 |
+| src/app/admin/shuttle/regular/RegularShuttleClient.tsx | 보기 전환·점검 접이식·저장 노선 표시·추가 안내·이탈 확인 | 수정 |
+| regular-dispatch/RegularDispatchClient.tsx · components/seasonal/RouteSection.tsx | 경고 배너 · 정규 모드 첫 저장(저장본 없음) confirm | 수정 |
+| tests/regular-roster-driver-view.test.mjs · regular-shuttle-auto-month.test.mjs | 가드·왕복 테스트 신규 / 편집 4종→5종 | 신규/수정 |
+
+💡 tester: tsc 0 · 단위 133 중 실패 1(contracts legacy, 기준선) · tests 1760 중 실패 1(매칭 한 벌, 기준선). 화면 렌더 금지(운영 DB).
+⚠️ reviewer: 슬롯 재배정 시 겹친 번호를 +1 로 벌림(다른 칸 번호와 동률 가능, 칸 내부 순서엔 무해) · 순서 편집 classTime 은 글자 그대로 비교(기사 화면 섹션 키와 동일).
+
+### 리뷰 결과 (reviewer) — 셔틀 명단 = 기사님 화면
+
+📊 종합 판정: 통과 (필수 수정 없음, 권장 4건)
+✅ 기사님 화면 회귀 0 — selectDriverDayRows 는 옛 filter·sort 와 글자 단위 동일. 슬롯 재배정은 칸 안 순서만 바꾸고(섹션=수업·방향별 groupSheetStops) 정차 블록이 연속 번호라 '처음 나온 위치' 규칙과 일치. 서버 행 집합 일치 검증·lockForEdit·감사로그·$n 바인딩·requireAdmin 이중 가드 OK. RouteSection 경고는 regularEditing 안이라 방학특강 무영향. tsc 0 · 관련 테스트 46/46 · KST 가드 6/6.
+🔴 필수: 없음
+🟡 권장:
+- DriverOrderView.tsx:105 — arriveTime 원문 그대로 전송. 기존 행 시각이 HH:MM 이 아니면(예 '16시40분'·'-') 화면은 빈칸인데 칸 전체 저장이 "도착시각은 17:05 처럼" 오류로 막힘 → 점검 로직에 '시각 형식 이상' 경고 추가 또는 오류 문구에 정류장명.
+- regularRosterEdit.ts reorder 감사로그 — 이후 달 행의 변경 전 sortOrder·arriveTime 미기록(되돌림 정보 부족).
+- regularRosterCheckLogic.ts:80 — 칸 키를 trim 한 classTime 으로 묶음(기사 화면은 원문). 끝 공백만 다른 행이 한 칸으로 합쳐져 '한 정차로 합쳐짐' 문구가 틀릴 수 있음. 공백만 다른 수업시간(섹션 분리) 자체를 경고하면 더 유용.
+- RegularDispatchClient.tsx:91 — 배너가 고정 문구라 이미 저장 노선으로 운행 중인 요일에도 "셔틀 명단 순서로 운행 중"이라 표시(사실과 다름). RegularShuttleClient 의 routeStatus null(로딩·실패) 시 추가 안내 둘 다 숨음 — 경미.
+
 ## 작업 로그 (최근 10건)
 
 | 날짜 | 작업 내용 | 상태 |
 |------|----------|------|
+| 2026-10-02 | **셔틀 명단 = 기사님 화면 리뷰(reviewer)** — 통과. 기사 화면 회귀 0(필터·정렬 동일), reorder 칸 밖 순서 무영향. 권장 4(비정형 시각 저장 막힘·이후 달 감사 before·점검 trim 키·배너 고정 문구) | 통과 |
+| 2026-10-02 | **셔틀 명단 = 기사님 화면(developer)** — 기사님 화면 보기(같은 순수 함수)·정차 순서·시각 저장(reorder)·명단 점검·저장 노선 표시·정규 배차 저장 경고. tsc 0·기준선 실패 2건만. 미커밋 | 검수 대기 |
 | 2026-10-02 | **셔틀 관리 3단계 정리(developer)** — 옛 노선 편성 화면 삭제, 시트 가져오기 API 410, 시트 가져오기 함수·CSV 파서 제거, 시트 주석·문구 정리, 테스트 9개 갱신. tsc 0·기준선 실패 2건만. 미커밋 | 검수 대기 |
 | 2026-10-02 | **셔틀 명단 월 자동 생성(developer·reviewer)** — 이번 달·다음 달 자동 보장(크론 KST 00:05·화면 진입), 저장 노선 복사, 편집 4종 적용 범위. 리뷰 높음1·권장3 수정(따라잡기 생성 시 탑승체크·기사요청 id 이전, 전화 없는 동명이인 미묶음, 지난 달 기본 THIS_MONTH) | 커밋 146e0cee |
 | 2026-10-02 | **정규 배차 편집 강화 2단계(developer·reviewer)** — 정차·학생 차량 간 이동·빼기·정원 경고·저장 안 됨/이탈 경고(regularEditing 로만). 리뷰 중간2·낮음3 수정(월 전환 재로딩·저장 중 편집 보존·회차 시간 확인) | 커밋 146e0cee |

@@ -4,8 +4,10 @@ import {
   addRosterStudent,
   copyRosterMonth,
   editRosterStop,
+  getRegularRouteStatus,
   moveRosterRows,
   removeRosterRows,
+  reorderRosterStops,
   RosterInputError,
   searchRosterStudents,
 } from "@/lib/shuttle/regularRosterEdit";
@@ -14,8 +16,9 @@ export const dynamic = "force-dynamic";
 
 // 셔틀 명단 편집 API(원장 전용). 각 lib 함수도 requireAdmin 을 다시 확인한다(이중 가드).
 //   GET    ?q=이름                       → 학생 검색(추가 폼)
+//   GET    ?routeStatus=1&month=&weekday= → 그 요일 기사님 화면이 정규 배차 저장 노선을 쓰는지(방향별, 조회 전용)
 //   POST   { action: "add" | "copyMonth" } → 학생 추가 / 다음 달 명단 만들기
-//   PATCH  { action: "move" | "editStop" } → 반이동 / 정류장 수정
+//   PATCH  { action: "move" | "editStop" | "reorder" } → 반이동 / 정류장 수정 / 기사님 화면 순서·시각
 //   DELETE { serviceMonth, ids }          → 빼기
 
 function fail(e: unknown, tag: string) {
@@ -35,7 +38,12 @@ async function body(request: Request): Promise<Record<string, unknown>> {
 export async function GET(request: Request) {
   try {
     await requireAdmin();
-    const q = new URL(request.url).searchParams.get("q") ?? "";
+    const params = new URL(request.url).searchParams;
+    if (params.get("routeStatus")) {
+      const status = await getRegularRouteStatus(params.get("month"), params.get("weekday"));
+      return NextResponse.json({ status }, { headers: { "Cache-Control": "no-store" } });
+    }
+    const q = params.get("q") ?? "";
     const students = await searchRosterStudents(q);
     return NextResponse.json({ students }, { headers: { "Cache-Control": "no-store" } });
   } catch (e) { return fail(e, "GET"); }
@@ -57,6 +65,7 @@ export async function PATCH(request: Request) {
     const b = await body(request);
     if (b.action === "move") return NextResponse.json({ ok: true, ...(await moveRosterRows(b)) });
     if (b.action === "editStop") return NextResponse.json({ ok: true, ...(await editRosterStop(b)) });
+    if (b.action === "reorder") return NextResponse.json({ ok: true, ...(await reorderRosterStops(b)) });
     throw new RosterInputError("알 수 없는 요청입니다.");
   } catch (e) { return fail(e, "PATCH"); }
 }

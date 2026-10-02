@@ -186,3 +186,9 @@
 - **발견자**: developer
 - **내용**: `AdminModal` 과 `LocationPickerModal` 은 둘 다 document 에 Esc·Tab 처리를 건다. 겹쳐 띄우면 Esc 한 번에 둘 다 닫히고 Tab 이 서로 포커스를 뺏는다. 방법(`admin/shuttle/regular/RegularShuttleClient.tsx`): 폼 입력값을 상위 `dialog` 상태에 두고 `{dialog && !picker && <AdminModal/>}` / `{picker && <LocationPickerModal/>}` 로 번갈아 띄운다. 또 렌더 함수 안에서 `function StopFields(){}` 를 정의해 `<StopFields/>` 로 쓰면 렌더마다 새 컴포넌트라 **글자 칠 때마다 입력 포커스가 풀린다** — `stopFields()` 처럼 함수 호출로 쓴다.
 - **참조횟수**: 0
+
+### [2026-10-02] 운영 화면의 «관리자 미리보기»는 운영 화면과 같은 순수 함수로 그린다 + 가드 테스트
+- **분류**: convention
+- **발견자**: developer
+- **내용**: 원장이 고치는 화면(셔틀 명단 「기사님 화면」 보기)과 실제 운영 화면(기사님 `/driver/[token]`)이 각자 묶음 로직을 가지면 한쪽만 고쳐져 «관리자가 본 순서 ≠ 기사님이 보는 순서»가 된다(옛 `RegularRouteSection.groupStops` 가 그 사본). 방법: 고르기·정렬·묶음을 순수 모듈(`regularDriverRouteLogic.ts` 의 `selectDriverDayRows`·`buildFallbackClasses`)에 두고 양쪽이 import, 날짜별 요소(결석)는 `() => false` 로 주입. `tests/regular-roster-driver-view.test.mjs` 가 import·자체 group 함수 금지·저장→재조립 왕복을 단정한다. 순서 저장은 «그 칸이 쓰던 sortOrder 번호만 돌려 쓰기»(슬롯 재배정)라 다른 칸 순서가 안 바뀐다.
+- **참조횟수**: 0

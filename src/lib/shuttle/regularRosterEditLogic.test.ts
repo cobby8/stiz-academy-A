@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 // @ts-expect-error -- Node's type-stripping runner needs the runtime extension.
-import { buildAddRows, buildMoveUpdates, catchUpDateRange, findCounterpartRows, idPairArrays, formatRosterMonths, groupRosterDay, isSameRosterStudent, nextServiceMonth, normalizeRosterScope, planEnsureMonths, remapStopRowIds, rosterStudentKeyResolver, nextSortOrder, normalizeArriveTime, normalizeClassTime, normalizeCoords, rosterRowIdsForStudent, RosterInputError, validateAddInput, validateCopyInput, validateMoveInput, validateRemoveInput, validateStopEditInput, type RosterExistingRow } from "./regularRosterEditLogic.ts";
+import { buildAddRows, buildCounterpartReorderUpdates, buildMoveUpdates, buildReorderUpdates, reassignSortSlots, validateReorderInput, catchUpDateRange, findCounterpartRows, idPairArrays, formatRosterMonths, groupRosterDay, isSameRosterStudent, nextServiceMonth, normalizeRosterScope, planEnsureMonths, remapStopRowIds, rosterStudentKeyResolver, nextSortOrder, normalizeArriveTime, normalizeClassTime, normalizeCoords, rosterRowIdsForStudent, RosterInputError, validateAddInput, validateCopyInput, validateMoveInput, validateRemoveInput, validateStopEditInput, type RosterExistingRow } from "./regularRosterEditLogic.ts";
 
 // 기존 행 한 줄
 function row(over: Partial<RosterExistingRow> = {}): RosterExistingRow {
@@ -277,4 +277,61 @@ test("전화 끝자리가 비면 이름만으로 studentId 학생에 묶지 않�
   assert.equal(isSameRosterStudent({ studentId: "k1", studentName: "김하준", parentPhone: null }, { studentId: null, studentName: "김하준", parentPhone: null }), false);
   // 이름만 등록 행끼리(복사된 같은 행)는 전화가 없어도 이어진다
   assert.equal(isSameRosterStudent({ studentId: null, studentName: "김하준", parentPhone: null }, { studentId: null, studentName: "김하준", parentPhone: "" }), true);
+});
+
+// ── 기사님 화면 순서·시각 편집(reorder) ──────────────────────────
+
+test("순서 편집 입력: 방향·정차·중복 행을 검증하고 수업시간은 글자 그대로 둔다", () => {
+  const ok = validateReorderInput({ serviceMonth: "2026-10", weekday: 3, classTime: "17:00 ~ 18:00", direction: "ALIGHT", stops: [{ rowIds: ["a", "b"], arriveTime: "18:10" }, { rowIds: ["c"], arriveTime: "" }] });
+  assert.equal(ok.classTime, "17:00 ~ 18:00"); // 기사님 화면 섹션 키와 같은 글자
+  assert.equal(ok.scope, "FROM_THIS_MONTH");
+  assert.deepEqual(ok.stops[1], { rowIds: ["c"], arriveTime: null });
+  assert.throws(() => validateReorderInput({ ...ok, direction: "PIVOT" }), RosterInputError);
+  assert.throws(() => validateReorderInput({ ...ok, stops: [] }), RosterInputError);
+  assert.throws(() => validateReorderInput({ ...ok, stops: [{ rowIds: ["a"] }, { rowIds: ["a"] }] }), RosterInputError);
+  assert.throws(() => validateReorderInput({ ...ok, stops: [{ rowIds: ["a"], arriveTime: "25:00" }] }), RosterInputError);
+});
+
+test("슬롯 재배정: 그 칸이 쓰던 번호만 새 순서대로 돌려 쓰고, 겹친 번호는 1씩 벌린다", () => {
+  const sort = new Map([["a", 4], ["b", 9], ["c", 9]]);
+  assert.deepEqual(reassignSortSlots([{ id: "c", arriveTime: "17:00" }, { id: "a", arriveTime: "17:10" }, { id: "b", arriveTime: "17:10" }], sort), [
+    { id: "c", sortOrder: 4, arriveTime: "17:00" },
+    { id: "a", sortOrder: 9, arriveTime: "17:10" },
+    { id: "b", sortOrder: 10, arriveTime: "17:10" },
+  ]);
+  assert.throws(() => reassignSortSlots([{ id: "zz", arriveTime: null }], sort), RosterInputError);
+});
+
+test("이 달 순서 저장: 다른 수업·방향 행은 건드리지 않고, 칸의 행이 바뀌었으면 거부한다", () => {
+  const rows = [
+    row({ id: "b1", weekday: 3, direction: "BOARD", classTime: "17:00~18:00", sortOrder: 1, studentId: "s1", studentName: "가" }),
+    row({ id: "x1", weekday: 3, direction: "BOARD", classTime: "18:00~19:00", sortOrder: 2, studentId: "s9", studentName: "다른반" }),
+    row({ id: "b2", weekday: 3, direction: "BOARD", classTime: "17:00~18:00", sortOrder: 3, studentId: "s2", studentName: "나" }),
+    row({ id: "a1", weekday: 3, direction: "ALIGHT", classTime: "17:00~18:00", sortOrder: 5, studentId: "s1", studentName: "가" }),
+  ];
+  const input = { weekday: 3, classTime: "17:00~18:00", direction: "BOARD" as const, stops: [{ rowIds: ["b2"], arriveTime: "16:30" }, { rowIds: ["b1"], arriveTime: "16:40" }] };
+  assert.deepEqual(buildReorderUpdates(input, rows), [
+    { id: "b2", sortOrder: 1, arriveTime: "16:30" },
+    { id: "b1", sortOrder: 3, arriveTime: "16:40" },
+  ]);
+  // 그사이 학생이 추가·삭제되어 보낸 행 집합이 다르면 저장하지 않는다.
+  assert.throws(() => buildReorderUpdates({ ...input, stops: [{ rowIds: ["b1"], arriveTime: null }] }, rows), RosterInputError);
+  assert.throws(() => buildReorderUpdates({ ...input, stops: [{ rowIds: ["b1", "b2", "a1"], arriveTime: null }] }, rows), RosterInputError);
+});
+
+test("이후 달 순서 반영: 대응 행끼리만 같은 순서·시각, 그 달에만 있는 학생은 그대로", () => {
+  const later = [
+    row({ id: "L1", weekday: 3, classTime: "17:00~18:00", sortOrder: 10, studentId: "s1", studentName: "가" }),
+    row({ id: "L2", weekday: 3, classTime: "17:00~18:00", sortOrder: 11, studentId: "s2", studentName: "나" }),
+    row({ id: "L3", weekday: 3, classTime: "17:00~18:00", sortOrder: 12, studentId: "s3", studentName: "새학생" }),
+  ];
+  const source = [
+    { weekday: 3, direction: "BOARD", classTime: "17:00~18:00", studentId: "s2", studentName: "나", arriveTime: "16:30" },
+    { weekday: 3, direction: "BOARD", classTime: "17:00~18:00", studentId: "s1", studentName: "가", arriveTime: "16:40" },
+  ];
+  assert.deepEqual(buildCounterpartReorderUpdates(source, later), [
+    { id: "L2", sortOrder: 10, arriveTime: "16:30" },
+    { id: "L1", sortOrder: 11, arriveTime: "16:40" },
+  ]);
+  assert.deepEqual(buildCounterpartReorderUpdates(source, [later[2]]), []); // 대응 행이 없으면 건너뜀
 });

@@ -12,6 +12,7 @@ import {
   assembleRegularDriverClasses,
   attachShuttleDayNotes,
   pickRegularRouteSource,
+  selectDriverDayRows,
   type DriverClass,
   type RouteDirection,
 } from "./regularDriverRouteLogic";
@@ -81,9 +82,8 @@ export async function getRegularDriverClasses(viewDate: string): Promise<DriverC
   ]);
 
   // 그 요일의 학생 정차행만(승차/하차). 명단 순서 유지 — 폴백 화면은 이 순서가 곧 운행 순서다.
-  const dayRows: RegularShuttleStop[] = stops
-    .filter((s) => s.weekday === weekday && (s.direction === "BOARD" || s.direction === "ALIGHT") && s.studentName)
-    .sort((a, b) => a.sortOrder - b.sortOrder);
+  // 관리자 「셔틀 명단 → 기사님 화면」 보기와 같은 함수(selectDriverDayRows)로 고른다.
+  const dayRows: RegularShuttleStop[] = selectDriverDayRows(stops, weekday);
 
   // 결석 매칭: 이름(+가능하면 학부모 전화)으로 그날 결석자와 이어 붙인다(best-effort) — 종전과 동일.
   const isAbsent = (p: { name: string | null; phone: string | null }) => matchAbsentee(p, absentees) !== null;

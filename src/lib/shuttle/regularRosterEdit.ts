@@ -3,9 +3,14 @@ import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/auth-guard";
 import { koreaServiceMonth } from "@/lib/regular/serviceMonth";
+import { getSavedRegularDispatchRoute } from "@/lib/regular/regularDispatchRoute";
+import { DOW_NAMES } from "@/lib/regular/shuttleRosterLogic";
+import { pickRegularRouteSource } from "./regularDriverRouteLogic";
 import {
   buildAddRows,
+  buildCounterpartReorderUpdates,
   buildMoveUpdates,
+  buildReorderUpdates,
   catchUpDateRange,
   findCounterpartRows,
   idPairArrays,
@@ -16,9 +21,13 @@ import {
   validateCopyInput,
   validateMoveInput,
   validateRemoveInput,
+  validateReorderInput,
   validateStopEditInput,
+  normalizeRosterMonth,
+  normalizeWeekday,
   type RosterExistingRow,
   type RosterNewRow,
+  type RosterReorderUpdate,
   type RosterRowIdentity,
   type RosterScope,
 } from "./regularRosterEditLogic";
@@ -347,6 +356,93 @@ export async function editRosterStop(raw: unknown): Promise<{ updated: number } 
       { serviceMonth: input.serviceMonth, id: input.id, ...stop, applyToAll: input.applyToAll, scope: input.scope, updated, appliedMonths });
     return { updated, appliedMonths, skippedMonths };
   });
+}
+
+// ── 기사님 화면 순서·시각(정차 단위) ──────────────────────────────
+
+/** 순서 편집용 행(시각 포함). monthRows 는 다른 편집이 공유하므로 따로 읽는다. */
+async function monthRowsWithTime(tx: Tx, month: string): Promise<(RosterExistingRow & { arriveTime: string | null })[]> {
+  const rows = await tx.$queryRawUnsafe<Record<string, unknown>[]>(
+    `SELECT "id","weekday","direction","classTime","sortOrder","studentId","studentName","parentPhone","arriveTime"
+       FROM "RegularShuttleStop" WHERE "serviceMonth"=$1`,
+    month,
+  );
+  return rows.map((r) => ({
+    id: String(r.id),
+    weekday: Number(r.weekday),
+    direction: String(r.direction),
+    classTime: (r.classTime as string | null) ?? null,
+    sortOrder: Number(r.sortOrder) || 0,
+    studentId: (r.studentId as string | null) ?? null,
+    studentName: (r.studentName as string | null) ?? null,
+    parentPhone: (r.parentPhone as string | null) ?? null,
+    arriveTime: (r.arriveTime as string | null) ?? null,
+  }));
+}
+
+async function applyReorderUpdates(tx: Tx, month: string, updates: RosterReorderUpdate[]): Promise<number> {
+  let n = 0;
+  for (const u of updates) {
+    n += Number(await tx.$executeRawUnsafe(
+      `UPDATE "RegularShuttleStop" SET "sortOrder"=$1,"arriveTime"=$2 WHERE "id"=$3 AND "serviceMonth"=$4`,
+      u.sortOrder, u.arriveTime, u.id, month,
+    )) || 0;
+  }
+  return n;
+}
+
+/**
+ * 기사님 화면 순서·시각 저장 — 한 요일·수업·방향 칸의 정차 순서와 정차 시각.
+ * 그 칸 학생 행들이 쓰던 sortOrder 번호만 돌려 쓰므로 다른 수업·방향 순서는 바뀌지 않는다.
+ * 정차에 속한 모든 행의 시각을 그 정차 시각으로 맞춘다(기사님 화면은 정류장별로 한 시각만 보여 준다).
+ */
+export async function reorderRosterStops(raw: unknown): Promise<{ updated: number } & RosterScopeResult> {
+  const admin = await requireAdmin();
+  const input = validateReorderInput(raw);
+  return prisma.$transaction(async (tx) => {
+    const later = await lockForEdit(tx, input.serviceMonth, input.scope);
+    const existing = await monthRowsWithTime(tx, input.serviceMonth);
+    const updates = buildReorderUpdates(input, existing);
+    const byId = new Map(existing.map((r) => [r.id, r]));
+    const updated = await applyReorderUpdates(tx, input.serviceMonth, updates);
+    if (updated !== updates.length) throw new RosterInputError("일부 행을 이 달 명단에서 찾지 못했습니다. 화면을 새로고침해 주세요.");
+
+    // 이후 달: 이 달 행(새 순서)마다 대응 행을 찾아 같은 순서·시각으로. 대응 행이 없는 달은 건너뛴다.
+    const orderedSource = updates.map((u) => ({ ...byId.get(u.id)!, arriveTime: u.arriveTime }));
+    const appliedMonths = [input.serviceMonth];
+    const skippedMonths: string[] = [];
+    const laterUpdates: ({ month: string } & RosterReorderUpdate)[] = [];
+    for (const m of later) {
+      const monthUpdates = buildCounterpartReorderUpdates(orderedSource, await monthRows(tx, m));
+      if (monthUpdates.length === 0) { skippedMonths.push(m); continue; }
+      await applyReorderUpdates(tx, m, monthUpdates);
+      laterUpdates.push(...monthUpdates.map((u) => ({ month: m, ...u })));
+      appliedMonths.push(m);
+    }
+    await audit(tx, admin.appUserId, "REGULAR_ROSTER_REORDER",
+      { serviceMonth: input.serviceMonth, weekday: input.weekday, classTime: input.classTime, direction: input.direction,
+        rows: updates.map((u) => ({ id: u.id, sortOrder: byId.get(u.id)?.sortOrder, arriveTime: byId.get(u.id)?.arriveTime ?? null })) },
+      { serviceMonth: input.serviceMonth, scope: input.scope, rows: updates, laterRows: laterUpdates, appliedMonths });
+    return { updated, appliedMonths, skippedMonths };
+  });
+}
+
+// ── 정규 배차 저장 노선 사용 여부(조회 전용) ───────────────────────
+
+/**
+ * 그 달·요일의 기사님 화면이 방향별로 무엇을 쓰는지 — 정규 배차 저장 노선(true) / 셔틀 명단 순서(false).
+ * 기사님 화면과 같은 판정(getSavedRegularDispatchRoute + pickRegularRouteSource)을 그대로 쓴다. 쓰기 없음.
+ */
+export async function getRegularRouteStatus(rawMonth: unknown, rawWeekday: unknown): Promise<{ PICKUP: boolean; DROPOFF: boolean }> {
+  await requireAdmin();
+  const month = normalizeRosterMonth(rawMonth);
+  const weekday = normalizeWeekday(rawWeekday);
+  const dow = DOW_NAMES[weekday];
+  const [pickup, dropoff] = await Promise.all([
+    getSavedRegularDispatchRoute(dow, "PICKUP", month),
+    getSavedRegularDispatchRoute(dow, "DROPOFF", month),
+  ]);
+  return { PICKUP: pickRegularRouteSource(pickup) === "SAVED", DROPOFF: pickRegularRouteSource(dropoff) === "SAVED" };
 }
 
 // ── 월 복사(수동 「직전 달 복사」 · 자동 생성 공용) ──────────────────

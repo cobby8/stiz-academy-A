@@ -253,6 +253,8 @@ export default function RouteSection({ initial, date, refreshKey, apiBase = "/ap
     if (regularEditing) {
       const over = overCapacityVehicles(sug.vehicles);
       if (over.length > 0 && !window.confirm(`정원을 넘은 차량이 있습니다.\n${over.map((o) => `· ${o.name}: ${o.passengers}/${o.capacity}명`).join("\n")}\n\n그래도 저장할까요?`)) return;
+      // 이 요일·방향에 저장본이 아직 없으면, 첫 저장 순간 기사님 화면이 「셔틀 명단」 순서 → 이 노선으로 바뀐다. 한 번 확인한다.
+      if (!loadedFromSaved && !window.confirm("지금 기사님 화면은 「셔틀 명단」 순서로 운행 중입니다.\n여기서 저장하면 이 요일·방향의 기사님 화면이 이 노선으로 바뀝니다.\n\n저장할까요?")) return;
     }
     const seqAtStart = editSeq.current; // 이 시점의 편집까지만 저장된다
     setSaving(true); setSaveMsg(null); setErr(null);

@@ -260,7 +260,7 @@ export default function RegularShuttleClient({ initialStops, initialMonth, month
         // 등록 수업을 미리 고르되, 원장이 이미 직접 추가해 둔 수업 칸은 지우지 않고 합친다.
         const enrolled = studentId
           // 휴원(PAUSED) 수업은 미리 체크하지 않는다 — 원장이 복귀할 수업을 눌러 고른다.
-          ? enrolledClassSlots(context.enrolled, classTimes).filter((o) => !o.paused).map((o) => ({ weekday: o.weekday, classTime: o.classTime }))
+          ? enrolledClassSlots(context.enrolled, stops).filter((o) => !o.paused).map((o) => ({ weekday: o.weekday, classTime: o.classTime }))
           : [];
         const slots = [...enrolled, ...d.slots.filter((s) => !enrolled.some((o) => o.weekday === s.weekday && classTimeKey(o.classTime) === classTimeKey(s.classTime)))];
         return { ...d, context, contextLoading: false, contextError: false, slots };
@@ -535,12 +535,12 @@ export default function RegularShuttleClient({ initialStops, initialMonth, month
       // 이 학생이 이 달 명단에서 이미 타는 행(학생 연결 행 + 이름·전화로 같은 학생인 미연결 행).
       const riding = ridingRows(dialog);
       // 등록 수업 → 수업 칩(명단에 같은 시각 글자가 있으면 그 글자). 늦게 온 다른 학생 응답은 쓰지 않는다.
-      const enrolledOptions = studentId && dialog.context?.student?.id === studentId ? enrolledClassSlots(dialog.context.enrolled, classTimes) : [];
+      const enrolledOptions = studentId && dialog.context?.student?.id === studentId ? enrolledClassSlots(dialog.context.enrolled, stops) : [];
       const sameSlot = (a: RosterClassSlot, b: RosterClassSlot) => a.weekday === b.weekday && classTimeKey(a.classTime) === classTimeKey(b.classTime);
       const hasSlot = (o: RosterClassSlot) => dialog.slots.some((s) => sameSlot(s, o));
       // 직접 추가한 수업도 칩으로 보여 줘서 눌러 뺄 수 있게 한다.
       const extraSlots = dialog.slots.filter((s) => !enrolledOptions.some((o) => sameSlot(o, s)))
-        .map((s) => ({ ...s, label: `${WEEKDAY_LABELS[s.weekday]} ${s.classTime} · 직접 추가`, paused: false }));
+        .map((s) => ({ ...s, label: `${WEEKDAY_LABELS[s.weekday]} ${s.classTime} · 직접 추가`, paused: false, enrolledTime: s.classTime }));
       const hasActiveEnrolled = enrolledOptions.some((o) => !o.paused);
       const toggleSlot = (o: RosterClassSlot) => set({ slots: hasSlot(o) ? dialog.slots.filter((s) => !sameSlot(s, o)) : [...dialog.slots, { weekday: o.weekday, classTime: o.classTime }] });
       return (

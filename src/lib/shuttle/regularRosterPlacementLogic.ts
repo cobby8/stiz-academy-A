@@ -54,18 +54,45 @@ function minToHhmm(min: number): string {
   return `${String(Math.floor(v / 60)).padStart(2, "0")}:${String(v % 60).padStart(2, "0")}`;
 }
 
+/** 명단 수업시간 글자 출처 — 명단 행(요일+글자) 또는 요일 모르는 글자 목록. */
+export type RosterClassTimeSource = string | { weekday: number; classTime: string | null };
+
+/** 후보 중 가장 많이 쓰인 글자(같으면 먼저 나온 것). */
+function mostUsed(list: readonly string[]): string | null {
+  const count = new Map<string, number>();
+  for (const ct of list) count.set(ct, (count.get(ct) ?? 0) + 1);
+  let best: string | null = null, bestN = 0;
+  for (const [ct, n] of count) if (n > bestN) { best = ct; bestN = n; }
+  return best;
+}
+
 /**
- * 수업 시작·종료 → 명단 수업시간 글자. 명단에 같은 시각의 글자가 이미 있으면 **그 글자를 그대로** 쓴다
- * (기사님 화면은 수업시간 글자로 섹션을 묶으므로 '17:00~18:00' 과 '17:00 ~ 18:00' 이 갈리면 안 된다).
+ * 등록 수업 시각 → 명단 수업칸 글자. **시작 시각 기준**으로 맞춘다.
+ * 왜: 학원 수업(Class)은 16:00~16:55, 셔틀 명단 칸은 16:00~17:00 처럼 **시작은 같고 끝 표기만 다르다**(2026-10-03 운영 실측).
+ *     글자 완전일치로 찾으면 운행표가 「0곳·0명」으로 비어 보였다.
+ * ① 그 요일 명단에 같은 시작 시각 글자가 있으면 그 글자(여럿이면 가장 많이 쓰인 것)
+ * ② 없으면 다른 요일 명단의 같은 시작 시각 글자
+ * ③ 그것도 없으면 등록 시각 그대로('HH:MM~HH:MM')
+ * 공백만 다른 글자('16:00 ~ 17:00')도 명단 글자 그대로 돌려준다(서버 buildAddRows 의 글자 맞춤과 같은 결과).
  */
-export function matchRosterClassTime(start: string, end: string, existingClassTimes: readonly string[]): string | null {
+export function rosterClassTimeFor(weekday: number | null, start: string, end: string, existing: readonly RosterClassTimeSource[]): string | null {
   const s = toMin(start), e = toMin(end);
-  if (s == null || e == null) return null;
-  const hit = existingClassTimes.find((ct) => {
-    const r = parseClassTimeRange(ct);
-    return r != null && r.start === s && r.end === e;
-  });
-  return hit ?? `${minToHhmm(s)}~${minToHhmm(e)}`;
+  if (s == null) return null;
+  const sameDay: string[] = [], otherDay: string[] = [];
+  for (const x of existing) {
+    const ct = typeof x === "string" ? x : x.classTime;
+    if (!ct || parseClassTimeRange(ct)?.start !== s) continue;
+    if (typeof x !== "string" && weekday != null && x.weekday === weekday) sameDay.push(ct);
+    else otherDay.push(ct);
+  }
+  const hit = mostUsed(sameDay) ?? mostUsed(otherDay);
+  if (hit) return hit;
+  return e == null ? null : `${minToHhmm(s)}~${minToHhmm(e)}`;
+}
+
+/** 요일 없이 글자 목록만으로 맞추기(예전 호출 호환) — rosterClassTimeFor 와 같은 시작 시각 기준. */
+export function matchRosterClassTime(start: string, end: string, existingClassTimes: readonly string[]): string | null {
+  return rosterClassTimeFor(null, start, end, existingClassTimes);
 }
 
 /**
@@ -73,16 +100,22 @@ export function matchRosterClassTime(start: string, end: string, existingClassTi
  * 휴원도 내려주는 이유: 복귀 직전 학생을 미리 배정하는 것이 학생 추가의 주 용도라서(2026-10-03 운영 실측: 휴원생 3수업 전부 누락).
  */
 export type EnrolledClass = { weekday: number; startTime: string; endTime: string; className: string | null; programName: string | null; status?: "ACTIVE" | "PAUSED" };
-/** paused = 휴원 중 수업(미리 체크하지 않고 「휴원」 배지로 보여 준다). */
-export type ClassSlotOption = { weekday: number; classTime: string; label: string; paused: boolean };
+/**
+ * paused = 휴원 중 수업(미리 체크하지 않고 「휴원」 배지로 보여 준다).
+ * enrolledTime = 학원 수업 시각('16:00~16:55') — 명단 칸 글자(classTime)와 다르면 칩에 대응을 보여 준다.
+ */
+export type ClassSlotOption = { weekday: number; classTime: string; label: string; paused: boolean; enrolledTime: string };
 
-/** 등록 수업 → 수업 칸 후보(요일 월→일, 시각 순, 같은 요일·시각은 하나 — 다니는 수업이 휴원보다 우선). */
-export function enrolledClassSlots(enrolled: readonly EnrolledClass[], existingClassTimes: readonly string[]): ClassSlotOption[] {
+/**
+ * 등록 수업 → 수업 칸 후보(요일 월→일, 시각 순). 같은 요일·명단 칸(변환 후 글자 기준)은 하나 — 다니는 수업이 휴원보다 우선.
+ * existing 에 명단 행(요일+글자)을 넘기면 그 요일 글자를 먼저 쓴다.
+ */
+export function enrolledClassSlots(enrolled: readonly EnrolledClass[], existing: readonly RosterClassTimeSource[]): ClassSlotOption[] {
   const out: ClassSlotOption[] = [];
   const seen = new Set<string>();
   for (const c of enrolled) {
     if (!Number.isInteger(c.weekday) || c.weekday < 0 || c.weekday > 6) continue;
-    const classTime = matchRosterClassTime(c.startTime, c.endTime, existingClassTimes);
+    const classTime = rosterClassTimeFor(c.weekday, c.startTime, c.endTime, existing);
     if (!classTime) continue;
     const key = `${c.weekday}|${classTimeKey(classTime)}`;
     const paused = c.status === "PAUSED";
@@ -93,8 +126,12 @@ export function enrolledClassSlots(enrolled: readonly EnrolledClass[], existingC
       continue;
     }
     seen.add(key);
+    const s = toMin(c.startTime), e = toMin(c.endTime);
+    const enrolledTime = s != null && e != null ? `${minToHhmm(s)}~${minToHhmm(e)}` : classTime;
     const name = [c.programName, c.className].filter(Boolean).join(" · ");
-    out.push({ weekday: c.weekday, classTime, label: `${WEEKDAY_LABELS[c.weekday]} ${classTime}${name ? ` · ${name}` : ""}`, paused });
+    // 학원 수업 시각과 명단 칸 글자가 다르면 「금 16:00~16:55 → 셔틀 16:00~17:00 칸」처럼 대응을 보여 준다.
+    const time = classTimeKey(enrolledTime) === classTimeKey(classTime) ? classTime : `${enrolledTime} → 셔틀 ${classTime} 칸`;
+    out.push({ weekday: c.weekday, classTime, enrolledTime, label: `${WEEKDAY_LABELS[c.weekday]} ${time}${name ? ` · ${name}` : ""}`, paused });
   }
   const rank = (w: number) => (w === 0 ? 7 : w);
   return out.sort((a, b) => rank(a.weekday) - rank(b.weekday) || a.classTime.localeCompare(b.classTime));

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 // @ts-expect-error -- Node's type-stripping runner needs the runtime extension.
-import { classTimeWarning, dowToWeekday, enrolledClassSlots, estimateInsertTime, findRouteCell, matchRosterClassTime, placementToRequest, resolveCellPlacement, studentRosterRows, suggestPlacement } from "./regularRosterPlacementLogic.ts";
+import { classTimeWarning, dowToWeekday, enrolledClassSlots, estimateInsertTime, findRouteCell, matchRosterClassTime, placementToRequest, resolveCellPlacement, rosterClassTimeFor, studentRosterRows, suggestPlacement } from "./regularRosterPlacementLogic.ts";
 // @ts-expect-error -- Node's type-stripping runner needs the runtime extension.
 import { buildAddRows, mapPlacementsToMonth, planRosterInsert, validateAddInput, RosterInputError } from "./regularRosterEditLogic.ts";
 // @ts-expect-error -- Node's type-stripping runner needs the runtime extension.
@@ -372,4 +372,50 @@ test("이미 타는 행: studentId 일치 + 미연결 행은 이름(공백 무�
   // 같은 이름+전화에 다른 학생 id 가 이미 있으면 묶지 않는다(남의 행 섞임 방지)
   const other = [r({ id: "w1", studentId: "other", studentName: "이종현", parentPhone: "010-1234-5678" }), ...unlinked];
   assert.deepEqual(studentRosterRows(other, { id: "kid", name: "이종현", parentPhone: "010-1234-5678" }).map((x: any) => x.id), []);
+});
+
+// 2026-10-03 운영 실측: 학원 Class 시각과 셔틀 명단 칸 글자는 시작이 같고 끝 표기만 다르다.
+const ROSTER_FRI = ["15:00~16:00", "16:00~17:00", "17:00~18:00", "18:00~19:20", "19:20~20:40"];
+const CLASS_TIMES: [string, string, string][] = [
+  ["15:00", "15:55", "15:00~16:00"], ["16:00", "16:55", "16:00~17:00"], ["17:00", "17:55", "17:00~18:00"],
+  ["18:00", "19:15", "18:00~19:20"], ["19:20", "20:35", "19:20~20:40"],
+];
+
+test("등록 수업 → 명단 칸: 시작 시각 기준(운영 실측 시각표 그대로)", () => {
+  const rows = ROSTER_FRI.map((classTime) => ({ weekday: 5, classTime }));
+  for (const [start, end, expected] of CLASS_TIMES) {
+    assert.equal(rosterClassTimeFor(5, start, end, rows), expected, `${start}~${end}`);
+  }
+  // 수요일 19:20~20:55 도 같은 시작 시각 칸(19:20~20:40)으로
+  assert.equal(rosterClassTimeFor(3, "19:20", "20:55", [{ weekday: 3, classTime: "19:20~20:40" }]), "19:20~20:40");
+});
+
+test("등록 수업 → 명단 칸 우선순위: 그 요일(가장 많이 쓰인 글자) > 다른 요일 > 등록 시각 그대로", () => {
+  const rows = [
+    { weekday: 5, classTime: "16:00~17:00" }, { weekday: 5, classTime: "16:00 ~ 17:00" }, { weekday: 5, classTime: "16:00 ~ 17:00" },
+    { weekday: 1, classTime: "16:00~17:10" },
+    { weekday: 2, classTime: "18:00~19:20" },
+  ];
+  assert.equal(rosterClassTimeFor(5, "16:00", "16:55", rows), "16:00 ~ 17:00"); // 그 요일에서 가장 많이 쓰인 글자
+  assert.equal(rosterClassTimeFor(5, "18:00", "19:15", rows), "18:00~19:20"); // 그 요일엔 없어 다른 요일 글자
+  assert.equal(rosterClassTimeFor(5, "9:30", "10:25", rows), "09:30~10:25"); // 어디에도 없으면 등록 시각
+  assert.equal(rosterClassTimeFor(5, "오후", "10:25", rows), null);
+});
+
+test("등록 수업 칩: 대응 표시 「금 16:00~16:55 → 셔틀 16:00~17:00 칸」, 같은 칸 합치기는 변환 후 글자로", () => {
+  const rows = ROSTER_FRI.map((classTime) => ({ weekday: 5, classTime }));
+  const out = enrolledClassSlots([
+    { weekday: 5, startTime: "16:00", endTime: "16:55", className: null, programName: null, status: "PAUSED" },
+    { weekday: 5, startTime: "16:00", endTime: "17:00", className: "다른반", programName: null, status: "ACTIVE" }, // 같은 칸 → 하나로
+    { weekday: 5, startTime: "17:00", endTime: "18:00", className: null, programName: null, status: "ACTIVE" },
+  ], rows);
+  assert.equal(out.length, 2);
+  assert.equal(out[0].classTime, "16:00~17:00");
+  assert.equal(out[0].paused, false); // 같은 칸에 다니는 수업이 있어 휴원 아님
+  assert.equal(out[0].label, "금 16:00~16:55 → 셔틀 16:00~17:00 칸");
+  assert.equal(out[1].label, "금 17:00~18:00"); // 글자가 같으면 대응 표시 없이
+  // 칸을 고르면 운행표가 비지 않는다(예전엔 글자 불일치로 0곳)
+  seq = 600;
+  const day = [r({ weekday: 5, classTime: "16:00~17:00", stopName: "다산자이" })];
+  assert.equal(findRouteCell(day, 5, out[0].classTime, "BOARD").length, 1);
 });

@@ -48,11 +48,17 @@ test("신규 학생 최초 등록은 청구 알림과 Rallyz 학부모 초대까
   const changeSync = readFileSync(resolve(dirname(skillPath), "references/change-request-sync.md"), "utf8");
   const billing = readFileSync(resolve(dirname(skillPath), "references/billing-policies.md"), "utf8");
 
-  assert.match(skill, /first applicable invoice is issued with its parent notification/);
-  assert.match(skill, /Rallyz parent invitation is sent/);
+  // 2026-09-30 방침 변경(사이트가 기준, 10월부터 시트 장부 신규 생성 중단)에 맞춘 문장이다.
+  // 문장은 바뀌었어도 지켜야 할 안전 계약(완료 조건·HELD·대상 특정·실행 후 재확인)은 그대로 검사한다.
+  const firstRegistration = readFileSync(resolve(dirname(skillPath), "references/first-registration.md"), "utf8");
+  assert.match(skill, /registration is not complete merely because the student and class rows exist/);
+  assert.match(skill, /invoice and notification, and parent invitation/);
   assert.match(skill, /This is a required outcome, not blanket execution permission/);
-  assert.match(skill, /exact student, branch, class, period, amount, masked recipient, delivery method, and item count/);
-  assert.match(skill, /Re-read all three systems, invoice state, and parent connection after execution/);
+  assert.match(skill, /Keep the invoice, invoice notification, and Rallyz parent invitation `HELD`/);
+  assert.match(skill, /specific student, branch, class, period, amount, masked recipient, delivery method, and item count/);
+  assert.match(skill, /Re-read the applicable systems, invoice state, and parent connection after execution/);
+  assert.match(firstRegistration, /send its requested parent notification, and invite the verified guardian once/);
+  assert.match(firstRegistration, /Do not resend an invitation or recreate an invoice after an uncertain response/);
   assert.match(changeSync, /required completion steps but remain separate `HELD` actions/);
   assert.match(billing, /Mid-month first registration is prorated from the remaining confirmed sessions/);
   assert.match(billing, /parent is not already connected/);

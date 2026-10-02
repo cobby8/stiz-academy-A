@@ -75,10 +75,26 @@
 - 핵심 규칙: 청구 원본=랠리즈(전달 3주차 발행), 사이트는 따라가는 기록. 대사는 읽기 전용, 돈 쓰기는 슬랙 [랠리즈 처리함 · 사이트 납부 반영] 버튼→재확인 선점 UPDATE→markPaymentPaid 한 경로뿐.
 - 매칭 로직 1벌: src/lib/pos/tossplace-match.mjs / 판단: payment-notice.mjs / 서명: webhookSignature.ts·slack/signature.ts
 
+## 리뷰 결과 (reviewer) — 토스 가맹 심사용 테스트 결제 + SHOP 판매자 안내 (2026-10-02)
+
+📊 종합 판정: 통과 (필수 수정 없음 · tsc 0 · node --test 8-0)
+
+✅ 잘된 점:
+- 키 분리(TOSS_REVIEW_*)·`test_` 접두 둘 다 아니면 null → API 404·성공화면 승인 거부·버튼 숨김 3곳 모두 같은 함수로 판정
+- 심사 경로는 Program SELECT 1회뿐, 청구서·Payment 쓰기 없음(테스트로 고정). 금액은 DB 가격으로 결정
+- `/payments/review/*` 는 정적 세그먼트라 `[invoiceId]` 보다 우선. proxy matcher 에 걸리지만 updateSession 은 admin/staff/mypage 만 로그인 강제 → 비로그인 접근 가능
+- orderId `REVIEW-`+32자(39자, 규칙 충족)·customerKey `guest-uuid`(42자, 허용문자)·requestPayment v2 옵션 정상
+
+🟡 권장 수정(심사 통과엔 무관):
+- success/page.tsx: 서버가 orderId↔금액을 기억하지 않아, 공개 clientKey 로 임의 금액 결제창을 직접 열면 승인됨(토스는 "결제창 금액=승인 금액"만 확인). 테스트 키 전용·DB 무관이라 실害 0. 라이브 전환 시엔 HMAC 서명 또는 DB 기록 필요
+- checkout/route.ts: Program 조회가 deletedAt 만 거름(비공개·종료 프로그램도 결제창 가능). 영향 미미
+- success/page.tsx: ALREADY_PROCESSED 시 URL 금액을 그대로 표시(표시만)
+
 ## 작업 로그 (최근 10건)
 
 | 날짜 | 작업 내용 | 상태 |
 |------|----------|------|
+| 2026-10-02 | **[reviewer] 토스 가맹 심사용 테스트 결제·SHOP 판매자 안내 검수** — 청구서/DB 분리·라이브키 차단·경로 충돌·비로그인 접근·SDK 옵션 확인. 필수 0, 권장 3(금액 서명 없음은 테스트키 전용이라 무해) | ✅ 통과 |
 | 2026-10-02 | **학생 병합 필터 가드 정상화** — 27파일 56건 분류: 학부모 «새 신청» 자녀 선택 5곳에 notMergedStudent(운영 실측 흡수 8명·진행 수강 0건이라 화면 변화 0), 나머지는 사유 붙여 예외 등록(청구·POS 대조·id 단건·게이트·병합엔진이 안 옮기는 기록 목록). `npm test`·`test:guards` 신설 + release-preflight 에 가드 편입. 후속: tables.ts 에 MakeupCredit 등 신규 테이블 추가 필요 | ✅ 667c73be 배포(검수 승인·런타임 오류 0) |
 | 2026-10-02 | **Phase 0 마무리 — 중복 학생 영구삭제 API 차단** — `cleanup-duplicates` POST(이름만으로 청구·출석까지 DELETE)를 410 으로 막고 병합 도구 안내, GET 유지, 재등장 방지 테스트. RLS 는 127개 전부 켜짐·공개권한 0 확인(타 세션 처리). 발견: studentVisibility 가드 테스트가 정규 실행에서 빠져 27파일 누적 위반(별도 작업 분리), 결제 스킬 문서 테스트 1건 기존 실패 | ✅ b3407054 배포 |
 | 2026-10-01 | **토스POS 결제 슬랙 DM 연동 완성·실동작 확인** — 슬랙 앱 `STIZ 결제 알림` 생성·설치(chat:write·im:write), PosPaymentNotice 표 운영 적용, 토스 웹훅이 **비활성**이던 것 발견해 켬. 테스트 DM 첫 시도 `invalid_auth` → 비밀값 3개가 명령어 글자로 저장된 것 발견(클립보드 덮어쓰기·PowerShell 파이프 
@@ -90,5 +106,3 @@
 | 2026-09-29 | **갈라진 학부모 계정 4가족 정리(운영 DB 수정)** — 승인 로직이 전화번호를 글자 그대로 비교해 부모 계정을 새로 만들던 버그(9/28 수정·배포)로 이미 갈라진 4가족을 복구. 로그인 계정 쪽으로 자녀 4명(양시우·박윤우·신하율·최율찬)·청구서 3건·알림 4건 이전. 결제는 학생에 붙어 있어 자동으로 따라옴. 빈 껍데기가 된 자동생성 계정은 과거 기록이 가리킬 수 있어 **삭제하지 않음**. 되돌리기 SQL 을 실행 전 파일로 저장(scratchpad/parent-merge-rollback-20260929.sql). 검증: 4가족 모두 로그인 계정에 자녀 1명·앱 노출 조건 통과, 남은 분리 사고 **0건**, 배포 이후 새로 갈라진 계정 0건 | 완료·코드변경 없음 |
 | 2026-09-18 | **토스POS ↔ 사이트 결제 월별 대사 스크립트(읽기 전용)** — `scripts/lib/tossplace-match.mjs`(순수 매칭)+`scripts/tossplace-reconcile.mjs`(CLI)+테스트 26건 신규. 2026-09 실행: 사이트 16건 ₩1,525,000 vs 토스 21건 ₩3,042,000, 차이 ₩1,517,000(토스에만 9건·사이트에만 1건·확인필요 17건). DB 무변경 증빙 통과. 미커밋 | 완료 |
 | 2026-08-16 | **대시보드 "오늘" KST 고정 (8/12 에 남겨둔 빚 상환)** — `adminReadPayloads.ts` 3곳(`getTodayLabel`·`getTodayClasses`·`loadDashboardPrimaryPayload`)이 `new Date().getDay()` 로 요일을 구해, Vercel(UTC)에서 **KST 00~09시에 전날 요일의 수업표·라벨**이 떴다. `kstDow(todayKst())` 로 교체(라벨 함수는 인자를 Date→"YYYY-MM-DD"). 가드 테스트 `R3_ALLOW` 에서 해당 파일 삭제 + 상한 3→2 하향(빚 목록은 줄어들기만 한다). 남은 R3 빚 2건(`queries.ts`·`staff-session-queries.ts`)은 `T12:00` 기준점이라 현재는 맞지만 위태로움. **같은 파일 `getMonthLabels()` 의 `getFullYear/getMonth` 는 미처리** — 매월 1일 새벽에 차트 월 라벨이 밀릴 수 있고 R3 정규식이 잡지 못함. tsc 0 / 테스트 **1138-0** / build 0 | 완료·커밋 b774967 |
-| 2026-08-12 | **시간대(UTC/KST) 사고 근절 체계 수립** — 원장 지시로 전역 규칙화. 원인: 배포서버 UTC·개발PC KST 라 **로컬은 멀쩡하고 배포하면 틀린다**(tsc·build·눈 전부 통과). 실측 함정 3종 ①`toISOString().slice(0,10)` 을 오늘로 쓰면 새벽 00~09시에 어제 ②`T00:00+09:00` + `getUTC*` 는 요일 하루 밀림 — **`T12:00` 은 우연히 맞아서 따라 쓰면 그대로 터짐** ③서버의 `getDay()` 는 9시간 어긋남. 조치: 공용 모듈 `src/lib/datetime/kst.ts` 신설(7함수, 헬퍼가 5곳에 복사돼 있었음) + **가드 테스트 `tests/kst-datetime-guard.test.mjs`**(주석·문자열 걷어낸 뒤 금지패턴 4종 검사, 위반 file:line 출력, 일부러 위반 파일을 넣어 실제 검출까지 확인) + ALLOW=미상환 빚 목록(늘리면 깨짐) + `tests/_ts-module.mjs`(`@/` import 추적 — 의존성0 제약이 헬퍼 복사의 원인이었음). 전역 CLAUDE.md·conventions·index 갱신. **미수정 발견: `adminReadPayloads.ts` 3곳 — 대시보드가 새벽에 전날 요일 수업표를 조회** | 완료·커밋 2건 |
-| 2026-08-09 | **디자인 개편 철회 확인 + 휩쓸려 사라진 관리자 메뉴 복구** — 잔재 전수 확인(`--doc-` 0건, components/doc·design-preview·doc-restyle.mjs 없음, 오늘 기능 파일 11 + 테스트 12 전부 생존). 그런데 `/admin/payment-requests`·`/admin/enrollment-changes` 의 **NavItem 이 사라져 있었다** — 다른 세션의 디자인 커밋(44b282f)에 메뉴 추가분이 딸려 들어갔고 revert 가 그것까지 되돌렸다. 화면은 멀쩡해 더 안 보인다. NavItem 2개 + OPS_PATHS·MORE_OPS_PATHS 재등록, 재발 방지로 "관리자 메뉴에서 도달할 수 있다" 테스트 2건 추가(conventions 승격, 같은 유형 2회째). tsc 0/build 0/테스트 **1111-0** | 완료·커밋 a2f7de5·배포 READY |

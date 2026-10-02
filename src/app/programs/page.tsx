@@ -7,6 +7,8 @@ import Badge from "@/components/ui/Badge";
 import AnimateOnScroll from "@/components/ui/AnimateOnScroll";
 import CTABanner from "@/components/landing/CTABanner";
 import { buildPublicMetadata } from "@/lib/publicMetadata";
+import { readTossReviewConfig } from "@/lib/payments/tossReview";
+import ProgramPayButton from "./ProgramPayButton";
 
 export const revalidate = 60;
 export const metadata = buildPublicMetadata({
@@ -84,6 +86,8 @@ export default async function ProgramsPage() {
         getAcademySettings() as Promise<any>,
     ]);
     const phone = settings.contactPhone || "010-0000-0000";
+    // 토스페이먼츠 가맹 심사용 결제 버튼 — 테스트 키가 있을 때만 보인다(라이브 키·미설정이면 숨김).
+    const reviewPayEnabled = readTossReviewConfig(process.env) !== null;
     return (
         <PublicPageLayout>
             {/* 페이지 히어로 — 그라데이션 배경 + 장식 요소 */}
@@ -229,6 +233,16 @@ export default async function ProgramsPage() {
                                                     시간표 보기 →
                                                 </a>
                                             </div>
+
+                                            {reviewPayEnabled && (
+                                                <ProgramPayButton
+                                                    programId={program.id}
+                                                    tiers={(tiers.length > 0
+                                                        ? tiers.map((t) => ({ key: t.key as string, label: t.label, amount: Number(program[t.key]) }))
+                                                        : [{ key: "price", label: "월 수강료", amount: program.price }]
+                                                    ).filter((option) => Number.isInteger(option.amount) && option.amount > 0)}
+                                                />
+                                            )}
                                         </div>
                                     </Card>
                                 </AnimateOnScroll>

@@ -1,6 +1,7 @@
 import PublicPageLayout from "@/components/PublicPageLayout";
 import AnimateOnScroll from "@/components/ui/AnimateOnScroll";
 import { buildPublicMetadata } from "@/lib/publicMetadata";
+import HqSellerNotice from "@/components/HqSellerNotice";
 import ClubShopClient from "./ClubShopClient";
 
 export const revalidate = 60;
@@ -30,6 +31,8 @@ export default function ShopPage() {
 
       <section className="bg-gray-50 py-6 dark:bg-gray-900 md:py-8">
         <div className="mx-auto max-w-5xl px-4">
+          {/* 실제 판매자(본사) 표시 — 학원 사업자와 구분 */}
+          <HqSellerNotice />
           <ClubShopClient />
         </div>
       </section>

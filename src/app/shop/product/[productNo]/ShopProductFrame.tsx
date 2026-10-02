@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import FontFreeIcon from "@/components/ui/FontFreeIcon";
+import HqSellerNotice from "@/components/HqSellerNotice";
 
 type ClubShopProduct = {
   productNo: number;
@@ -127,6 +128,9 @@ export default function ShopProductFrame({ productNo }: { productNo: string }) {
           </a>
         )}
       </header>
+
+      {/* 아래 구매 화면은 본사 쇼핑몰이다 — 판매자를 학원과 구분해 표시 */}
+      <HqSellerNotice compact />
 
       <section className="relative min-h-0 flex-1" aria-label="클럽샵 상품 상세">
         {state.status === "loading" && <ProductLoading />}

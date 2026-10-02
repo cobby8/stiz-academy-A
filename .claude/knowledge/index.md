@@ -7,7 +7,7 @@
 | errors.md | 8 | 2026-08-09 |
 | conventions.md | 29 | 2026-10-02 |
 | decisions.md | 19 | 2026-08-09 |
-| lessons.md | 5 | 2026-10-01 |
+| lessons.md | 6 | 2026-10-02 |
 
 ## ⚠️ 재발 다발 함정 (작업 전 반드시 확인)
 - **날짜·시간** → 달력 값은 `@/lib/datetime/kst` 에서만. `toISOString().slice(0,10)`(새벽에 어제) ·

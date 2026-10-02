@@ -13,7 +13,7 @@ import { ensureRegularRosterMonths } from "@/lib/shuttle/regularRosterEdit";
 export const dynamic = "force-dynamic";
 
 // 정규 셔틀 동적배차(신청서 좌표 기반) — 방학특강 배차 화면을 요일 기준으로 재사용한다.
-// 구글시트 정규 셔틀(/admin/shuttle/regular)과는 별개의 새 화면(정합 명단 소스).
+// 명단 편집은 「셔틀 명단」 탭(/admin/shuttle/regular)이 맡고, 이 화면은 그 명단으로 노선을 짠다.
 export default async function RegularDispatchPage({ searchParams }: { searchParams: Promise<{ month?: string }> }) {
   // 이번 달·다음 달 명단(과 저장 노선)이 없으면 직전 달을 복사해 만든다. 실패해도 화면은 뜬다.
   try { await ensureRegularRosterMonths(); } catch (e) { console.error("[admin/shuttle/regular-dispatch] 명단 월 자동 생성 실패", e); }

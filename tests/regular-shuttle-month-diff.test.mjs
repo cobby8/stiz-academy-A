@@ -5,15 +5,17 @@ import { readFileSync } from "node:fs";
 const diff = readFileSync(new URL("../src/lib/regular/regularShuttleDiff.ts", import.meta.url), "utf8");
 const schema = readFileSync(new URL("../prisma/schema.prisma", import.meta.url), "utf8");
 const importSource = readFileSync(new URL("../src/lib/shuttle/regularImport.ts", import.meta.url), "utf8");
+const rosterEdit = readFileSync(new URL("../src/lib/shuttle/regularRosterEdit.ts", import.meta.url), "utf8");
 const client = readFileSync(new URL("../src/app/admin/shuttle/regular/RegularShuttleClient.tsx", import.meta.url), "utf8");
 
 test("정규 차량표와 저장 노선은 월별로 보존된다", () => {
   assert.match(schema, /model RegularShuttleStop[\s\S]*serviceMonth\s+String/);
   assert.match(schema, /model RegularDispatchRoute[\s\S]*@@unique\(\[serviceMonth, dayOfWeek, direction\]\)/);
-  assert.match(importSource, /DELETE FROM "RegularShuttleStop" WHERE "id"=\$1 AND "serviceMonth"=\$2/);
-  assert.match(importSource, /stopSyncKey/);
-  assert.doesNotMatch(importSource, /DELETE FROM "RegularShuttleStop"`\)/);
-  assert.doesNotMatch(importSource, /DELETE FROM "RegularShuttleStop" WHERE "serviceMonth"=\$1/);
+  // 2026-10-02 시트 가져오기 종료 — 명단 쓰기는 셔틀 명단 편집(regularRosterEdit)만 하고, 삭제는 늘 id·월로 한정한다.
+  assert.match(rosterEdit, /WHERE "id" = ANY\(\$1::text\[\]\) AND "serviceMonth"=\$2/);
+  assert.doesNotMatch(rosterEdit, /DELETE FROM "RegularShuttleStop"`\)/);
+  assert.doesNotMatch(rosterEdit, /DELETE FROM "RegularShuttleStop"\s+WHERE "serviceMonth"=\$1/);
+  assert.doesNotMatch(importSource, /DELETE FROM "RegularShuttleStop"/);
 });
 
 test("차량 변동은 학생별 추가·제외·변경으로 구분한다", () => {

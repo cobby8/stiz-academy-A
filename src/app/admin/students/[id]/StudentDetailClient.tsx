@@ -470,7 +470,6 @@ export default function StudentDetailClient({
 
     // 지도 모달 확정 → /api/admin/shuttle(studentLocation·confirmLocation)로 저장
     // 서버 updateStudentShuttleLocation은 좌표·주소 필수(없으면 400). 성공 시 응답 location으로 로컬만 갱신.
-    // 참고 패턴: src/app/admin/shuttle/ShuttleRouteAdminClient.tsx:196 saveRequestLocation
     async function saveShuttleLocation(kind: "PICKUP" | "DROPOFF", value: MapLocationData) {
         if (!studentId) return;
         setShuttleSaving(true);

@@ -24,6 +24,30 @@ export type RosterStopInput = {
  */
 export type RosterScope = "THIS_MONTH" | "FROM_THIS_MONTH";
 
+/** 학생 추가의 수업 한 칸 — 요일마다 수업시간이 다를 수 있어(월 17시·수 18시) 요일과 수업시간을 짝으로 받는다. */
+export type RosterClassSlot = { weekday: number; classTime: string };
+
+/**
+ * 새 행을 운행 순서 어디에 넣을지(요일·수업·방향 칸마다 하나).
+ * - END   : 그 칸 맨 뒤(예전 동작)
+ * - BEFORE: rowId 행(그 칸 어떤 정차의 첫 행) 바로 앞 — 기사님 화면에서 그 정차 앞에 새 정차가 생긴다
+ * - JOIN  : rowId 행의 정차에 합류 — 그 행과 같은 정류장 이름·좌표·시각을 쓰고 바로 뒤 순서
+ */
+export type RosterPlacementMode = "END" | "BEFORE" | "JOIN";
+export type RosterPlacementInput = {
+  weekday: number;
+  classTime: string;
+  direction: RosterDirection;
+  mode: RosterPlacementMode;
+  rowId: string | null;
+  /** 이 칸 새 행의 시각. undefined = 정류장 입력값의 시각을 그대로(합류는 늘 대상 정차 시각). */
+  arriveTime?: string | null;
+  /** 이후 달에서 기준 행을 못 찾아 맨 뒤로 바뀐 경우(결과 표시용, 서버 내부에서만 채운다). */
+  fellBack?: boolean;
+  /** 맨 뒤로 바뀐 합류의 정류장 값(이 달 합류 대상 정차) — 그 달에서도 같은 정류장으로 넣는다. */
+  fallbackStop?: RosterStopInput;
+};
+
 export type RosterAddInput = {
   serviceMonth: string;
   scope?: RosterScope;
@@ -31,6 +55,10 @@ export type RosterAddInput = {
   studentName: string;
   weekdays: number[];
   classTime: string;
+  /** 요일·수업시간 짝. 없으면 weekdays × classTime 으로 본다(예전 요청 형식). */
+  slots?: RosterClassSlot[];
+  /** 칸별 삽입 위치. 없는 칸은 맨 뒤(END). */
+  placements?: RosterPlacementInput[];
   board: RosterStopInput | null; // null = 등원 셔틀 안 탐
   alight: RosterStopInput | null; // null = 하원 셔틀 안 탐
 };
@@ -171,16 +199,88 @@ export function validateAddInput(raw: unknown): RosterAddInput {
   const board = o.board == null ? null : normalizeStopInput(o.board, "등원 정류장");
   const alight = o.alight == null ? null : normalizeStopInput(o.alight, "하원 정류장");
   if (!board && !alight) throw new RosterInputError("등원·하원 중 하나 이상 선택해 주세요.");
+  // 새 형식(slots: 요일별 수업시간)이 오면 그것을, 아니면 예전 형식(요일 여러 개 × 수업시간 하나)을 쓴다.
+  let slots: RosterClassSlot[];
+  if (o.slots != null) {
+    slots = normalizeClassSlots(o.slots);
+  } else {
+    const weekdays = normalizeWeekdays(o.weekdays);
+    const classTime = normalizeClassTime(o.classTime);
+    slots = weekdays.map((weekday) => ({ weekday, classTime }));
+  }
+  const directions: RosterDirection[] = [...(board ? ["BOARD" as const] : []), ...(alight ? ["ALIGHT" as const] : [])];
   return {
     serviceMonth: normalizeRosterMonth(o.serviceMonth),
     scope: normalizeRosterScope(o.scope),
     studentId,
     studentName,
-    weekdays: normalizeWeekdays(o.weekdays),
-    classTime: normalizeClassTime(o.classTime),
+    weekdays: [...new Set(slots.map((s) => s.weekday))].sort((a, b) => a - b),
+    classTime: slots[0].classTime,
+    slots,
+    placements: normalizePlacements(o.placements, slots, directions),
     board,
     alight,
   };
+}
+
+const MAX_SLOTS = 14;
+
+/** 수업 칸 목록 — 중복 제거, 요일·수업시간 순 정렬. 하나 이상 필요. */
+export function normalizeClassSlots(v: unknown): RosterClassSlot[] {
+  if (!Array.isArray(v) || v.length === 0) throw new RosterInputError("수업(요일·수업시간)을 하나 이상 선택해 주세요.");
+  if (v.length > MAX_SLOTS) throw new RosterInputError("수업이 너무 많습니다.");
+  const seen = new Set<string>();
+  const out: RosterClassSlot[] = [];
+  for (const raw of v) {
+    const so = obj(raw);
+    const slot = { weekday: normalizeWeekday(so.weekday), classTime: normalizeClassTime(so.classTime) };
+    const key = `${slot.weekday}|${slot.classTime}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(slot);
+  }
+  return out.sort((a, b) => a.weekday - b.weekday || a.classTime.localeCompare(b.classTime));
+}
+
+/** 공백만 다른 수업시간('17:00 ~ 18:00' vs '17:00~18:00')을 같은 수업으로 보기 위한 비교값(오류 없이). */
+export function classTimeKey(v: string | null | undefined): string {
+  return String(v ?? "").trim().replace(/\s*~\s*/g, "~").replace(/\s+/g, " ");
+}
+
+/** 칸 식별키(요일·수업·방향). 화면과 서버가 같은 키로 삽입 위치를 맞춘다. */
+export function placementKey(weekday: number, classTime: string, direction: string): string {
+  return `${weekday}|${classTimeKey(classTime)}|${direction}`;
+}
+
+/**
+ * 삽입 위치 목록 검증. 각 항목은 고른 수업 칸·방향 중 하나여야 하고 칸마다 하나만.
+ * BEFORE·JOIN 은 기준 행 id 가 필요하다(행이 실제로 그 칸에 있는지는 planRosterInsert 가 DB 행으로 확인).
+ */
+export function normalizePlacements(v: unknown, slots: readonly RosterClassSlot[], directions: readonly RosterDirection[]): RosterPlacementInput[] {
+  if (v == null) return [];
+  if (!Array.isArray(v)) throw new RosterInputError("넣을 위치 형식이 올바르지 않습니다.");
+  if (v.length > MAX_SLOTS * 2) throw new RosterInputError("넣을 위치가 너무 많습니다.");
+  const allowed = new Set(slots.flatMap((s) => directions.map((d) => placementKey(s.weekday, s.classTime, d))));
+  const seen = new Set<string>();
+  return v.map((raw) => {
+    const po = obj(raw);
+    const weekday = normalizeWeekday(po.weekday);
+    const classTime = normalizeClassTime(po.classTime);
+    const direction = po.direction === "BOARD" || po.direction === "ALIGHT" ? po.direction : null;
+    if (!direction) throw new RosterInputError("넣을 위치의 방향이 올바르지 않습니다.");
+    const mode = po.mode === "END" || po.mode === "BEFORE" || po.mode === "JOIN" ? po.mode : null;
+    if (!mode) throw new RosterInputError("넣을 위치 방식이 올바르지 않습니다.");
+    const key = placementKey(weekday, classTime, direction);
+    if (!allowed.has(key)) throw new RosterInputError("고르지 않은 수업·방향의 넣을 위치가 있습니다. 화면을 새로고침해 주세요.");
+    if (seen.has(key)) throw new RosterInputError("같은 수업·방향의 넣을 위치가 두 번 들어 있습니다.");
+    seen.add(key);
+    const rowId = text(po.rowId) || null;
+    if (mode !== "END" && !rowId) throw new RosterInputError("넣을 위치의 기준 정차가 없습니다. 운행표에서 다시 골라 주세요.");
+    const out: RosterPlacementInput = { weekday, classTime, direction, mode, rowId: mode === "END" ? null : rowId };
+    // 합류는 시각을 받지 않는다 — 서버가 대상 정차 시각을 그대로 복사한다(옛 비정형 시각 때문에 저장이 막히지 않게).
+    if (mode !== "JOIN" && "arriveTime" in po) out.arriveTime = normalizeArriveTime(po.arriveTime);
+    return out;
+  });
 }
 
 /** 행 id 목록(삭제·반이동 대상). 중복 제거, 비어 있거나 너무 많으면 거부. */
@@ -261,22 +361,195 @@ export function buildAddRows(
 ): RosterNewRow[] {
   const work: RosterExistingRow[] = [...existing];
   const out: RosterNewRow[] = [];
-  for (const weekday of input.weekdays) {
+  // weekdays 는 slots 의 요일 목록이다 — 요일만 바꿔 넘긴 호출({ ...input, weekdays: [1] })도 그대로 따르게 한 번 거른다.
+  const slots = (input.slots ?? input.weekdays.map((weekday) => ({ weekday, classTime: input.classTime })))
+    .filter((s) => input.weekdays.includes(s.weekday));
+  for (const slot of slots) {
+    const { weekday } = slot;
+    // 그 요일 명단에 공백만 다른 같은 수업시간('17:00 ~ 18:00')이 있으면 그 글자를 그대로 쓴다.
+    // 기사님 화면은 수업시간 글자가 같은 행끼리 한 섹션으로 묶으므로, 글자가 다르면 새 학생만 다른 섹션에 뜬다.
+    const classTime = existingClassTimeVariant(work, weekday, slot.classTime);
     for (const [direction, stop] of [["BOARD", input.board], ["ALIGHT", input.alight]] as const) {
       if (!stop) continue;
-      const dup = work.some((r) => r.weekday === weekday && r.direction === direction && (r.classTime ?? "") === input.classTime
+      const dup = work.some((r) => r.weekday === weekday && r.direction === direction && (r.classTime ?? "") === classTime
         && isSameStudent(r, input.studentId, studentName));
       if (dup && opts.skipDuplicates) continue;
       if (dup) {
-        throw new RosterInputError(`${studentName} 학생은 ${WEEKDAY_LABELS[weekday]}요일 ${input.classTime} ${DIRECTION_LABEL[direction]}이 이미 명단에 있습니다.`);
+        throw new RosterInputError(`${studentName} 학생은 ${WEEKDAY_LABELS[weekday]}요일 ${classTime} ${DIRECTION_LABEL[direction]}이 이미 명단에 있습니다.`);
       }
-      const sortOrder = nextSortOrder(work, weekday, direction, input.classTime);
-      out.push({ weekday, classTime: input.classTime, direction, ...stop, sortOrder });
+      const sortOrder = nextSortOrder(work, weekday, direction, classTime);
+      out.push({ weekday, classTime, direction, ...stop, sortOrder });
       // 같은 요청 안에서 다음 행이 이 행 뒤로 가도록 작업 목록에도 넣는다.
-      work.push({ id: `new-${out.length}`, weekday, direction, classTime: input.classTime, sortOrder, studentId: input.studentId, studentName });
+      work.push({ id: `new-${out.length}`, weekday, direction, classTime, sortOrder, studentId: input.studentId, studentName });
     }
   }
   return out;
+}
+
+/** 그 요일 행 중 공백만 다른 같은 수업시간 글자가 있으면 그 글자(가장 많이 쓰인 것), 없으면 입력 그대로. */
+export function existingClassTimeVariant(rows: readonly Pick<RosterExistingRow, "weekday" | "classTime">[], weekday: number, classTime: string): string {
+  const key = classTimeKey(classTime);
+  const count = new Map<string, number>();
+  for (const r of rows) {
+    if (r.weekday !== weekday || !r.classTime || classTimeKey(r.classTime) !== key) continue;
+    count.set(r.classTime, (count.get(r.classTime) ?? 0) + 1);
+  }
+  if (count.has(classTime) || count.size === 0) return classTime;
+  return [...count.entries()].sort((a, b) => b[1] - a[1])[0][0];
+}
+
+// ── 운행 순서 중간에 넣기(학생 추가) ─────────────────────────────
+
+/** 삽입 계획에 필요한 기존 행 — 합류 시 대상 정차의 정류장 이름·좌표·시각을 복사한다. */
+export type RosterPlacementRow = RosterExistingRow & {
+  stopName?: string | null;
+  arriveTime?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
+};
+
+/**
+ * 삽입 한 단계 — 순서대로 실행한다.
+ * shiftFrom 이 있으면 먼저 「그 요일에서 sortOrder ≥ shiftFrom 인 모든 행 +1」을 하고 row 를 넣는다.
+ * 요일 전체를 같이 밀기 때문에 다른 수업·방향·운영정차(PIVOT/RETURN)의 서로 간 순서는 그대로다.
+ */
+export type RosterInsertStep = { shiftFrom: number | null; row: RosterNewRow; mode: RosterPlacementMode; fellBack: boolean };
+
+/**
+ * 삽입 계획 = ① 겹침 벌리기(spread: 기존 행 번호 바꾸기, 먼저 실행) → ② 단계(steps) 순서대로.
+ * spread 는 BEFORE 로 넣을 칸 안에서 번호가 겹친 학생 행이 있을 때만 생긴다.
+ */
+export type RosterInsertPlan = { spread: { id: string; sortOrder: number }[]; steps: RosterInsertStep[] };
+
+const PLACEMENT_STALE = "그사이 명단이 바뀌어 넣을 위치를 찾지 못했습니다. 화면을 새로고침한 뒤 다시 골라 주세요.";
+
+/** 그 칸(같은 요일·방향·수업시간)의 학생 행인지. */
+function inCell(r: RosterPlacementRow, weekday: number, direction: string, classTime: string | null): boolean {
+  return r.weekday === weekday && r.direction === direction && classTimeKey(r.classTime) === classTimeKey(classTime) && !!r.studentName;
+}
+
+/** 기사님 화면 순서 — sortOrder, 겹치면 id(명단 조회 ORDER BY "id" COLLATE "C" 와 같은 바이트 순). */
+function rowOrder(a: RosterPlacementRow, b: RosterPlacementRow): number {
+  return a.sortOrder - b.sortOrder || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
+}
+
+/**
+ * 칸 안에서 번호가 겹친 학생 행을 기사님 화면 순서대로 벌린다(work 를 직접 고친다).
+ * 왜: A(5)·B(5) 에서 「B 앞」에 넣으려고 5 를 주면 A 앞에 가 버린다. 먼저 A=5·B=6 으로 벌려야 정확히 그 사이에 간다.
+ * 벌릴 때 그 요일에서 겹친 번호보다 큰 행은 모두 함께 밀어(+k-1) 다른 칸·운영 정차의 상대 순서를 지킨다.
+ * 칸 밖 행과의 겹침(예: 운영 하차행과 학생 행이 같은 번호)은 칸 순서와 무관하므로 건드리지 않는다.
+ */
+function spreadCellTies(work: RosterPlacementRow[], weekday: number, direction: string, classTime: string | null) {
+  for (let guard = 0; guard < 500; guard++) {
+    const cell = work.filter((r) => inCell(r, weekday, direction, classTime)).sort(rowOrder);
+    const i = cell.findIndex((r, j) => j > 0 && r.sortOrder === cell[j - 1].sortOrder);
+    if (i < 0) return;
+    const v = cell[i].sortOrder;
+    const tied = cell.filter((r) => r.sortOrder === v);
+    for (const r of work) if (r.weekday === weekday && r.sortOrder > v) r.sortOrder += tied.length - 1;
+    tied.forEach((r, j) => { r.sortOrder = v + j; });
+  }
+  throw new RosterInputError("명단 순서를 정리하지 못했습니다. 잠시 후 다시 시도해 주세요.");
+}
+
+/**
+ * buildAddRows 가 만든 새 행(맨 뒤 기준)에 칸별 삽입 위치를 적용해 실행 계획을 만든다(순수 함수).
+ * - END(또는 위치 없음): 예전과 똑같이 그 칸 맨 뒤 번호(밀기 없음).
+ * - BEFORE: 칸 겹침을 벌린 뒤, 기준 행 번호를 새 행이 갖고 그 요일의 그 번호 이상을 +1.
+ * - JOIN : 밀지 않고 칸 맨 뒤 + 대상 정차의 정류장 이름(글자 그대로)·좌표·시각 복사.
+ *          기사님 화면은 같은 이름을 처음 나온 위치에 한 정차로 묶으므로 결과는 합류와 같다.
+ * 기준 행이 그 칸(같은 요일·방향·수업시간의 학생 행)이 아니면 거부한다 — 화면과 DB 가 어긋난 상태라서.
+ */
+export function planRosterInsert(
+  rows: readonly RosterNewRow[],
+  placements: readonly RosterPlacementInput[] | undefined,
+  existing: readonly RosterPlacementRow[],
+): RosterInsertPlan {
+  const work: RosterPlacementRow[] = existing.map((r) => ({ ...r }));
+  const placementOf = (base: RosterNewRow) => (placements ?? []).find((x) => x.weekday === base.weekday && x.direction === base.direction
+    && classTimeKey(x.classTime) === classTimeKey(base.classTime));
+  const refOf = (base: RosterNewRow, rowId: string) => {
+    const ref = work.find((r) => r.id === rowId);
+    if (!ref || ref.id.startsWith("new-") || !inCell(ref, base.weekday, base.direction, base.classTime)) throw new RosterInputError(PLACEMENT_STALE);
+    return ref;
+  };
+
+  // ① BEFORE 로 넣을 칸의 번호 겹침을 먼저 벌린다(기존 행만 대상, 바뀐 행은 spread 로 돌려준다).
+  const original = new Map(existing.map((r) => [r.id, r.sortOrder]));
+  for (const base of rows) {
+    const p = placementOf(base);
+    if (p?.mode === "BEFORE" && p.rowId) {
+      refOf(base, p.rowId); // 칸 확인
+      spreadCellTies(work, base.weekday, base.direction, base.classTime);
+    }
+  }
+  const spread = work.filter((r) => original.get(r.id) !== r.sortOrder).map((r) => ({ id: r.id, sortOrder: r.sortOrder }));
+
+  // ② 새 행을 차례로 넣는다(앞 단계의 밀기를 work 에 반영해 다음 행 계산에 쓴다).
+  const steps: RosterInsertStep[] = [];
+  rows.forEach((base, i) => {
+    const p = placementOf(base);
+    const mode: RosterPlacementMode = p?.mode ?? "END";
+    let row: RosterNewRow = { ...base };
+    let shiftFrom: number | null = null;
+    let used: RosterPlacementMode = "END";
+    if (mode === "BEFORE" && p?.rowId) {
+      const ref = refOf(base, p.rowId);
+      shiftFrom = ref.sortOrder;
+      for (const r of work) if (r.weekday === base.weekday && r.sortOrder >= shiftFrom) r.sortOrder += 1;
+      row = { ...row, classTime: ref.classTime ?? row.classTime, sortOrder: shiftFrom, ...(p.arriveTime !== undefined ? { arriveTime: p.arriveTime } : {}) };
+      used = "BEFORE";
+    } else if (mode === "JOIN" && p?.rowId) {
+      const ref = refOf(base, p.rowId);
+      const classTime = ref.classTime ?? row.classTime;
+      // 좌표: 대상 정차 좌표, 없으면 원장이 지정한 학생 좌표로 보강(위·경도는 한 쌍으로).
+      const coord = ref.latitude != null && ref.longitude != null
+        ? { latitude: ref.latitude, longitude: ref.longitude }
+        : { latitude: row.latitude, longitude: row.longitude };
+      // 시각은 검증 없이 대상 정차 값을 그대로 복사한다('16:40:00' 같은 옛 표기도 그대로).
+      row = { ...row, classTime, stopName: ref.stopName || row.stopName, ...coord, arriveTime: ref.arriveTime ?? null,
+        sortOrder: nextSortOrder(work, base.weekday, base.direction, classTime) };
+      used = "JOIN";
+    } else {
+      const stop = p?.fallbackStop;
+      row = {
+        ...row,
+        ...(stop ? { stopName: stop.stopName, arriveTime: stop.arriveTime,
+          ...(stop.latitude != null && stop.longitude != null ? { latitude: stop.latitude, longitude: stop.longitude } : {}) } : {}),
+        ...(p && p.arriveTime !== undefined && !stop ? { arriveTime: p.arriveTime } : {}),
+        sortOrder: nextSortOrder(work, base.weekday, base.direction, base.classTime),
+      };
+    }
+    work.push({ id: `new-${i}`, weekday: row.weekday, direction: row.direction, classTime: row.classTime, sortOrder: row.sortOrder,
+      studentId: null, studentName: "(새 학생)", stopName: row.stopName, arriveTime: row.arriveTime, latitude: row.latitude, longitude: row.longitude });
+    steps.push({ shiftFrom, row, mode: used, fellBack: Boolean(p?.fellBack) });
+  });
+  return { spread, steps };
+}
+
+/**
+ * 이후 달(FROM_THIS_MONTH)용 삽입 위치.
+ * - BEFORE: 이 달 기준 행의 대응 행(findCounterpartRows: 같은 학생·요일·방향·수업시간)으로 바꾼다. 없으면 맨 뒤 + fellBack.
+ * - JOIN  : 그 달도 칸 맨 뒤 + 이 달 합류 정차의 정류장 값. 그 달 그 칸에 같은 이름 정차가 없으면(묶이지 않으면) fellBack.
+ */
+export function mapPlacementsToMonth(
+  placements: readonly RosterPlacementInput[] | undefined,
+  sourceRows: readonly RosterPlacementRow[],
+  targetRows: readonly RosterPlacementRow[],
+): RosterPlacementInput[] {
+  return (placements ?? []).map((p) => {
+    if (p.mode === "END" || !p.rowId) return { ...p };
+    const src = sourceRows.find((r) => r.id === p.rowId);
+    if (p.mode === "JOIN") {
+      if (!src?.stopName) return { ...p, mode: "END", rowId: null, fellBack: true };
+      const fallbackStop = { stopName: src.stopName, arriveTime: src.arriveTime ?? null, latitude: src.latitude ?? null, longitude: src.longitude ?? null };
+      const grouped = targetRows.some((r) => inCell(r, p.weekday, p.direction, p.classTime) && r.stopName === src.stopName);
+      return { ...p, mode: "END", rowId: null, fallbackStop, ...(grouped ? {} : { fellBack: true }) };
+    }
+    const hit = src ? findCounterpartRows(src, targetRows)[0] : undefined;
+    if (hit) return { ...p, rowId: hit.id };
+    return { ...p, mode: "END", rowId: null, fellBack: true };
+  });
 }
 
 /**

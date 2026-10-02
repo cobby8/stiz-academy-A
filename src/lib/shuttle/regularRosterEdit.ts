@@ -6,8 +6,13 @@ import { koreaServiceMonth } from "@/lib/regular/serviceMonth";
 import { getSavedRegularDispatchRoute } from "@/lib/regular/regularDispatchRoute";
 import { DOW_NAMES } from "@/lib/regular/shuttleRosterLogic";
 import { pickRegularRouteSource } from "./regularDriverRouteLogic";
+import { getSettings } from "@/lib/seasonal/shuttle-optimize";
+import { isKoreanCoordinate } from "./academyLocation";
+import { dowToWeekday, type EnrolledClass, type GeoPoint } from "./regularRosterPlacementLogic";
 import {
   buildAddRows,
+  mapPlacementsToMonth,
+  planRosterInsert,
   buildCounterpartReorderUpdates,
   buildMoveUpdates,
   buildReorderUpdates,
@@ -26,7 +31,10 @@ import {
   normalizeRosterMonth,
   normalizeWeekday,
   type RosterExistingRow,
+  type RosterInsertPlan,
+  type RosterInsertStep,
   type RosterNewRow,
+  type RosterPlacementRow,
   type RosterReorderUpdate,
   type RosterRowIdentity,
   type RosterScope,
@@ -74,8 +82,11 @@ async function lockForEdit(tx: Tx, month: string, scope: RosterScope | undefined
   return later;
 }
 
-/** 이후 달 반영 결과(화면 문구용): 실제로 바뀐 달 / 대응 행이 없어(또는 겹쳐) 건너뛴 달. */
-export type RosterScopeResult = { appliedMonths: string[]; skippedMonths: string[] };
+/**
+ * 이후 달 반영 결과(화면 문구용): 실제로 바뀐 달 / 대응 행이 없어(또는 겹쳐) 건너뛴 달.
+ * endPlacedMonths: 학생 추가에서 고른 자리의 기준 정차를 그 달에서 못 찾아 맨 뒤에 넣은 달.
+ */
+export type RosterScopeResult = { appliedMonths: string[]; skippedMonths: string[]; endPlacedMonths?: string[] };
 
 async function monthRows(tx: Tx, month: string): Promise<RosterExistingRow[]> {
   const rows = await tx.$queryRawUnsafe<Record<string, unknown>[]>(
@@ -193,19 +204,168 @@ export async function addRosterStudent(raw: unknown): Promise<{ added: number } 
   return prisma.$transaction(async (tx) => {
     const later = await lockForEdit(tx, input.serviceMonth, input.scope);
     // 고른 달은 중복이면 거부(오류 안내), 이후 달은 이미 있는 행만 건너뛰고 나머지를 만든다.
-    const rows = buildAddRows(input, await monthRows(tx, input.serviceMonth), studentName);
-    await insertRosterRows(tx, input.serviceMonth, rows, who);
+    const existing = await monthPlacementRows(tx, input.serviceMonth);
+    // 운행표에서 고른 자리(중간 삽입·합류)를 적용한 실행 단계. 고른 자리가 없으면 예전처럼 그 수업 맨 뒤.
+    const plan = planRosterInsert(buildAddRows(input, existing, studentName), input.placements, existing);
+    const shifted = await applyInsertPlan(tx, input.serviceMonth, plan, who);
+    const { steps } = plan;
+    const rows = steps.map((s) => s.row);
     const appliedMonths = [input.serviceMonth];
     const skippedMonths: string[] = [];
+    const endPlacedMonths: string[] = [];
+    const laterSteps: { month: string; steps: RosterInsertStep[] }[] = [];
     for (const m of later) {
-      const extra = buildAddRows(input, await monthRows(tx, m), studentName, { skipDuplicates: true });
+      const laterRows = await monthPlacementRows(tx, m);
+      const extra = buildAddRows(input, laterRows, studentName, { skipDuplicates: true });
       if (extra.length === 0) { skippedMonths.push(m); continue; }
-      await insertRosterRows(tx, m, extra, who);
+      // 그 달에서는 기준 정차의 대응 행(같은 학생·요일·방향·수업) 기준으로 같은 자리에, 없으면 맨 뒤.
+      const monthPlan = planRosterInsert(extra, mapPlacementsToMonth(input.placements, existing, laterRows), laterRows);
+      await applyInsertPlan(tx, m, monthPlan, who);
+      const monthSteps = monthPlan.steps;
+      laterSteps.push({ month: m, steps: monthSteps });
+      if (monthSteps.some((s) => s.fellBack)) endPlacedMonths.push(m);
       appliedMonths.push(m);
     }
-    await audit(tx, admin.appUserId, "REGULAR_ROSTER_ADD", null, { serviceMonth: input.serviceMonth, scope: input.scope, appliedMonths, studentId: input.studentId, studentName, rows });
-    return { added: rows.length, appliedMonths, skippedMonths };
+    await audit(tx, admin.appUserId, "REGULAR_ROSTER_ADD", null, {
+      serviceMonth: input.serviceMonth, scope: input.scope, appliedMonths, endPlacedMonths, studentId: input.studentId, studentName, rows,
+      placements: input.placements ?? [], shifted, spread: plan.spread,
+      steps: steps.map((s) => ({ mode: s.mode, shiftFrom: s.shiftFrom, weekday: s.row.weekday, direction: s.row.direction, sortOrder: s.row.sortOrder })),
+      laterSteps: laterSteps.map((l) => ({ month: l.month, steps: l.steps.map((s) => ({ mode: s.mode, fellBack: s.fellBack, shiftFrom: s.shiftFrom, weekday: s.row.weekday, direction: s.row.direction, sortOrder: s.row.sortOrder })) })),
+    });
+    return { added: rows.length, appliedMonths, skippedMonths, endPlacedMonths };
   });
+}
+
+/** 학생 추가 삽입 계획용 행(합류 대상의 정류장 이름·시각·좌표 포함). monthRows 는 다른 편집이 공유하므로 따로 읽는다. */
+async function monthPlacementRows(tx: Tx, month: string): Promise<RosterPlacementRow[]> {
+  const rows = await tx.$queryRawUnsafe<Record<string, unknown>[]>(
+    `SELECT "id","weekday","direction","classTime","sortOrder","studentId","studentName","parentPhone","stopName","arriveTime","latitude","longitude"
+       FROM "RegularShuttleStop" WHERE "serviceMonth"=$1`,
+    month,
+  );
+  const num = (v: unknown) => (v == null ? null : Number.isFinite(Number(v)) ? Number(v) : null);
+  return rows.map((r) => ({
+    id: String(r.id),
+    weekday: Number(r.weekday),
+    direction: String(r.direction),
+    classTime: (r.classTime as string | null) ?? null,
+    sortOrder: Number(r.sortOrder) || 0,
+    studentId: (r.studentId as string | null) ?? null,
+    studentName: (r.studentName as string | null) ?? null,
+    parentPhone: (r.parentPhone as string | null) ?? null,
+    stopName: (r.stopName as string | null) ?? null,
+    arriveTime: (r.arriveTime as string | null) ?? null,
+    latitude: num(r.latitude),
+    longitude: num(r.longitude),
+  }));
+}
+
+/**
+ * 삽입 계획 실행 — ① 칸 안 번호 겹침 벌리기(spread, 행 id 별 새 번호) ② 단계마다 (필요하면) 그 요일의
+ * sortOrder ≥ shiftFrom 행을 모두 +1 하고 새 행을 넣는다. 같은 트랜잭션·같은 잠금 안이라 계획 시점 행과 DB 가 같다.
+ * 요일 전체를 함께 밀어 다른 수업·방향·운영정차의 상대 순서를 지킨다. 바뀐 기존 행 수를 돌려준다(감사 기록용).
+ */
+async function applyInsertPlan(
+  tx: Tx, month: string, plan: RosterInsertPlan,
+  who: { studentName: string; studentId: string | null; studentPhone: string | null; parentPhone: string | null },
+): Promise<number> {
+  let shifted = 0;
+  for (const u of plan.spread) {
+    const n = Number(await tx.$executeRawUnsafe(
+      `UPDATE "RegularShuttleStop" SET "sortOrder"=$1 WHERE "id"=$2 AND "serviceMonth"=$3`,
+      u.sortOrder, u.id, month,
+    )) || 0;
+    if (n !== 1) throw new RosterInputError("그사이 명단이 바뀌었습니다. 화면을 새로고침한 뒤 다시 시도해 주세요.");
+    shifted += n;
+  }
+  for (const s of plan.steps) {
+    if (s.shiftFrom != null) {
+      shifted += Number(await tx.$executeRawUnsafe(
+        `UPDATE "RegularShuttleStop" SET "sortOrder"="sortOrder"+1 WHERE "serviceMonth"=$1 AND "weekday"=$2 AND "sortOrder">=$3`,
+        month, s.row.weekday, s.shiftFrom,
+      )) || 0;
+    }
+    await insertRosterRows(tx, month, [s.row], who);
+  }
+  return shifted;
+}
+
+// ── 학생 추가 화면: 등록 수업·상세 위치·학원 기준점 불러오기(조회 전용) ─────────────
+
+export type RosterStudentContext = {
+  student: RosterStudentSearchResult | null;
+  /** ACTIVE 수강(병합 학생·삭제된 프로그램 제외)의 요일·시각. */
+  enrolled: EnrolledClass[];
+  /** 운행 기준점 — 추천 거리 계산용(등원: 차고지 → 학원 / 하원: 학원 → 차고지). 좌표가 이상하면 null. */
+  academy: GeoPoint | null;
+  depot: GeoPoint | null;
+};
+
+/**
+ * 학생 추가 모달이 학생을 고르면(또는 모달을 열면) 부른다. 쓰기 없음.
+ * studentId 가 비어 있으면(이름만 입력) 학원 기준점만 돌려준다.
+ */
+export async function getRosterStudentContext(rawStudentId: unknown): Promise<RosterStudentContext> {
+  await requireAdmin();
+  const studentId = typeof rawStudentId === "string" ? rawStudentId.trim() : "";
+  if (studentId.length > 64) throw new RosterInputError("학생 정보가 올바르지 않습니다.");
+
+  // getSettings 는 좌표가 비면 0 이 들어올 수 있어 한국 좌표 범위로 한 번 더 거른다.
+  const settings = await getSettings();
+  const geo = (g: { lat: number; lng: number } | null): GeoPoint | null =>
+    g && Number.isFinite(g.lat) && Number.isFinite(g.lng) && isKoreanCoordinate(g.lat, g.lng) ? { lat: g.lat, lng: g.lng } : null;
+  const academy = geo(settings.academy);
+  const depot = geo(settings.depot);
+  if (!studentId) return { student: null, enrolled: [], academy, depot };
+
+  const found = await prisma.$queryRawUnsafe<Record<string, unknown>[]>(
+    `SELECT s."id", s."name", s."grade", u."phone" AS "parentPhone",
+            pk."name" AS "pkName", pk."address" AS "pkAddress", pk."latitude" AS "pkLat", pk."longitude" AS "pkLng",
+            dr."name" AS "drName", dr."address" AS "drAddress", dr."latitude" AS "drLat", dr."longitude" AS "drLng"
+       FROM "Student" s
+       LEFT JOIN "User" u ON u."id"=s."parentId"
+       LEFT JOIN "StudentShuttleLocation" pk ON pk."studentId"=s."id" AND pk."kind"='PICKUP'
+       LEFT JOIN "StudentShuttleLocation" dr ON dr."studentId"=s."id" AND dr."kind"='DROPOFF'
+      WHERE s."id"=$1 AND s."mergedIntoStudentId" IS NULL
+      LIMIT 1`,
+    studentId,
+  );
+  const r = found[0];
+  if (!r) throw new RosterInputError("학생을 찾지 못했습니다. 다시 검색해 주세요.");
+  const place = (name: unknown, address: unknown, lat: unknown, lng: unknown): RosterStudentPlace | null =>
+    lat != null && lng != null ? { name: (name as string | null) ?? null, address: String(address ?? ""), latitude: Number(lat), longitude: Number(lng) } : null;
+  const student: RosterStudentSearchResult = {
+    id: String(r.id),
+    name: String(r.name ?? ""),
+    grade: (r.grade as string | null) ?? null,
+    parentPhone: (r.parentPhone as string | null) ?? null,
+    pickup: place(r.pkName, r.pkAddress, r.pkLat, r.pkLng),
+    dropoff: place(r.drName, r.drAddress, r.drLat, r.drLng),
+  };
+
+  // 수강 등록: Enrollment(학생–반, status) → Class(dayOfWeek "Mon"…, startTime/endTime "HH:MM") → Program.
+  const classes = await prisma.$queryRawUnsafe<Record<string, unknown>[]>(
+    `SELECT c."dayOfWeek", c."startTime", c."endTime", c."name" AS "className", p."name" AS "programName"
+       FROM "Enrollment" e
+       JOIN "Class" c ON c."id"=e."classId"
+       JOIN "Program" p ON p."id"=c."programId"
+      WHERE e."studentId"=$1 AND e."status"='ACTIVE' AND p."deletedAt" IS NULL
+      ORDER BY c."startTime" ASC`,
+    studentId,
+  );
+  const enrolled: EnrolledClass[] = [];
+  for (const c of classes) {
+    const weekday = dowToWeekday(c.dayOfWeek as string | null);
+    if (weekday == null) continue;
+    enrolled.push({
+      weekday,
+      startTime: String(c.startTime ?? ""),
+      endTime: String(c.endTime ?? ""),
+      className: (c.className as string | null) ?? null,
+      programName: (c.programName as string | null) ?? null,
+    });
+  }
+  return { student, enrolled, academy, depot };
 }
 
 // ── 빼기(퇴원·셔틀 중단) ─────────────────────────────────────

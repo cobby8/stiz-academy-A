@@ -8,15 +8,20 @@ import LocationPickerModal, { type MapLocationData } from "@/components/maps/Loc
 import {
   formatRosterMonths,
   groupRosterDay,
+  classTimeKey,
   nextServiceMonth,
+  placementKey,
   rosterRowIdsForStudent,
   WEEKDAY_LABELS,
+  type RosterClassSlot,
   type RosterScope,
   type RosterStudentEntry,
 } from "@/lib/shuttle/regularRosterEditLogic";
-import type { RosterStudentSearchResult } from "@/lib/shuttle/regularRosterEdit";
+import type { RosterStudentContext, RosterStudentSearchResult } from "@/lib/shuttle/regularRosterEdit";
 import { checkRosterRows } from "@/lib/shuttle/regularRosterCheckLogic";
+import { enrolledClassSlots, resolveCellPlacement, type GeoPoint, type PlacementOverride } from "@/lib/shuttle/regularRosterPlacementLogic";
 import DriverOrderView from "./DriverOrderView";
+import AddRiderRoutePanel, { type PanelDirection } from "./AddRiderRoutePanel";
 
 // 셔틀 명단 — 사이트가 정규 셔틀 명단의 원장이다. 월 → 요일 → 수업시간별 학생(등원·하원 정류장).
 // 학생 추가·빼기·반이동·정류장 수정은 /api/admin/shuttle/regular-roster 로 바로 저장한다.
@@ -31,8 +36,16 @@ type Dialog =
     results: RosterStudentSearchResult[] | null;
     student: RosterStudentSearchResult | null;
     manualName: string;
-    weekdays: number[];
-    classTime: string;
+    /** 고른 수업(요일·수업시간) — 학생을 고르면 등록 수업으로 미리 채운다. */
+    slots: RosterClassSlot[];
+    manualWeekday: number; // 등록 수업에 없는 수업을 직접 추가할 때
+    manualClassTime: string;
+    /** 등록 수업·상세 위치·학원/차고지 좌표(서버 조회). */
+    context: RosterStudentContext | null;
+    contextLoading: boolean;
+    contextError: boolean; // 불러오기 실패 — 「등록 수업 없음」과 구분해 안내한다
+    /** 칸(요일·수업·방향)별 원장이 바꾼 넣을 자리·시각. 없으면 추천. */
+    overrides: Record<string, PlacementOverride>;
     useBoard: boolean;
     board: StopDraft;
     useAlight: boolean;
@@ -196,8 +209,10 @@ export default function RegularShuttleClient({ initialStops, initialMonth, month
       const j = await rosterCall(method, { ...body, serviceMonth, scope: dialog && "scope" in dialog ? dialog.scope : undefined });
       const applied: string[] = Array.isArray(j?.appliedMonths) ? j.appliedMonths : [];
       const skipped: string[] = Array.isArray(j?.skippedMonths) ? j.skippedMonths : [];
+      // 학생 추가: 이후 달에서 고른 자리의 기준 정차를 못 찾아 그 수업 맨 뒤에 넣은 달
+      const endPlaced: string[] = Array.isArray(j?.endPlacedMonths) ? j.endPlacedMonths : [];
       const monthNote = applied.length > 0
-        ? ` · ${formatRosterMonths(applied)}에 반영${skipped.length > 0 ? ` (${formatRosterMonths(skipped)}은 해당 학생 행이 없거나 이미 달라 건너뜀)` : ""}`
+        ? ` · ${formatRosterMonths(applied)}에 반영${skipped.length > 0 ? ` (${formatRosterMonths(skipped)}은 해당 학생 행이 없거나 이미 달라 건너뜀)` : ""}${endPlaced.length > 0 ? ` (${formatRosterMonths(endPlaced)}은 기준 정차가 없어 맨 뒤에 넣음 — 그 달 기사님 화면에서 확인)` : ""}`
         : "";
       setDialog(null); setMsg(`${done}${monthNote}`); setErr(null); setShowDispatchHint(true);
     } catch (e: unknown) { setDialogErr(e instanceof Error ? e.message : "처리하지 못했습니다."); setBusy(false); return; }
@@ -219,10 +234,40 @@ export default function RegularShuttleClient({ initialStops, initialMonth, month
   function openAdd() {
     setDialogErr(null);
     setDialog({
-      kind: "add", query: "", results: null, student: null, manualName: "", weekdays: [active], classTime: groups[0]?.classTime ?? "",
+      kind: "add", query: "", results: null, student: null, manualName: "",
+      slots: [], manualWeekday: active, manualClassTime: groups[0]?.classTime ?? "",
+      context: null, contextLoading: false, contextError: false, overrides: {},
       useBoard: true, board: { ...EMPTY_DRAFT }, useAlight: true, alightSame: true, alight: { ...EMPTY_DRAFT },
       scope: defaultScope,
     });
+    // 학생을 고르기 전에도 추천 거리 계산에 쓸 학원·차고지 좌표는 받아 둔다(이름만 입력하는 경우).
+    void loadAddContext(null);
+  }
+
+  // 학생 추가 정보 불러오기(조회 전용) — 등록 수업·상세 위치·학원/차고지 좌표.
+  // 학생을 골랐으면 등록 수업으로 수업 칸을 미리 채운다(원장이 체크를 풀 수 있다).
+  async function loadAddContext(studentId: string | null) {
+    setDialog((d) => (d?.kind === "add" ? { ...d, contextLoading: true, contextError: false } : d));
+    try {
+      const r = await fetch(`/api/admin/shuttle/regular-roster?context=1&studentId=${encodeURIComponent(studentId ?? "")}`, { cache: "no-store" });
+      const j = await r.json().catch(() => null);
+      if (!r.ok) throw new Error(j?.error || "학생 정보를 불러오지 못했습니다.");
+      const context = j.context as RosterStudentContext;
+      setDialog((d) => {
+        if (d?.kind !== "add") return d;
+        // 그사이 다른 학생을 골랐으면 늦게 온 응답은 버린다.
+        if ((d.student?.id ?? null) !== (context.student?.id ?? null)) return d;
+        // 등록 수업을 미리 고르되, 원장이 이미 직접 추가해 둔 수업 칸은 지우지 않고 합친다.
+        const enrolled = studentId
+          ? enrolledClassSlots(context.enrolled, classTimes).map((o) => ({ weekday: o.weekday, classTime: o.classTime }))
+          : [];
+        const slots = [...enrolled, ...d.slots.filter((s) => !enrolled.some((o) => o.weekday === s.weekday && classTimeKey(o.classTime) === classTimeKey(s.classTime)))];
+        return { ...d, context, contextLoading: false, contextError: false, slots };
+      });
+    } catch (e: unknown) {
+      setDialog((d) => (d?.kind === "add" ? { ...d, contextLoading: false, contextError: true } : d));
+      setDialogErr(e instanceof Error ? e.message : "학생 정보를 불러오지 못했습니다.");
+    }
   }
 
   async function searchStudents() {
@@ -244,22 +289,51 @@ export default function RegularShuttleClient({ initialStops, initialMonth, month
         p ? { ...cur, stopName: p.name || p.address, latitude: p.latitude, longitude: p.longitude } : cur;
       const board = fromPlace(student.pickup, d.board);
       const alight = fromPlace(student.dropoff, d.alight);
-      return { ...d, student, results: null, board, alight, alightSame: student.dropoff ? false : d.alightSame };
+      // 학생을 고르면 자리 선택은 비우고 정보를 새로 불러온다(직접 추가해 둔 수업 칸은 남겨 등록 수업과 합친다).
+      return { ...d, student, results: null, board, alight, alightSame: student.dropoff ? false : d.alightSame, overrides: {}, context: null };
     });
+    void loadAddContext(student.id);
+  }
+
+  // 학생 추가 모달의 방향별 정류장(하원 = 등원과 같으면 등원 정류장). 운행표 패널과 저장이 같은 값을 쓴다.
+  function addDirections(d: Extract<Dialog, { kind: "add" }>): (PanelDirection & { draft: StopDraft })[] {
+    const point = (s: StopDraft): GeoPoint | null => (s.latitude != null && s.longitude != null ? { lat: s.latitude, lng: s.longitude } : null);
+    const alight = d.alightSame && d.useBoard ? d.board : d.alight;
+    return [
+      ...(d.useBoard ? [{ dir: "BOARD" as const, stopName: d.board.stopName, point: point(d.board), draft: d.board }] : []),
+      ...(d.useAlight ? [{ dir: "ALIGHT" as const, stopName: alight.stopName, point: point(alight), draft: alight }] : []),
+    ];
   }
 
   function saveAdd() {
     if (dialog?.kind !== "add") return;
-    const alight = dialog.alightSame ? { ...dialog.board, arriveTime: dialog.alight.arriveTime } : dialog.alight;
+    const dirs = addDirections(dialog);
+    const studentId = dialog.student?.id ?? null;
+    // 칸(수업×방향)마다 운행표 패널과 같은 계산으로 넣을 자리·시각을 정해 보낸다.
+    const placements = dialog.slots.flatMap((slot) => dirs.map((d) => {
+      const res = resolveCellPlacement({
+        stops, weekday: slot.weekday, classTime: slot.classTime, direction: d.dir, stopName: d.stopName, student: d.point,
+        academy: dialog.context?.academy ?? null, depot: dialog.context?.depot ?? null, studentId,
+        override: dialog.overrides[placementKey(slot.weekday, slot.classTime, d.dir)],
+      });
+      const base = { weekday: slot.weekday, classTime: slot.classTime, direction: d.dir, mode: res.request.mode, rowId: res.request.rowId };
+      // 합류는 시각을 보내지 않는다 — 서버가 대상 정차 시각을 그대로 복사한다.
+      return res.request.mode === "JOIN" ? base : { ...base, arriveTime: res.arriveTime };
+    }));
+    const stopBody = (dir: "BOARD" | "ALIGHT") => {
+      const d = dirs.find((x) => x.dir === dir);
+      // 시각은 칸마다 다르므로 정류장에는 넣지 않고 placements 로 보낸다.
+      return d ? toStopBody({ ...d.draft, arriveTime: "" }) : null;
+    };
     void submitDialog("POST", {
       action: "add",
-      studentId: dialog.student?.id ?? null,
+      studentId,
       studentName: dialog.student ? dialog.student.name : dialog.manualName,
-      weekdays: dialog.weekdays,
-      classTime: dialog.classTime,
-      board: dialog.useBoard ? toStopBody(dialog.board) : null,
-      alight: dialog.useAlight ? toStopBody(alight) : null,
-    }, `${dialog.student?.name ?? dialog.manualName} 학생을 명단에 추가했습니다(그 수업 맨 뒤). 「기사님 화면」 보기에서 순서·시각을 맞춰 주세요.`);
+      slots: dialog.slots,
+      placements,
+      board: stopBody("BOARD"),
+      alight: stopBody("ALIGHT"),
+    }, `${dialog.student?.name ?? dialog.manualName} 학생을 명단에 추가했습니다(운행표에서 고른 자리). 「기사님 화면」 보기에서 확인해 주세요.`);
   }
 
   // 정류장 입력값 갱신(추가 폼의 등원·하원, 정류장 수정 폼 공용).
@@ -353,18 +427,21 @@ export default function RegularShuttleClient({ initialStops, initialMonth, month
     );
   }
 
-  function stopFields(target: PickerTarget, title?: string) {
+  // withTime=false: 학생 추가 — 시각은 운행표 패널에서 칸(요일·수업)마다 정한다.
+  function stopFields(target: PickerTarget, title?: string, withTime = true) {
     const d = draftOf(target);
     const hasCoord = d.latitude != null && d.longitude != null;
     return (
       <div className="space-y-2">
-        <div className="grid grid-cols-[1fr_6rem] gap-2">
+        <div className={withTime ? "grid grid-cols-[1fr_6rem] gap-2" : ""}>
           <label className={LABEL}>{title ?? "정류장 이름"}
             <input value={d.stopName} onChange={(e) => patchDraft(target, { stopName: e.target.value })} placeholder="예: 다산자이 정문" className={INPUT} />
           </label>
-          <label className={LABEL}>도착시각
-            <input value={d.arriveTime} onChange={(e) => patchDraft(target, { arriveTime: e.target.value })} placeholder="16:40" inputMode="numeric" className={INPUT} />
-          </label>
+          {withTime && (
+            <label className={LABEL}>도착시각
+              <input value={d.arriveTime} onChange={(e) => patchDraft(target, { arriveTime: e.target.value })} placeholder="16:40" inputMode="numeric" className={INPUT} />
+            </label>
+          )}
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <button type="button" onClick={() => setPicker(target)} className="inline-flex min-h-9 items-center gap-1 rounded-lg border border-gray-200 px-3 text-[12.5px] font-black text-gray-700 dark:border-gray-600 dark:text-gray-200">
@@ -374,6 +451,39 @@ export default function RegularShuttleClient({ initialStops, initialMonth, month
             ? <span className="text-[11.5px] font-bold text-green-700 dark:text-green-300">좌표 있음</span>
             : <span className="text-[11.5px] font-bold text-amber-600 dark:text-amber-300">⚠ 좌표 없음 — 배차 지도에 안 나옵니다</span>}
         </div>
+      </div>
+    );
+  }
+
+  // 학생 추가: 정류장 후보 — 학생 상세 위치(등·하원) + 이 달 이미 타는 정류장. 누르면 이름·좌표를 채운다.
+  function stopCandidates(target: "board" | "alight") {
+    if (dialog?.kind !== "add") return null;
+    const student = dialog.context?.student ?? dialog.student;
+    const dir = target === "board" ? "BOARD" : "ALIGHT";
+    const places = target === "board"
+      ? ([["등원 위치", student?.pickup], ["하원 위치", student?.dropoff]] as const)
+      : ([["하원 위치", student?.dropoff], ["등원 위치", student?.pickup]] as const);
+    const out: { key: string; label: string; draft: Partial<StopDraft> }[] = [];
+    for (const [label, p] of places) {
+      if (p) out.push({ key: `place-${label}`, label: `학생 ${label} · ${p.name || p.address}`, draft: { stopName: p.name || p.address, latitude: p.latitude, longitude: p.longitude } });
+    }
+    const sid = dialog.student?.id;
+    if (sid) {
+      const seen = new Set<string>();
+      for (const s of stops) {
+        if (s.studentId !== sid || s.direction !== dir || seen.has(s.stopName)) continue;
+        seen.add(s.stopName);
+        out.push({ key: `row-${s.id}`, label: `지금 ${dir === "BOARD" ? "등원" : "하원"} 정류장 · ${s.stopName}`, draft: { stopName: s.stopName, latitude: s.latitude ?? null, longitude: s.longitude ?? null } });
+      }
+    }
+    if (out.length === 0) return null;
+    return (
+      <div className="mt-2 flex flex-wrap items-center gap-1">
+        <span className="text-[11px] font-bold text-gray-400">후보</span>
+        {out.map((c) => (
+          <button key={c.key} type="button" onClick={() => patchDraft(target, c.draft)}
+            className="rounded-lg border border-gray-200 px-2 py-1 text-[11.5px] font-bold text-gray-600 dark:border-gray-600 dark:text-gray-300">{c.label}</button>
+        ))}
       </div>
     );
   }
@@ -414,6 +524,17 @@ export default function RegularShuttleClient({ initialStops, initialMonth, month
 
     if (dialog.kind === "add") {
       const set = (patch: Partial<Extract<Dialog, { kind: "add" }>>) => setDialog((d) => (d?.kind === "add" ? { ...d, ...patch } : d));
+      const studentId = dialog.student?.id ?? null;
+      // 이 학생이 이 달 명단에서 이미 타는 행(학생 계정과 연결된 행만).
+      const riding = studentId ? stops.filter((s) => s.studentId === studentId && (s.direction === "BOARD" || s.direction === "ALIGHT")) : [];
+      // 등록 수업 → 수업 칩(명단에 같은 시각 글자가 있으면 그 글자). 늦게 온 다른 학생 응답은 쓰지 않는다.
+      const enrolledOptions = studentId && dialog.context?.student?.id === studentId ? enrolledClassSlots(dialog.context.enrolled, classTimes) : [];
+      const sameSlot = (a: RosterClassSlot, b: RosterClassSlot) => a.weekday === b.weekday && classTimeKey(a.classTime) === classTimeKey(b.classTime);
+      const hasSlot = (o: RosterClassSlot) => dialog.slots.some((s) => sameSlot(s, o));
+      // 직접 추가한 수업도 칩으로 보여 줘서 눌러 뺄 수 있게 한다.
+      const extraSlots = dialog.slots.filter((s) => !enrolledOptions.some((o) => sameSlot(o, s)))
+        .map((s) => ({ ...s, label: `${WEEKDAY_LABELS[s.weekday]} ${s.classTime} · 직접 추가` }));
+      const toggleSlot = (o: RosterClassSlot) => set({ slots: hasSlot(o) ? dialog.slots.filter((s) => !sameSlot(s, o)) : [...dialog.slots, { weekday: o.weekday, classTime: o.classTime }] });
       return (
         <div className="p-4">
           <h4 id="roster-dialog-title" className="text-base font-black text-gray-900 dark:text-white">학생 추가 · {serviceMonth}</h4>
@@ -422,7 +543,7 @@ export default function RegularShuttleClient({ initialStops, initialMonth, month
             {dialog.student ? (
               <div className="flex items-center justify-between rounded-xl bg-gray-50 px-3 py-2 dark:bg-gray-900">
                 <p className="text-sm font-black text-gray-900 dark:text-white">{dialog.student.name}<span className="ml-2 text-xs font-bold text-gray-500">{dialog.student.grade ?? ""}</span></p>
-                <button type="button" onClick={() => set({ student: null })} className="text-xs font-black text-gray-500">다시 선택</button>
+                <button type="button" onClick={() => set({ student: null, slots: [], overrides: {} })} className="text-xs font-black text-gray-500">다시 선택</button>
               </div>
             ) : (
               <div>
@@ -450,29 +571,55 @@ export default function RegularShuttleClient({ initialStops, initialMonth, month
               </div>
             )}
 
-            {/* 요일 · 수업시간 */}
+            {/* 이 학생이 이 달 이미 타는 셔틀 — 같은 수업을 또 넣지 않도록, 정류장 후보로도 쓴다. */}
+            {riding.length > 0 && (
+              <div className="rounded-xl bg-gray-50 px-3 py-2 text-[12px] text-gray-600 dark:bg-gray-900 dark:text-gray-300">
+                <p className="font-black">이 달 이미 타는 셔틀</p>
+                <ul className="mt-0.5 space-y-0.5">
+                  {riding.map((s, i) => <li key={s.id ?? i}>{WEEKDAY_LABELS[s.weekday]} {s.classTime} {s.direction === "BOARD" ? "등원" : "하원"} · 「{s.stopName}」 {s.arriveTime ?? ""}</li>)}
+                </ul>
+              </div>
+            )}
+
+            {/* 수업(요일·수업시간) — 등록 수업을 불러와 미리 고른다. 등록 수업에 없는 수업은 아래에서 직접 추가. */}
             <div>
-              <p className="text-[11px] font-bold text-gray-500 dark:text-gray-400">요일(여러 개 선택 가능)</p>
+              <p className="text-[11px] font-bold text-gray-500 dark:text-gray-400">수업(요일·수업시간)</p>
+              {dialog.contextLoading && <p className="mt-1 text-[12px] text-gray-400">등록 수업을 불러오는 중…</p>}
+              {dialog.student && !dialog.contextLoading && dialog.contextError && (
+                <p className="mt-1 text-[12px] font-bold text-red-600">학생 정보를 불러오지 못했습니다(아래에서 수업을 직접 추가할 수 있습니다).</p>
+              )}
+              {dialog.student && !dialog.contextLoading && !dialog.contextError && enrolledOptions.length === 0 && (
+                <p className="mt-1 text-[12px] font-bold text-amber-600">수강 중인 등록 수업이 없습니다. 아래에서 직접 추가해 주세요.</p>
+              )}
               <div className="mt-1 flex flex-wrap gap-1">
-                {WD_ORDER.map((w) => {
-                  const on = dialog.weekdays.includes(w);
+                {[...enrolledOptions, ...extraSlots].map((o) => {
+                  const on = hasSlot(o);
                   return (
-                    <button key={w} type="button" aria-pressed={on} onClick={() => set({ weekdays: on ? dialog.weekdays.filter((x) => x !== w) : [...dialog.weekdays, w] })}
-                      className={`min-h-9 min-w-10 rounded-lg px-2 text-sm font-black ${on ? "bg-brand-navy-900 text-white dark:bg-brand-neon-lime dark:text-brand-navy-900" : "bg-gray-100 text-gray-500 dark:bg-gray-900"}`}>{WEEKDAY_LABELS[w]}</button>
+                    <button key={`${o.weekday}|${o.classTime}`} type="button" aria-pressed={on} onClick={() => toggleSlot(o)}
+                      className={`min-h-9 rounded-lg px-2.5 text-left text-[12.5px] font-black ${on ? "bg-brand-navy-900 text-white dark:bg-brand-neon-lime dark:text-brand-navy-900" : "bg-gray-100 text-gray-500 dark:bg-gray-900"}`}>
+                      {on ? "✓ " : ""}{o.label}
+                    </button>
                   );
                 })}
               </div>
+              <div className="mt-2 grid grid-cols-[5.5rem_1fr_auto] gap-2">
+                <select value={dialog.manualWeekday} onChange={(e) => set({ manualWeekday: Number(e.target.value) })} aria-label="직접 추가할 요일" className={INPUT}>
+                  {WD_ORDER.map((w) => <option key={w} value={w}>{WEEKDAY_LABELS[w]}요일</option>)}
+                </select>
+                <input value={dialog.manualClassTime} onChange={(e) => set({ manualClassTime: e.target.value })} list="roster-class-times" placeholder="17:00~18:00" aria-label="직접 추가할 수업시간" className={INPUT} />
+                <button type="button" disabled={!dialog.manualClassTime.trim()} onClick={() => {
+                  const slot = { weekday: dialog.manualWeekday, classTime: dialog.manualClassTime.trim() };
+                  if (!hasSlot(slot)) set({ slots: [...dialog.slots, slot] });
+                }} className="rounded-lg border border-gray-200 px-3 text-[12.5px] font-black text-gray-700 disabled:opacity-40 dark:border-gray-600 dark:text-gray-200">직접 추가</button>
+              </div>
             </div>
-            <label className={LABEL}>수업시간
-              <input value={dialog.classTime} onChange={(e) => set({ classTime: e.target.value })} list="roster-class-times" placeholder="17:00~18:00" className={INPUT} />
-            </label>
 
             {/* 등원 */}
             <fieldset className="rounded-xl border border-gray-200 p-3 dark:border-gray-700">
               <label className="flex items-center gap-2 text-sm font-black text-blue-700 dark:text-blue-300">
                 <input type="checkbox" checked={dialog.useBoard} onChange={(e) => set({ useBoard: e.target.checked })} /> 등원 셔틀 이용
               </label>
-              {dialog.useBoard && <div className="mt-2">{stopFields("board", "등원 정류장")}</div>}
+              {dialog.useBoard && <div className="mt-2">{stopFields("board", "등원 정류장", false)}{stopCandidates("board")}</div>}
             </fieldset>
 
             {/* 하원 */}
@@ -488,13 +635,32 @@ export default function RegularShuttleClient({ initialStops, initialMonth, month
                     </label>
                   )}
                   {dialog.useBoard && dialog.alightSame ? (
-                    <label className={`${LABEL} w-28`}>하원 도착시각
-                      <input value={dialog.alight.arriveTime} onChange={(e) => patchDraft("alight", { arriveTime: e.target.value })} placeholder="18:10" inputMode="numeric" className={INPUT} />
-                    </label>
-                  ) : stopFields("alight", "하원 정류장")}
+                    <p className="text-[12px] text-gray-500 dark:text-gray-400">등원 정류장 「{dialog.board.stopName || "미입력"}」에서 내립니다. 하원 시각은 아래 운행표에서 정합니다.</p>
+                  ) : <>{stopFields("alight", "하원 정류장", false)}{stopCandidates("alight")}</>}
                 </div>
               )}
             </fieldset>
+
+            {/* 현재 운행표 대조 · 넣을 자리(추천 기본) */}
+            {dialog.slots.length === 0
+              ? <p className="rounded-xl border border-dashed border-gray-300 p-3 text-center text-[12px] text-gray-400 dark:border-gray-600">수업을 고르면 그 수업의 현재 운행표와 넣을 자리 추천이 나옵니다.</p>
+              : (
+                <AddRiderRoutePanel
+                  stops={stops}
+                  slots={dialog.slots}
+                  directions={addDirections(dialog)}
+                  academy={dialog.context?.academy ?? null}
+                  depot={dialog.context?.depot ?? null}
+                  studentId={dialog.student?.id ?? null}
+                  overrides={dialog.overrides}
+                  onOverride={(key, next) => setDialog((d) => {
+                    if (d?.kind !== "add") return d;
+                    const overrides = { ...d.overrides };
+                    if (next) overrides[key] = next; else delete overrides[key];
+                    return { ...d, overrides };
+                  })}
+                />
+              )}
           </div>
           {scopeFields(dialog.scope)}
           {errBox}

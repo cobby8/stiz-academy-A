@@ -89,9 +89,11 @@ export async function getRegularShuttleStops(serviceMonth?: string): Promise<{ s
     const months = await getRegularShuttleMonths();
     const month = serviceMonth ? normalizeServiceMonth(serviceMonth) : (months[0] ?? null);
     if (!month) return { stops: [], importedAt: null, serviceMonth: null, months };
+    // sortOrder 가 겹친 행은 id(바이트 순)로 순서를 고정한다 — 관리자 화면·기사님 화면·학생 추가 삽입 계산
+    // (regularRosterEditLogic rowOrder)이 같은 순서를 보게 하려는 것. 예전엔 겹친 행 순서가 DB 마음대로였다.
     const rows = await prisma.$queryRawUnsafe<Record<string, unknown>[]>(
       `SELECT "id","serviceMonth","weekday","classTime","arriveTime","stopName","direction","studentName","studentId","studentPhone","parentPhone","note","sortOrder","latitude","longitude","importedAt"
-         FROM "RegularShuttleStop" WHERE "serviceMonth"=$1 ORDER BY "weekday" ASC, "sortOrder" ASC`,
+         FROM "RegularShuttleStop" WHERE "serviceMonth"=$1 ORDER BY "weekday" ASC, "sortOrder" ASC, "id" COLLATE "C" ASC`,
       month,
     );
     const WD = ["일", "월", "화", "수", "목", "금", "토"];

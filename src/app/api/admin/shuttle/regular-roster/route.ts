@@ -5,6 +5,7 @@ import {
   copyRosterMonth,
   editRosterStop,
   getRegularRouteStatus,
+  getRosterStudentContext,
   moveRosterRows,
   removeRosterRows,
   reorderRosterStops,
@@ -17,6 +18,7 @@ export const dynamic = "force-dynamic";
 // 셔틀 명단 편집 API(원장 전용). 각 lib 함수도 requireAdmin 을 다시 확인한다(이중 가드).
 //   GET    ?q=이름                       → 학생 검색(추가 폼)
 //   GET    ?routeStatus=1&month=&weekday= → 그 요일 기사님 화면이 정규 배차 저장 노선을 쓰는지(방향별, 조회 전용)
+//   GET    ?context=1&studentId=          → 학생 추가: 등록 수업·상세 위치·학원/차고지 좌표(조회 전용)
 //   POST   { action: "add" | "copyMonth" } → 학생 추가 / 다음 달 명단 만들기
 //   PATCH  { action: "move" | "editStop" | "reorder" } → 반이동 / 정류장 수정 / 기사님 화면 순서·시각
 //   DELETE { serviceMonth, ids }          → 빼기
@@ -42,6 +44,10 @@ export async function GET(request: Request) {
     if (params.get("routeStatus")) {
       const status = await getRegularRouteStatus(params.get("month"), params.get("weekday"));
       return NextResponse.json({ status }, { headers: { "Cache-Control": "no-store" } });
+    }
+    if (params.get("context")) {
+      const context = await getRosterStudentContext(params.get("studentId") ?? "");
+      return NextResponse.json({ context }, { headers: { "Cache-Control": "no-store" } });
     }
     const q = params.get("q") ?? "";
     const students = await searchRosterStudents(q);

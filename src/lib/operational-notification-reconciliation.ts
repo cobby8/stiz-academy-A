@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { prisma } from "@/lib/prisma";
+import { notMergedStudent } from "@/lib/studentVisibility";
 import { notifyAdminsOfAbsenceChange } from "@/lib/regular/parent-regular-absence";
 import { notifyAdminsOfShuttleException } from "@/lib/shuttle/parent-shuttle-exception";
 
@@ -37,7 +38,7 @@ export async function reconcileOperationalNotifications(limit = 20) {
     `SELECT x.id, x."studentId" AS "studentId", s.name AS "studentName", to_char(x."serviceDate",'YYYY-MM-DD') AS "serviceDate",
             x.direction, x.kind, x.location, x.note, (x."canceledAt" IS NOT NULL) AS canceled
        FROM "ShuttleDayException" x JOIN "Student" s ON s.id=x."studentId"
-      WHERE x."updatedAt" >= NOW()-INTERVAL '14 days'
+      WHERE x."updatedAt" >= NOW()-INTERVAL '14 days' AND ${notMergedStudent("s")}
         AND (x."canceledAt" IS NULL OR NOT EXISTS (
           SELECT 1 FROM "ShuttleDayException" active
            WHERE active."studentId"=x."studentId" AND active."serviceDate"=x."serviceDate"

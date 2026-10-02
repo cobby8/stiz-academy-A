@@ -61,31 +61,31 @@ const ALLOWED_WITHOUT_FILTER: Record<string, { count: number; reason: string }> 
     },
     "lib/pos/paymentNoticeService.ts": { count: 1, reason: "id 지정 POS 결제 알림 1건의 학생 이름(LEFT JOIN)" },
 
-    // 병합 엔진이 옮기지 않는 기록 테이블의 목록 — 숨기면 기록이 사라진다.
-    // tables.ts(2026-07-26 기준)에 MakeupCredit·RegularAbsence·ShuttleDayException·
-    // EnrollmentChangeRequest·PaymentParentRequest·KakaoParentIntake 등이 없어서, 병합하면 이 기록들은
-    // 흡수된 학생 id 에 그대로 남는다. 여기서 필터를 걸면 보강권·결석·예외 신청이 화면에서 사라진다.
-    // (2026-10-02 실측: 흡수 학생 8명에게 남은 행은 전부 0건 — 지금 걸어도 화면 변화는 없다)
-    "lib/makeup/parent-makeup.ts": {
-        count: 4,
-        reason: "학부모 보강권 목록 1건(숨기면 보강권 소실) + 보강권 id 지정 예약/옵션/취소 3건",
+    // 기록 테이블 (2026-10-02 정리)
+    // 병합 엔진(tables.ts)이 이제 보강권·결석·셔틀 예외·반 변경 신청까지 대표 학생에게 옮긴다.
+    // 흡수 쪽에 남는 행이 "진짜 중복"인 보강권·보강 일정·셔틀 예외 목록은 필터를 걸었다.
+    // 아래는 남는 행이 유일한 기록일 수 있는 목록 + id·키를 지정한 단건 처리라 거르지 않는다.
+    "lib/regular/admin-regular-absence.ts": {
+        count: 1,
+        reason: "원장 결석 목록 — 결석 UNIQUE(반·날짜)가 상태를 안 봐서, 대표 쪽이 취소면 살아 있는 결석이 흡수 쪽에 남는다",
     },
-    "lib/makeup/admin-credits.ts": { count: 1, reason: "원장 보강권 현황 — 남은 보강권을 숨기지 않는다" },
-    "lib/regular/parent-regular-makeup.ts": { count: 1, reason: "학부모 보강 일정 목록(기록)" },
-    "lib/regular/admin-regular-absence.ts": { count: 1, reason: "원장 결석 신고 목록(기록)" },
-    "lib/regular/parent-regular-absence.ts": { count: 2, reason: "결석 id/키 지정 취소 2건(부모 소유 확인 포함)" },
-    "lib/shuttle/parent-shuttle-exception.ts": {
-        count: 3,
-        reason: "학부모 예정 예외 목록(기록) + 예외 id 지정 취소 + 날짜별 기사 명단(숨기면 기사가 기다린다)",
-    },
-    "lib/shuttle/regularRun.ts": { count: 1, reason: "날짜별 결석자 명단(기사용) — 신고된 결석을 숨기지 않는다" },
-    "lib/shuttle/regularLocationLink.ts": { count: 2, reason: "학생 id 지정 잠금 1건 + 관리자 링크 발급 이력" },
-    "lib/enrollment/admin-change-request.ts": { count: 2, reason: "원장 반 변경 신청 목록 + 신청 id 지정 청구" },
-    "lib/enrollment/parent-change-request.ts": { count: 1, reason: "신청 id 지정 취소(부모 소유 확인 포함)" },
+    "lib/shuttle/regularRun.ts": { count: 1, reason: "날짜별 결석자 명단(기사용) — 위와 같은 이유로 숨기면 기사가 기다린다" },
     "lib/operational-notification-reconciliation.ts": {
-        count: 2,
-        reason: "결석·셔틀 예외 기록의 누락 알림 복구 — 기록 기준이라 학생 상태로 거르지 않는다",
+        count: 1,
+        reason: "결석 누락 알림 복구 — 위와 같은 이유(셔틀 예외 쪽은 필터 적용)",
     },
+    "lib/makeup/parent-makeup.ts": {
+        count: 3,
+        reason: "보강권 id 지정 예약 옵션·예약·취소 3건(부모 소유 확인 포함)",
+    },
+    "lib/regular/parent-regular-absence.ts": { count: 2, reason: "결석 id/키 지정 취소 2건(부모 소유 확인 포함)" },
+    "lib/shuttle/parent-shuttle-exception.ts": { count: 1, reason: "예외 id 지정 취소(부모 소유 확인 포함)" },
+    "lib/shuttle/regularLocationLink.ts": { count: 2, reason: "학생 id 지정 잠금 1건 + 관리자 링크 발급 이력" },
+    "lib/enrollment/admin-change-request.ts": {
+        count: 2,
+        reason: "원장 반 변경 신청 목록(흡수 쪽에 남는 건 대기 중·청구된 유일한 신청) + 신청 id 지정 청구",
+    },
+    "lib/enrollment/parent-change-request.ts": { count: 1, reason: "신청 id 지정 취소(부모 소유 확인 포함)" },
 
     // 단건 상세·이력 표시 — 링크로 들어온 사람에게 404를 주지 않는다.
     "lib/queries.ts": {

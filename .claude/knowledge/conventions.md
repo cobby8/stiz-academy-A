@@ -180,3 +180,9 @@
 - **발견자**: developer
 - **내용**: `markPaymentPaid` 는 트랜잭션 없이 여러 문장을 쓴다. 그래서 "읽고 확인 → 납부" 로 짜면 두 번 클릭·두 알림 동시 클릭에 뚫린다. 방법(`src/lib/pos/paymentNoticeActions.ts`): ①알림 행을 `UPDATE … SET status='CONFIRMED', "siteMarkedPaid"=true WHERE <상태 조건> AND EXISTS(<미납·같은 금액>) AND (SELECT count(*) …)=1 AND NOT EXISTS(<PAID 같은 금액>) RETURNING` **한 문장**으로 선점(행 잠금 덕에 두 번째 클릭은 0행) ②다른 알림과의 경합은 **부분 유일 인덱스**(`sitePaymentId WHERE siteMarkedPaid`)가 예외로 막음 ③선점 성공 뒤에만 `markPaymentPaid` ④실패 시 청구서가 실제로 PAID 인지 보고 아니면 선점을 되돌림. 슬랙은 3초 안에 답해야 하므로 라우트는 `after()` 로 먼저 200 을 준다. 서명 검증은 `req.text()` 원문 → `v0:ts:body` HMAC, secret 없으면 거부.
 - **참조횟수**: 0
+
+### [2026-10-02] 모달 안에서 지도(LocationPickerModal)를 띄울 때는 입력 모달을 내리고 상태는 상위에 둔다
+- **분류**: convention
+- **발견자**: developer
+- **내용**: `AdminModal` 과 `LocationPickerModal` 은 둘 다 document 에 Esc·Tab 처리를 건다. 겹쳐 띄우면 Esc 한 번에 둘 다 닫히고 Tab 이 서로 포커스를 뺏는다. 방법(`admin/shuttle/regular/RegularShuttleClient.tsx`): 폼 입력값을 상위 `dialog` 상태에 두고 `{dialog && !picker && <AdminModal/>}` / `{picker && <LocationPickerModal/>}` 로 번갈아 띄운다. 또 렌더 함수 안에서 `function StopFields(){}` 를 정의해 `<StopFields/>` 로 쓰면 렌더마다 새 컴포넌트라 **글자 칠 때마다 입력 포커스가 풀린다** — `stopFields()` 처럼 함수 호출로 쓴다.
+- **참조횟수**: 0

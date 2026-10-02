@@ -1,67 +1,49 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import type { RegularShuttleStop } from "@/lib/shuttle/regularSheet";
-import RegularRouteSection, { type ShuttleGeo } from "@/components/shuttle/RegularRouteSection";
 import AdminModal from "@/components/admin/AdminModal";
-import { maskPhone, regularShuttleChangeMessage, type RegularShuttleChange } from "@/lib/regular/regularShuttleDiff";
+import LocationPickerModal, { type MapLocationData } from "@/components/maps/LocationPickerModal";
+import {
+  groupRosterDay,
+  nextServiceMonth,
+  rosterRowIdsForStudent,
+  WEEKDAY_LABELS,
+  type RosterStudentEntry,
+} from "@/lib/shuttle/regularRosterEditLogic";
+import type { RosterStudentSearchResult } from "@/lib/shuttle/regularRosterEdit";
 
-// ── 카카오 지도 SDK(장소검색) 로더 ─────────────────────────────
-// REST 키는 401이라 브라우저 JS SDK로만 좌표를 찾을 수 있다(방학특강과 동일 방식).
-type KakaoPlace = { x: string; y: string; place_name: string; address_name: string };
-type KakaoSdk = {
-  maps: {
-    load: (cb: () => void) => void;
-    services: { Places: new () => { keywordSearch: (kw: string, cb: (data: KakaoPlace[], status: string) => void) => void } };
-  };
-};
-// 다른 파일에서 이미 window.kakao 타입을 선언하므로, 여기선 전역 선언 없이 캐스팅으로 접근한다.
-function winKakao(): KakaoSdk | undefined { return (window as unknown as { kakao?: KakaoSdk }).kakao; }
-let kakaoLoader: Promise<KakaoSdk> | null = null;
-function loadKakaoSdk(key: string): Promise<KakaoSdk> {
-  if (typeof window === "undefined") return Promise.reject(new Error("no window"));
-  const k = winKakao();
-  if (k?.maps?.services) return Promise.resolve(k);
-  if (kakaoLoader) return kakaoLoader;
-  kakaoLoader = new Promise<KakaoSdk>((resolve, reject) => {
-    const existing = document.querySelector<HTMLScriptElement>('script[data-stiz-kakao-map="true"]');
-    const onReady = () => {
-      const kk = winKakao();
-      if (!kk?.maps) { kakaoLoader = null; return reject(new Error("카카오 SDK 로드 실패")); }
-      kk.maps.load(() => resolve(kk));
-    };
-    if (existing) { existing.addEventListener("load", onReady); if (winKakao()?.maps) onReady(); return; }
-    const script = document.createElement("script");
-    script.dataset.stizKakaoMap = "true";
-    script.src = `https://dapi.kakao.com/v2/maps/sdk.js?appkey=${encodeURIComponent(key)}&autoload=false&libraries=services`;
-    script.onload = onReady;
-    script.onerror = () => { kakaoLoader = null; reject(new Error("카카오 SDK 로드 실패")); };
-    document.head.appendChild(script);
-  });
-  return kakaoLoader;
-}
-// 장소 이름 하나를 좌표로. 첫 검색결과를 쓴다. 못 찾으면 null.
-function geocodePlace(sdk: KakaoSdk, keyword: string): Promise<{ lat: number; lng: number } | null> {
-  return new Promise((resolve) => {
-    try {
-      new sdk.maps.services.Places().keywordSearch(keyword, (data, status) => {
-        if (status === "OK" && data.length > 0) resolve({ lat: Number(data[0].y), lng: Number(data[0].x) });
-        else resolve(null);
-      });
-    } catch { resolve(null); }
-  });
-}
+// 셔틀 명단 — 사이트가 정규 셔틀 명단의 원장이다. 월 → 요일 → 수업시간별 학생(등원·하원 정류장).
+// 학생 추가·빼기·반이동·정류장 수정은 /api/admin/shuttle/regular-roster 로 바로 저장한다.
+// 차량 배정은 정규 배차 화면에서 따로 한다(명단이 바뀌면 배차 화면이 자동으로 변동을 감지).
 
-// 정규 셔틀 — 구글 시트에서 가져온 요일별 하루 타임라인을 앱에서 본다.
-// 각 정차 = 승차/하차/학원경유/복귀. 시트 '가져오기'로 통째 갱신한다.
+type Entry = RosterStudentEntry<RegularShuttleStop>;
+type StopDraft = { stopName: string; arriveTime: string; latitude: number | null; longitude: number | null };
+type Dialog =
+  | {
+    kind: "add";
+    query: string;
+    results: RosterStudentSearchResult[] | null;
+    student: RosterStudentSearchResult | null;
+    manualName: string;
+    weekdays: number[];
+    classTime: string;
+    useBoard: boolean;
+    board: StopDraft;
+    useAlight: boolean;
+    alightSame: boolean; // 하원 정류장 = 등원 정류장(도착시각만 따로)
+    alight: StopDraft;
+  }
+  | { kind: "move"; entry: Entry; weekday: number; classTime: string }
+  | { kind: "stop"; entry: Entry; direction: "BOARD" | "ALIGHT"; draft: StopDraft; applyToAll: boolean }
+  | { kind: "remove"; entry: Entry; weekday: number };
+type PickerTarget = "board" | "alight" | "stop";
 
 const WD_ORDER = [1, 2, 3, 4, 5, 6, 0]; // 월→일
-const DIR_META: Record<string, { label: string; cls: string }> = {
-  BOARD: { label: "승차", cls: "bg-blue-100 text-blue-700" },
-  ALIGHT: { label: "하차", cls: "bg-orange-100 text-orange-700" },
-  PIVOT: { label: "학원 경유", cls: "bg-brand-navy-900 text-white" },
-  RETURN: { label: "복귀", cls: "bg-gray-200 text-gray-600" },
-};
+const EMPTY_DRAFT: StopDraft = { stopName: "", arriveTime: "", latitude: null, longitude: null };
+const INPUT = "w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-semibold dark:border-gray-600 dark:bg-gray-900 dark:text-white";
+const LABEL = "flex flex-col gap-1 text-[11px] font-bold text-gray-500 dark:text-gray-400";
 
 function tel(p: string | null): string | null { if (!p) return null; const d = p.replace(/[^0-9]/g, ""); return d.length >= 9 ? `tel:${d}` : null; }
 function fmtImported(iso: string | null): string {
@@ -72,15 +54,20 @@ function fmtImported(iso: string | null): string {
   return `${g("month")}/${g("day")} ${g("hour")}:${g("minute")}`;
 }
 
-function koreaMonth(): string {
-  const parts = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Seoul", year: "numeric", month: "2-digit" }).formatToParts(new Date());
-  const value = (type: string) => parts.find((part) => part.type === type)?.value ?? "";
-  return `${value("year")}-${value("month")}`;
-}
-
-/** 선택 월보다 가까운 과거 월만 비교 대상으로 허용한다. */
+/** 선택 월보다 가까운 과거 월(빈 달에서 「이전 달 명단 복사」 원본). */
 function closestPreviousMonth(months: string[], serviceMonth: string): string {
   return [...months].filter((month) => month < serviceMonth).sort((a, b) => b.localeCompare(a))[0] ?? "";
+}
+
+function draftFromRow(row: RegularShuttleStop | null): StopDraft {
+  if (!row) return { ...EMPTY_DRAFT };
+  return { stopName: row.stopName, arriveTime: row.arriveTime ?? "", latitude: row.latitude ?? null, longitude: row.longitude ?? null };
+}
+function toStopBody(d: StopDraft) {
+  return { stopName: d.stopName, arriveTime: d.arriveTime || null, latitude: d.latitude, longitude: d.longitude };
+}
+function entryIds(entry: Entry): string[] {
+  return [entry.board?.id, entry.alight?.id].filter((id): id is string => Boolean(id));
 }
 
 type RegularLocationLinkState = {
@@ -101,36 +88,25 @@ const LOCATION_LINK_STATUS: Record<RegularLocationLinkState["status"], string> =
   REVOKED: "취소",
 };
 
-export default function RegularShuttleClient({ initialStops, importedAt: initialImportedAt, defaultSheetUrl, geo, initialMonth, months, initialCompareMonth, initialComparison }: {
+export default function RegularShuttleClient({ initialStops, initialMonth, months, currentMonth }: {
   initialStops: RegularShuttleStop[];
-  importedAt: string | null;
-  defaultSheetUrl: string;
-  geo: ShuttleGeo;
-  initialMonth: string | null;
+  initialMonth: string;
   months: string[];
-  initialCompareMonth: string | null;
-  initialComparison: RegularShuttleChange[];
+  currentMonth: string;
 }) {
   const [stops, setStops] = useState<RegularShuttleStop[]>(initialStops);
-  const [importedAt, setImportedAt] = useState<string | null>(initialImportedAt);
-  const [sheetUrl, setSheetUrl] = useState(defaultSheetUrl);
-  const [serviceMonth, setServiceMonth] = useState(initialMonth ?? koreaMonth());
+  const [serviceMonth, setServiceMonth] = useState(initialMonth);
   const [availableMonths, setAvailableMonths] = useState(months);
-  const [compareMonth, setCompareMonth] = useState(initialCompareMonth ?? "");
-  const [comparison, setComparison] = useState<RegularShuttleChange[]>(initialComparison);
-  const [previewChange, setPreviewChange] = useState<RegularShuttleChange | null>(null);
-  const [previewCopied, setPreviewCopied] = useState(false);
-  const [noticeStatus, setNoticeStatus] = useState<"PREPARING" | "HELD" | "APPROVED" | "SENDING" | "SENT" | "ERROR">("HELD");
-  const [noticePayloadHash, setNoticePayloadHash] = useState("");
-  const [noticeError, setNoticeError] = useState<string | null>(null);
   const [locationLinkBusy, setLocationLinkBusy] = useState<string | null>(null);
   const [locationLink, setLocationLink] = useState<{ id: string; studentId: string; studentName: string; url: string; expiresAt: string } | null>(null);
   const [locationLinks, setLocationLinks] = useState<Record<string, RegularLocationLinkState>>({});
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
-  const [geoBusy, setGeoBusy] = useState(false);
-  const [geoProgress, setGeoProgress] = useState<{ done: number; total: number } | null>(null);
+  const [showDispatchHint, setShowDispatchHint] = useState(false);
+  const [dialog, setDialog] = useState<Dialog | null>(null);
+  const [dialogErr, setDialogErr] = useState<string | null>(null);
+  const [picker, setPicker] = useState<PickerTarget | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -149,93 +125,130 @@ export default function RegularShuttleClient({ initialStops, importedAt: initial
     return () => { cancelled = true; };
   }, []);
 
-  // 좌표가 아직 없는 '고유 정류장 이름' 목록 — 지오코딩 대상.
-  const missingNames = useMemo(() => {
-    const names = new Set<string>();
-    for (const s of stops) if (s.latitude == null || s.longitude == null) names.add(s.stopName);
-    return [...names];
-  }, [stops]);
-  const totalNames = useMemo(() => new Set(stops.map((s) => s.stopName)).size, [stops]);
+  // 월 선택지 = 저장된 달 + 이번 달 + 다음 달(새 달 명단을 만들 수 있게).
+  const monthOptions = useMemo(
+    () => [...new Set([...availableMonths, currentMonth, nextServiceMonth(currentMonth), serviceMonth])].sort((a, b) => b.localeCompare(a)),
+    [availableMonths, currentMonth, serviceMonth],
+  );
+  const previousMonth = closestPreviousMonth(availableMonths, serviceMonth);
 
-  const weekdays = useMemo(() => {
-    const present = new Set(stops.map((s) => s.weekday));
-    return WD_ORDER.filter((w) => present.has(w)).map((w) => ({ weekday: w, label: `${["일", "월", "화", "수", "목", "금", "토"][w]}요일` }));
-  }, [stops]);
-  const [active, setActive] = useState<number>(weekdays[0]?.weekday ?? 1);
-  const activeWd = weekdays.some((w) => w.weekday === active) ? active : (weekdays[0]?.weekday ?? 1);
-  const dayStops = useMemo(() => stops.filter((s) => s.weekday === activeWd).sort((a, b) => a.sortOrder - b.sortOrder), [stops, activeWd]);
+  // 요일 탭: 월~토는 항상, 일요일은 명단이 있을 때만. 탭마다 학생 수를 보여준다.
+  const weekdays = useMemo(() => WD_ORDER
+    .map((w) => ({ weekday: w, count: groupRosterDay(stops, w).reduce((n, g) => n + g.students.length, 0) }))
+    .filter((w) => w.weekday !== 0 || w.count > 0), [stops]);
+  const [active, setActive] = useState<number>(() => weekdays.find((w) => w.count > 0)?.weekday ?? 1);
+  const groups = useMemo(() => groupRosterDay(stops, active), [stops, active]);
+  // 이 달에 쓰인 수업시간(추가·반이동 입력 자동완성용).
+  const classTimes = useMemo(() => [...new Set(stops.map((s) => s.classTime).filter((c): c is string => Boolean(c)))].sort(), [stops]);
 
-  const [mode, setMode] = useState<"dispatch" | "list">("dispatch"); // 배차·지도 / 운행 목록
-  // 이 요일의 수업시간 목록(학생이 있는 BOARD/ALIGHT 기준). 배차 단위 = 요일 × 수업 × 방향.
-  const classTimes = useMemo(() => {
-    const set = new Set<string>();
-    for (const s of dayStops) if (s.classTime && s.studentName && (s.direction === "BOARD" || s.direction === "ALIGHT")) set.add(s.classTime);
-    return [...set].sort((a, b) => a.localeCompare(b));
-  }, [dayStops]);
-  const [activeClass, setActiveClass] = useState<string>("");
-  const curClass = classTimes.includes(activeClass) ? activeClass : (classTimes[0] ?? "");
-
-  async function importSheet() {
-    if (busy) return;
-    setBusy(true); setMsg(null); setErr(null);
+  async function loadMonth(month: string) {
+    setBusy(true); setErr(null);
     try {
-      const r = await fetch("/api/admin/shuttle/regular-import", {
-        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sheetUrl, serviceMonth }),
-      });
-      const j = await r.json();
-      if (!r.ok) throw new Error(j?.error || "가져오지 못했습니다.");
-      const notes = [`가져왔습니다 · ${j.imported}개 정차${j.title ? ` (${j.title})` : ""}`];
-      if (j.excluded?.length) notes.push(`휴원·퇴원 제외 ${j.excluded.length}명: ${j.excluded.join(", ")}`);
-      if (j.held?.length) notes.push(`확인보류 ${j.held.length}명: ${j.held.join(", ")}`);
-      setMsg(notes.join(" · "));
-      // 새로고침 없이 다시 읽어 반영
-      const g = await fetch(`/api/admin/shuttle/regular?month=${encodeURIComponent(serviceMonth)}${compareMonth ? `&compareTo=${encodeURIComponent(compareMonth)}` : ""}`, { cache: "no-store" }).then((x) => x.json()).catch(() => null);
-      if (g?.stops) { setStops(g.stops); setImportedAt(g.importedAt ?? null); setAvailableMonths(g.months ?? []); setComparison(g.comparison ?? []); }
-    } catch (e: any) { setErr(e?.message || "가져오지 못했습니다."); }
+      const r = await fetch(`/api/admin/shuttle/regular?month=${encodeURIComponent(month)}`, { cache: "no-store" });
+      const j = await r.json().catch(() => null);
+      if (!r.ok) throw new Error(j?.error || "명단을 불러오지 못했습니다.");
+      setServiceMonth(month); setStops(j.stops ?? []); setAvailableMonths(j.months ?? []);
+    } catch (e: unknown) { setErr(e instanceof Error ? e.message : "명단을 불러오지 못했습니다."); }
     finally { setBusy(false); }
   }
 
-  async function loadMonth(month: string, against?: string) {
+  // 명단 편집 API 호출 공통 — 실패하면 서버의 한국어 메시지를 그대로 던진다.
+  async function rosterCall(method: "POST" | "PATCH" | "DELETE", body: Record<string, unknown>) {
+    const r = await fetch("/api/admin/shuttle/regular-roster", { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+    const j = await r.json().catch(() => null);
+    if (!r.ok) throw new Error(j?.error || "처리하지 못했습니다.");
+    return j;
+  }
+
+  // 모달 안 저장: 성공하면 모달을 닫고 명단을 다시 읽는다. 실패하면 모달 안에 오류를 보여준다.
+  async function submitDialog(method: "POST" | "PATCH" | "DELETE", body: Record<string, unknown>, done: string) {
+    if (busy) return;
+    setBusy(true); setDialogErr(null);
+    try {
+      await rosterCall(method, { ...body, serviceMonth });
+      setDialog(null); setMsg(done); setErr(null); setShowDispatchHint(true);
+    } catch (e: unknown) { setDialogErr(e instanceof Error ? e.message : "처리하지 못했습니다."); setBusy(false); return; }
+    setBusy(false);
+    await loadMonth(serviceMonth);
+  }
+
+  async function copyMonth(sourceMonth: string, targetMonth: string) {
+    if (busy || !window.confirm(`${sourceMonth} 명단을 ${targetMonth} 명단으로 복사할까요?\n복사한 뒤 ${targetMonth}에서 바뀐 학생만 고치면 됩니다.`)) return;
     setBusy(true); setErr(null); setMsg(null);
     try {
-      const nextCompareMonth = against && against < month
-        ? against
-        : closestPreviousMonth(availableMonths, month);
-      const query = `/api/admin/shuttle/regular?month=${encodeURIComponent(month)}${nextCompareMonth ? `&compareTo=${encodeURIComponent(nextCompareMonth)}` : ""}`;
-      const r = await fetch(query, { cache: "no-store" });
-      const j = await r.json();
-      if (!r.ok) throw new Error(j?.error || "차량표를 불러오지 못했습니다.");
-      setServiceMonth(month); setStops(j.stops ?? []); setImportedAt(j.importedAt ?? null);
-      setAvailableMonths(j.months ?? []); setCompareMonth(nextCompareMonth); setComparison(j.comparison ?? []);
-    } catch (e: unknown) { setErr(e instanceof Error ? e.message : "차량표를 불러오지 못했습니다."); }
-    finally { setBusy(false); }
+      const j = await rosterCall("POST", { action: "copyMonth", sourceMonth, targetMonth });
+      setMsg(`${targetMonth} 명단을 만들었습니다 · ${j.copied}개 정류장`); setShowDispatchHint(true);
+    } catch (e: unknown) { setErr(e instanceof Error ? e.message : "명단을 만들지 못했습니다."); setBusy(false); return; }
+    setBusy(false);
+    await loadMonth(targetMonth);
   }
 
-  async function noticeAction(action: "PREPARE" | "APPROVE" | "SEND", change: RegularShuttleChange) {
-    if (!compareMonth) return;
-    setNoticeError(null);
-    setNoticeStatus(action === "PREPARE" ? "PREPARING" : action === "SEND" ? "SENDING" : noticeStatus);
+  function openAdd() {
+    setDialogErr(null);
+    setDialog({
+      kind: "add", query: "", results: null, student: null, manualName: "", weekdays: [active], classTime: groups[0]?.classTime ?? "",
+      useBoard: true, board: { ...EMPTY_DRAFT }, useAlight: true, alightSame: true, alight: { ...EMPTY_DRAFT },
+    });
+  }
+
+  async function searchStudents() {
+    if (dialog?.kind !== "add" || !dialog.query.trim()) return;
+    setDialogErr(null);
     try {
-      const response = await fetch("/api/admin/shuttle/regular-notice", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action, serviceMonth, compareMonth, change, payloadHash: action === "PREPARE" ? undefined : noticePayloadHash }),
-      });
-      const result = await response.json().catch(() => null);
-      if (!response.ok) throw new Error(result?.error || "문자 처리에 실패했습니다.");
-      setNoticePayloadHash(result.payloadHash ?? "");
-      setNoticeStatus(result.status);
-    } catch (error) {
-      setNoticeStatus("ERROR");
-      setNoticeError(error instanceof Error ? error.message : "문자 처리에 실패했습니다.");
-    }
+      const r = await fetch(`/api/admin/shuttle/regular-roster?q=${encodeURIComponent(dialog.query.trim())}`, { cache: "no-store" });
+      const j = await r.json().catch(() => null);
+      if (!r.ok) throw new Error(j?.error || "학생을 찾지 못했습니다.");
+      setDialog((d) => (d?.kind === "add" ? { ...d, results: j.students ?? [] } : d));
+    } catch (e: unknown) { setDialogErr(e instanceof Error ? e.message : "학생을 찾지 못했습니다."); }
   }
 
-  function openNoticePreview(change: RegularShuttleChange) {
-    setPreviewChange(change);
-    setPreviewCopied(false);
-    setNoticePayloadHash("");
-    void noticeAction("PREPARE", change);
+  // 학생 선택 — 학생 상세에 저장된 등·하원 위치가 있으면 정류장 칸을 미리 채운다.
+  function pickStudent(student: RosterStudentSearchResult) {
+    setDialog((d) => {
+      if (d?.kind !== "add") return d;
+      const fromPlace = (p: RosterStudentSearchResult["pickup"], cur: StopDraft): StopDraft =>
+        p ? { ...cur, stopName: p.name || p.address, latitude: p.latitude, longitude: p.longitude } : cur;
+      const board = fromPlace(student.pickup, d.board);
+      const alight = fromPlace(student.dropoff, d.alight);
+      return { ...d, student, results: null, board, alight, alightSame: student.dropoff ? false : d.alightSame };
+    });
+  }
+
+  function saveAdd() {
+    if (dialog?.kind !== "add") return;
+    const alight = dialog.alightSame ? { ...dialog.board, arriveTime: dialog.alight.arriveTime } : dialog.alight;
+    void submitDialog("POST", {
+      action: "add",
+      studentId: dialog.student?.id ?? null,
+      studentName: dialog.student ? dialog.student.name : dialog.manualName,
+      weekdays: dialog.weekdays,
+      classTime: dialog.classTime,
+      board: dialog.useBoard ? toStopBody(dialog.board) : null,
+      alight: dialog.useAlight ? toStopBody(alight) : null,
+    }, `${dialog.student?.name ?? dialog.manualName} 학생을 명단에 추가했습니다.`);
+  }
+
+  // 정류장 입력값 갱신(추가 폼의 등원·하원, 정류장 수정 폼 공용).
+  function patchDraft(target: PickerTarget, patch: Partial<StopDraft>) {
+    setDialog((d) => {
+      if (!d) return d;
+      if (target === "stop" && d.kind === "stop") return { ...d, draft: { ...d.draft, ...patch } };
+      if (target === "board" && d.kind === "add") return { ...d, board: { ...d.board, ...patch } };
+      if (target === "alight" && d.kind === "add") return { ...d, alight: { ...d.alight, ...patch } };
+      return d;
+    });
+  }
+  function draftOf(target: PickerTarget): StopDraft {
+    if (dialog?.kind === "stop") return dialog.draft;
+    if (dialog?.kind === "add") return target === "alight" ? dialog.alight : dialog.board;
+    return EMPTY_DRAFT;
+  }
+  // 지도에서 고른 위치 → 좌표 저장. 정류장 이름이 비어 있으면 장소명(없으면 주소)으로 채운다.
+  function onPicked(value: MapLocationData) {
+    if (!picker) return;
+    const cur = draftOf(picker);
+    patchDraft(picker, { latitude: value.latitude, longitude: value.longitude, stopName: cur.stopName || value.placeName || value.address });
+    setPicker(null);
   }
 
   async function createParentLocationLink(studentId: string, studentName: string, reissue = false) {
@@ -288,179 +301,254 @@ export default function RegularShuttleClient({ initialStops, importedAt: initial
       const url = `${window.location.origin}${j.path}`;
       try { await navigator.clipboard.writeText(url); setMsg("기사님 운행 링크를 복사했습니다(매일 열면 오늘 요일 운행)"); }
       catch { setMsg(`기사님 링크: ${url}`); }
-    } catch (e: any) { setErr(e?.message || "링크를 만들지 못했습니다."); }
+    } catch (e: unknown) { setErr(e instanceof Error ? e.message : "링크를 만들지 못했습니다."); }
   }
 
-  // 문자 발송과 분리된 미리보기 전용 복사 기능이다. 이 화면에서는 외부 발송을 실행하지 않는다.
-  async function copyChangeMessage() {
-    if (!previewChange) return;
-    const message = regularShuttleChangeMessage(previewChange, serviceMonth);
-    if (!message) return;
-    try {
-      await navigator.clipboard.writeText(message);
-      setPreviewCopied(true);
-    } catch {
-      setErr("문구를 복사하지 못했습니다. 문구를 길게 눌러 직접 복사해 주세요.");
+  // ── 작은 표시 조각 ──
+  // ⚠️ 컴포넌트(<StopLine />)로 쓰지 않고 함수로 호출한다 — 렌더마다 새 컴포넌트가 되어 입력 포커스가 풀리기 때문.
+  function stopLine(label: string, row: RegularShuttleStop | null) {
+    if (!row) return <p className="text-[12.5px] text-gray-400"><b className="mr-1.5">{label}</b>이용 안 함</p>;
+    const hasCoord = row.latitude != null && row.longitude != null;
+    return (
+      <p className="flex flex-wrap items-center gap-x-1.5 text-[12.5px] text-gray-700 dark:text-gray-200">
+        <b className={label === "등원" ? "text-blue-700 dark:text-blue-300" : "text-orange-600 dark:text-orange-300"}>{label}</b>
+        <span className="font-bold">{row.stopName}</span>
+        {row.arriveTime && <span className="text-gray-500 dark:text-gray-400">{row.arriveTime}</span>}
+        {!hasCoord && <span className="rounded bg-amber-50 px-1.5 py-0.5 text-[10.5px] font-black text-amber-700 dark:bg-amber-950/30 dark:text-amber-300">⚠ 좌표 없음</span>}
+      </p>
+    );
+  }
+
+  function stopFields(target: PickerTarget, title?: string) {
+    const d = draftOf(target);
+    const hasCoord = d.latitude != null && d.longitude != null;
+    return (
+      <div className="space-y-2">
+        <div className="grid grid-cols-[1fr_6rem] gap-2">
+          <label className={LABEL}>{title ?? "정류장 이름"}
+            <input value={d.stopName} onChange={(e) => patchDraft(target, { stopName: e.target.value })} placeholder="예: 다산자이 정문" className={INPUT} />
+          </label>
+          <label className={LABEL}>도착시각
+            <input value={d.arriveTime} onChange={(e) => patchDraft(target, { arriveTime: e.target.value })} placeholder="16:40" inputMode="numeric" className={INPUT} />
+          </label>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <button type="button" onClick={() => setPicker(target)} className="inline-flex min-h-9 items-center gap-1 rounded-lg border border-gray-200 px-3 text-[12.5px] font-black text-gray-700 dark:border-gray-600 dark:text-gray-200">
+            <span className="material-symbols-outlined text-base">location_on</span>{hasCoord ? "지도에서 다시 지정" : "지도에서 위치 지정"}
+          </button>
+          {hasCoord
+            ? <span className="text-[11.5px] font-bold text-green-700 dark:text-green-300">좌표 있음</span>
+            : <span className="text-[11.5px] font-bold text-amber-600 dark:text-amber-300">⚠ 좌표 없음 — 배차 지도에 안 나옵니다</span>}
+        </div>
+      </div>
+    );
+  }
+
+  function renderDialog() {
+    if (!dialog) return null;
+    const footer = (onSave: () => void, saveLabel: string, danger = false) => (
+      <div className="mt-4 flex justify-end gap-2">
+        <button type="button" onClick={() => setDialog(null)} className="rounded-xl border border-gray-200 px-4 py-2 text-sm font-bold text-gray-600 dark:border-gray-700 dark:text-gray-200">취소</button>
+        <button type="button" disabled={busy} onClick={onSave}
+          className={`rounded-xl px-4 py-2 text-sm font-black text-white disabled:opacity-50 ${danger ? "bg-red-600" : "bg-brand-navy-900 dark:bg-brand-neon-lime dark:text-brand-navy-900"}`}>{busy ? "저장 중…" : saveLabel}</button>
+      </div>
+    );
+    const errBox = dialogErr && <p role="alert" className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-xs font-bold text-red-700 dark:bg-red-950/30 dark:text-red-200">⚠ {dialogErr}</p>;
+
+    if (dialog.kind === "add") {
+      const set = (patch: Partial<Extract<Dialog, { kind: "add" }>>) => setDialog((d) => (d?.kind === "add" ? { ...d, ...patch } : d));
+      return (
+        <div className="p-4">
+          <h4 id="roster-dialog-title" className="text-base font-black text-gray-900 dark:text-white">학생 추가 · {serviceMonth}</h4>
+          <div className="mt-3 space-y-4">
+            {/* 학생 선택 */}
+            {dialog.student ? (
+              <div className="flex items-center justify-between rounded-xl bg-gray-50 px-3 py-2 dark:bg-gray-900">
+                <p className="text-sm font-black text-gray-900 dark:text-white">{dialog.student.name}<span className="ml-2 text-xs font-bold text-gray-500">{dialog.student.grade ?? ""}</span></p>
+                <button type="button" onClick={() => set({ student: null })} className="text-xs font-black text-gray-500">다시 선택</button>
+              </div>
+            ) : (
+              <div>
+                <div className="flex gap-2">
+                  <input value={dialog.query} data-admin-modal-initial-focus onChange={(e) => set({ query: e.target.value })} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); void searchStudents(); } }}
+                    placeholder="학생 이름 검색" className={INPUT} />
+                  <button type="button" onClick={() => void searchStudents()} className="shrink-0 rounded-lg bg-brand-navy-900 px-3 text-sm font-black text-white dark:bg-brand-neon-lime dark:text-brand-navy-900">검색</button>
+                </div>
+                {dialog.results && (
+                  <ul className="mt-2 max-h-48 space-y-1 overflow-y-auto">
+                    {dialog.results.length === 0 && <li className="px-1 text-xs text-gray-400">검색 결과가 없습니다. 아래에 이름만 입력해 추가할 수도 있습니다.</li>}
+                    {dialog.results.map((s) => (
+                      <li key={s.id}>
+                        <button type="button" onClick={() => pickStudent(s)} className="flex w-full items-center justify-between rounded-lg border border-gray-200 px-3 py-2 text-left text-sm hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-gray-900">
+                          <span className="font-bold text-gray-900 dark:text-white">{s.name} <span className="text-xs text-gray-500">{s.grade ?? ""}</span></span>
+                          <span className="text-[11px] text-gray-500">{s.parentPhone ? `학부모 …${s.parentPhone.replace(/\D/g, "").slice(-4)}` : ""}{s.pickup || s.dropoff ? " · 위치 저장됨" : ""}</span>
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                <label className={`${LABEL} mt-2`}>학생 계정이 없으면 이름만 입력
+                  <input value={dialog.manualName} onChange={(e) => set({ manualName: e.target.value })} placeholder="예: 홍길동" className={INPUT} />
+                </label>
+              </div>
+            )}
+
+            {/* 요일 · 수업시간 */}
+            <div>
+              <p className="text-[11px] font-bold text-gray-500 dark:text-gray-400">요일(여러 개 선택 가능)</p>
+              <div className="mt-1 flex flex-wrap gap-1">
+                {WD_ORDER.map((w) => {
+                  const on = dialog.weekdays.includes(w);
+                  return (
+                    <button key={w} type="button" aria-pressed={on} onClick={() => set({ weekdays: on ? dialog.weekdays.filter((x) => x !== w) : [...dialog.weekdays, w] })}
+                      className={`min-h-9 min-w-10 rounded-lg px-2 text-sm font-black ${on ? "bg-brand-navy-900 text-white dark:bg-brand-neon-lime dark:text-brand-navy-900" : "bg-gray-100 text-gray-500 dark:bg-gray-900"}`}>{WEEKDAY_LABELS[w]}</button>
+                  );
+                })}
+              </div>
+            </div>
+            <label className={LABEL}>수업시간
+              <input value={dialog.classTime} onChange={(e) => set({ classTime: e.target.value })} list="roster-class-times" placeholder="17:00~18:00" className={INPUT} />
+            </label>
+
+            {/* 등원 */}
+            <fieldset className="rounded-xl border border-gray-200 p-3 dark:border-gray-700">
+              <label className="flex items-center gap-2 text-sm font-black text-blue-700 dark:text-blue-300">
+                <input type="checkbox" checked={dialog.useBoard} onChange={(e) => set({ useBoard: e.target.checked })} /> 등원 셔틀 이용
+              </label>
+              {dialog.useBoard && <div className="mt-2">{stopFields("board", "등원 정류장")}</div>}
+            </fieldset>
+
+            {/* 하원 */}
+            <fieldset className="rounded-xl border border-gray-200 p-3 dark:border-gray-700">
+              <label className="flex items-center gap-2 text-sm font-black text-orange-600 dark:text-orange-300">
+                <input type="checkbox" checked={dialog.useAlight} onChange={(e) => set({ useAlight: e.target.checked })} /> 하원 셔틀 이용
+              </label>
+              {dialog.useAlight && (
+                <div className="mt-2 space-y-2">
+                  {dialog.useBoard && (
+                    <label className="flex items-center gap-2 text-[12.5px] font-bold text-gray-600 dark:text-gray-300">
+                      <input type="checkbox" checked={dialog.alightSame} onChange={(e) => set({ alightSame: e.target.checked })} /> 등원과 같은 정류장
+                    </label>
+                  )}
+                  {dialog.useBoard && dialog.alightSame ? (
+                    <label className={`${LABEL} w-28`}>하원 도착시각
+                      <input value={dialog.alight.arriveTime} onChange={(e) => patchDraft("alight", { arriveTime: e.target.value })} placeholder="18:10" inputMode="numeric" className={INPUT} />
+                    </label>
+                  ) : stopFields("alight", "하원 정류장")}
+                </div>
+              )}
+            </fieldset>
+          </div>
+          {errBox}
+          {footer(saveAdd, "추가")}
+        </div>
+      );
     }
+
+    if (dialog.kind === "move") {
+      return (
+        <div className="p-4">
+          <h4 id="roster-dialog-title" className="text-base font-black text-gray-900 dark:text-white">반이동 · {dialog.entry.studentName}</h4>
+          <p className="mt-1 text-xs text-gray-500">{WEEKDAY_LABELS[active]}요일 {dialog.entry.board?.classTime ?? dialog.entry.alight?.classTime ?? ""} 등·하원을 옮깁니다. 정류장은 그대로입니다.</p>
+          <div className="mt-3 grid grid-cols-[6rem_1fr] gap-2">
+            <label className={LABEL}>요일
+              <select value={dialog.weekday} onChange={(e) => setDialog({ ...dialog, weekday: Number(e.target.value) })} className={INPUT}>
+                {WD_ORDER.map((w) => <option key={w} value={w}>{WEEKDAY_LABELS[w]}요일</option>)}
+              </select>
+            </label>
+            <label className={LABEL}>수업시간
+              <input value={dialog.classTime} onChange={(e) => setDialog({ ...dialog, classTime: e.target.value })} list="roster-class-times" className={INPUT} />
+            </label>
+          </div>
+          {errBox}
+          {footer(() => void submitDialog("PATCH", { action: "move", ids: entryIds(dialog.entry), weekday: dialog.weekday, classTime: dialog.classTime }, `${dialog.entry.studentName} 학생을 ${WEEKDAY_LABELS[dialog.weekday]}요일 ${dialog.classTime}으로 옮겼습니다.`), "옮기기")}
+        </div>
+      );
+    }
+
+    if (dialog.kind === "stop") {
+      const row = dialog.direction === "BOARD" ? dialog.entry.board : dialog.entry.alight;
+      return (
+        <div className="p-4">
+          <h4 id="roster-dialog-title" className="text-base font-black text-gray-900 dark:text-white">정류장 수정 · {dialog.entry.studentName}</h4>
+          {dialog.entry.board && dialog.entry.alight && (
+            <div className="mt-3 flex gap-1 rounded-xl bg-gray-100 p-1 dark:bg-gray-900">
+              {(["BOARD", "ALIGHT"] as const).map((dir) => (
+                <button key={dir} type="button" onClick={() => setDialog({ ...dialog, direction: dir, draft: draftFromRow(dir === "BOARD" ? dialog.entry.board : dialog.entry.alight) })}
+                  className={`min-h-9 flex-1 rounded-lg text-sm font-black ${dialog.direction === dir ? "bg-white text-brand-navy-900 shadow dark:bg-gray-700 dark:text-white" : "text-gray-500"}`}>{dir === "BOARD" ? "등원" : "하원"}</button>
+              ))}
+            </div>
+          )}
+          <div className="mt-3">{stopFields("stop")}</div>
+          <label className="mt-3 flex items-start gap-2 text-[12.5px] font-bold text-gray-600 dark:text-gray-300">
+            <input type="checkbox" className="mt-0.5" checked={dialog.applyToAll} onChange={(e) => setDialog({ ...dialog, applyToAll: e.target.checked })} />
+            <span>이 달 「{row?.stopName}」 정류장 전체에 이름·좌표 함께 적용<span className="block text-[11px] font-semibold text-gray-400">도착시각은 이 학생 것만 바뀝니다.</span></span>
+          </label>
+          {errBox}
+          {footer(() => row?.id && void submitDialog("PATCH", { action: "editStop", id: row.id, stop: toStopBody(dialog.draft), applyToAll: dialog.applyToAll }, "정류장을 수정했습니다."), "저장")}
+        </div>
+      );
+    }
+
+    // 빼기 — 이 요일만 / 이 달 전체 요일
+    const allIds = rosterRowIdsForStudent(stops, dialog.entry.key);
+    const label = dialog.entry.studentName;
+    return (
+      <div className="p-4">
+        <h4 id="roster-dialog-title" className="text-base font-black text-gray-900 dark:text-white">{label} 학생을 명단에서 뺄까요?</h4>
+        <p className="mt-1 text-xs text-gray-500">퇴원·셔틀 중단일 때 씁니다. 빼면 이 달 배차 화면에서도 빠진 학생으로 표시됩니다.</p>
+        <div className="mt-4 flex flex-col gap-2">
+          <button type="button" disabled={busy} onClick={() => void submitDialog("DELETE", { ids: entryIds(dialog.entry) }, `${label} 학생을 ${WEEKDAY_LABELS[dialog.weekday]}요일 명단에서 뺐습니다.`)}
+            className="min-h-11 rounded-xl border border-red-200 px-4 text-sm font-black text-red-700 disabled:opacity-50 dark:border-red-800 dark:text-red-200">{WEEKDAY_LABELS[dialog.weekday]}요일만 빼기</button>
+          <button type="button" disabled={busy} onClick={() => void submitDialog("DELETE", { ids: allIds }, `${label} 학생을 ${serviceMonth} 명단에서 모두 뺐습니다.`)}
+            className="min-h-11 rounded-xl bg-red-600 px-4 text-sm font-black text-white disabled:opacity-50">이 달 전체 요일 빼기 ({allIds.length}개 정류장)</button>
+          <button type="button" onClick={() => setDialog(null)} className="min-h-11 rounded-xl border border-gray-200 px-4 text-sm font-bold text-gray-600 dark:border-gray-700 dark:text-gray-200">취소</button>
+        </div>
+        {errBox}
+      </div>
+    );
   }
 
-  // 저장 후 목록을 다시 읽어 로컬 상태를 최신화(순서·시각 반영).
-  async function refreshStops() {
-    const g = await fetch(`/api/admin/shuttle/regular?month=${encodeURIComponent(serviceMonth)}`, { cache: "no-store" }).then((x) => x.json()).catch(() => null);
-    if (g?.stops) { setStops(g.stops); setImportedAt(g.importedAt ?? null); }
-  }
-
-  // 좌표 자동 채우기 — 브라우저 카카오 SDK로 정류장 이름을 검색해 좌표를 찾아 DB에 저장한다.
-  async function runGeocode() {
-    if (geoBusy || missingNames.length === 0) return;
-    const key = process.env.NEXT_PUBLIC_KAKAO_MAP_JS_KEY?.trim();
-    if (!key) { setErr("카카오 지도 키(NEXT_PUBLIC_KAKAO_MAP_JS_KEY)가 없습니다."); return; }
-    setGeoBusy(true); setMsg(null); setErr(null);
-    setGeoProgress({ done: 0, total: missingNames.length });
-    try {
-      const sdk = await loadKakaoSdk(key);
-      const found: { stopName: string; latitude: number; longitude: number }[] = [];
-      const failed: string[] = [];
-      for (let i = 0; i < missingNames.length; i++) {
-        const name = missingNames[i];
-        const c = await geocodePlace(sdk, name);
-        if (c) found.push({ stopName: name, latitude: c.lat, longitude: c.lng });
-        else failed.push(name);
-        setGeoProgress({ done: i + 1, total: missingNames.length });
-      }
-      if (found.length > 0) {
-        const r = await fetch("/api/admin/shuttle/regular-geocode", {
-          method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ entries: found }),
-        });
-        const j = await r.json();
-        if (!r.ok) throw new Error(j?.error || "좌표를 저장하지 못했습니다.");
-        // 로컬 상태에도 좌표 반영(새로고침 없이 핀 상태 갱신)
-        const coordMap = new Map(found.map((f) => [f.stopName, f]));
-        setStops((prev) => prev.map((s) => {
-          const c = coordMap.get(s.stopName);
-          return c ? { ...s, latitude: c.latitude, longitude: c.longitude } : s;
-        }));
-      }
-      const parts = [`${found.length}곳 좌표 저장`];
-      if (failed.length > 0) parts.push(`${failed.length}곳 못 찾음: ${failed.slice(0, 5).join(", ")}${failed.length > 5 ? " 외" : ""}`);
-      setMsg(parts.join(" · "));
-    } catch (e: any) { setErr(e?.message || "좌표 채우기에 실패했습니다."); }
-    finally { setGeoBusy(false); setGeoProgress(null); }
-  }
+  const pickerDraft = picker ? draftOf(picker) : null;
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-4">
       <div className="rounded-2xl border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-800">
         <div className="flex flex-wrap items-start justify-between gap-2">
           <div>
-            <h3 className="text-base font-black text-gray-900 dark:text-white">정규 셔틀 운행리스트</h3>
-            <p className="mt-0.5 text-[12.5px] text-gray-500 dark:text-gray-400">수강생 운영 구글 시트의 월별 차량 탭을 가져와 요일·수업별로 관리합니다.{importedAt ? ` · 마지막 가져오기 ${fmtImported(importedAt)}` : " · 아직 가져오지 않음"}</p>
+            <h3 className="text-base font-black text-gray-900 dark:text-white">셔틀 명단</h3>
+            <p className="mt-0.5 text-[12.5px] text-gray-500 dark:text-gray-400">정규 셔틀 이용 학생을 요일·수업별로 관리합니다. 신규·퇴원·반이동은 여기서 바로 고칩니다.</p>
           </div>
-          <div className="flex flex-wrap items-end gap-2">
-            <label className="flex flex-col gap-1 text-[11px] font-bold text-gray-500">확인 월
-              <select value={serviceMonth} onChange={(e) => void loadMonth(e.target.value)} className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-bold dark:border-gray-600 dark:bg-gray-900">
-                {availableMonths.map((month) => <option key={month} value={month}>{month}</option>)}
-                {!availableMonths.includes(serviceMonth) && <option value={serviceMonth}>{serviceMonth}</option>}
-              </select>
-            </label>
-            <label className="flex flex-col gap-1 text-[11px] font-bold text-gray-500">비교 월
-              <select value={compareMonth} onChange={(e) => { setCompareMonth(e.target.value); void loadMonth(serviceMonth, e.target.value); }} className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-bold dark:border-gray-600 dark:bg-gray-900">
-                <option value="">비교 안 함</option>
-                {availableMonths.filter((month) => month < serviceMonth).map((month) => <option key={month} value={month}>{month}</option>)}
-              </select>
-            </label>
-          </div>
+          <label className="flex flex-col gap-1 text-[11px] font-bold text-gray-500">월
+            <select value={serviceMonth} disabled={busy} onChange={(e) => void loadMonth(e.target.value)} className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-bold dark:border-gray-600 dark:bg-gray-900">
+              {monthOptions.map((month) => <option key={month} value={month}>{month}{month === currentMonth ? " (이번 달)" : ""}</option>)}
+            </select>
+          </label>
         </div>
 
-        {compareMonth && (
-          <details className="mt-3 rounded-xl border border-blue-200 bg-blue-50/60 dark:border-blue-800 dark:bg-blue-950/20" open>
-            <summary className="cursor-pointer px-3 py-2 text-sm font-black text-blue-900 dark:text-blue-100">{compareMonth} → {serviceMonth} 차량 변동 {comparison.length}명</summary>
-            <div className="space-y-2 border-t border-blue-200 p-3 dark:border-blue-800">
-              {comparison.length === 0 && <p className="text-xs font-bold text-gray-500">학생별 등·하원 시간과 정류장 변동이 없습니다.</p>}
-              {comparison.map((change) => (
-                <div key={change.key} className="rounded-lg bg-white p-3 text-xs shadow-sm dark:bg-gray-900">
-                  <div className="flex flex-wrap items-center gap-2"><b className="text-sm">{change.studentName}</b><span>{maskPhone(change.parentPhone)}</span><span className="rounded bg-blue-100 px-1.5 py-0.5 font-black text-blue-700">{change.kind === "ADDED" ? "추가" : change.kind === "REMOVED" ? "제외" : "변경"}</span></div>
-                  <p className="mt-1 text-gray-500">기존: {change.before ?? "없음"}</p><p className="mt-0.5 font-bold text-gray-800 dark:text-gray-100">변경: {change.after ?? "없음"}</p>
-                  {regularShuttleChangeMessage(change, serviceMonth) && (
-                    <button
-                      type="button"
-                      onClick={() => openNoticePreview(change)}
-                      className="mt-2 rounded-lg border border-blue-200 px-3 py-1.5 font-black text-blue-700 hover:bg-blue-50 dark:border-blue-700 dark:text-blue-200 dark:hover:bg-blue-950/40"
-                    >
-                      문자 미리보기
-                    </button>
-                  )}
-                </div>
-              ))}
-              <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs font-bold text-amber-800">문자는 자동 발송되지 않습니다. 대상·변경값·문구 미리보기 후 별도 승인이 필요합니다.</p>
-            </div>
-          </details>
-        )}
+        {/* 주요 동작 */}
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <button type="button" onClick={openAdd} className="inline-flex min-h-10 items-center gap-1 rounded-xl bg-brand-navy-900 px-4 text-sm font-black text-white dark:bg-brand-neon-lime dark:text-brand-navy-900">
+            <span className="material-symbols-outlined text-lg">person_add</span>학생 추가
+          </button>
+          {stops.length > 0 && (
+            <button type="button" disabled={busy} onClick={() => void copyMonth(serviceMonth, nextServiceMonth(serviceMonth))} className="inline-flex min-h-10 items-center gap-1 rounded-xl border border-gray-200 px-4 text-sm font-black text-gray-700 disabled:opacity-50 dark:border-gray-600 dark:text-gray-200">
+              <span className="material-symbols-outlined text-lg">content_copy</span>다음 달 명단 만들기
+            </button>
+          )}
+          <button type="button" onClick={copyRegularRunLink} className="inline-flex min-h-10 items-center gap-1 rounded-xl border border-gray-200 px-4 text-sm font-black text-gray-700 dark:border-gray-600 dark:text-gray-200">
+            <span className="material-symbols-outlined text-lg">directions_bus</span>기사님 운행 링크 복사
+          </button>
+        </div>
 
-        {previewChange && (
-          <AdminModal titleId="shuttle-message-preview-title" onClose={() => setPreviewChange(null)}>
-            <div className="p-4">
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <h4 id="shuttle-message-preview-title" className="text-base font-black text-gray-900 dark:text-white">{previewChange.studentName} 문자 미리보기</h4>
-                  <p className="mt-0.5 text-xs text-gray-500">{maskPhone(previewChange.parentPhone)} · 승인 전에는 발송되지 않으며, 승인 후 별도 발송할 수 있습니다.</p>
-                </div>
-                <button type="button" data-admin-modal-initial-focus onClick={() => setPreviewChange(null)} aria-label="문자 미리보기 닫기" className="rounded-lg px-2 py-1 text-xl font-bold text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800">×</button>
-              </div>
-              <pre className="mt-3 max-h-[55vh] overflow-y-auto whitespace-pre-wrap rounded-xl bg-gray-50 p-3 font-sans text-sm leading-6 text-gray-700 dark:bg-gray-800 dark:text-gray-200">{regularShuttleChangeMessage(previewChange, serviceMonth)}</pre>
-              <p className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-xs font-bold text-amber-800 dark:bg-amber-950/30 dark:text-amber-200">
-                {noticeStatus === "PREPARING" ? "변경 내용과 수신자를 고정하는 중입니다."
-                  : noticeStatus === "HELD" ? "현재는 승인 대기입니다. 아래 승인만으로 문자가 발송되지는 않습니다."
-                  : noticeStatus === "APPROVED" ? "이 미리보기로 승인됐습니다. 실제 발송 버튼을 한 번 더 눌러야 합니다."
-                  : noticeStatus === "SENDING" ? "승인된 문자를 발송하고 있습니다."
-                  : noticeStatus === "SENT" ? "이 문자는 발송 완료됐습니다. 같은 내용은 다시 발송되지 않습니다."
-                  : "문자 상태를 확인해 주세요."}
-              </p>
-              {noticeError && <p role="alert" className="mt-2 rounded-lg bg-red-50 px-3 py-2 text-xs font-bold text-red-700 dark:bg-red-950/30 dark:text-red-200">{noticeError}</p>}
-              <div className="mt-3 flex flex-wrap justify-end gap-2">
-                <button type="button" onClick={() => setPreviewChange(null)} className="rounded-xl border border-gray-200 px-4 py-2 text-sm font-bold text-gray-600 dark:border-gray-700 dark:text-gray-200">닫기</button>
-                <button type="button" onClick={() => void copyChangeMessage()} className="rounded-xl bg-brand-navy-900 px-4 py-2 text-sm font-black text-white dark:bg-brand-neon-lime dark:text-brand-navy-900">{previewCopied ? "✓ 복사됨" : "문구 복사"}</button>
-                {noticeStatus === "ERROR" && <button type="button" onClick={() => void noticeAction("PREPARE", previewChange)} className="rounded-xl border border-gray-300 px-4 py-2 text-sm font-black text-gray-700 dark:border-gray-600 dark:text-gray-200">다시 준비</button>}
-                {noticeStatus === "HELD" && <button type="button" disabled={!noticePayloadHash} onClick={() => void noticeAction("APPROVE", previewChange)} className="rounded-xl border border-blue-300 px-4 py-2 text-sm font-black text-blue-700 disabled:opacity-40 dark:border-blue-700 dark:text-blue-200">이 내용 승인</button>}
-                {noticeStatus === "APPROVED" && <button type="button" onClick={() => void noticeAction("SEND", previewChange)} className="rounded-xl bg-[var(--brand-accent)] px-4 py-2 text-sm font-black text-[var(--brand-accent-contrast)]">승인된 문자 발송</button>}
-              </div>
-            </div>
-          </AdminModal>
-        )}
-
-        {/* 시트 가져오기·좌표 채우기 — 최초 1회만 쓰는 준비 작업이라 접어 둔다. */}
-        <details className="mt-3 rounded-xl border border-gray-200 bg-gray-50 dark:border-gray-700 dark:bg-gray-900/40" open={stops.length === 0}>
-          <summary className="cursor-pointer select-none px-3 py-2 text-[12px] font-black text-gray-600 dark:text-gray-300">⚙️ 시트 가져오기 · 좌표 채우기 (최초 1회)</summary>
-          <div className="border-t border-gray-200 p-3 dark:border-gray-700">
-            <div className="flex flex-wrap items-end gap-2">
-              <label className="flex w-36 flex-col gap-1 text-[11px] font-bold text-gray-500">적용 월
-                <input type="month" value={serviceMonth} onChange={(e) => setServiceMonth(e.target.value)} className="rounded-lg border border-gray-200 px-3 py-2 text-[12px] font-semibold dark:border-gray-600 dark:bg-gray-900 dark:text-white" />
-              </label>
-              <label className="flex min-w-[220px] flex-1 flex-col gap-1 text-[11px] font-bold text-gray-500">구글 시트 URL
-                <input value={sheetUrl} onChange={(e) => setSheetUrl(e.target.value)} placeholder="https://docs.google.com/spreadsheets/..." className="rounded-lg border border-gray-200 px-3 py-2 text-[12px] font-semibold dark:border-gray-600 dark:bg-gray-900 dark:text-white" />
-              </label>
-              <button onClick={importSheet} disabled={busy} className="rounded-xl bg-brand-orange-500 px-4 py-2.5 text-sm font-black text-white disabled:opacity-50">{busy ? "가져오는 중…" : "⬇ 시트에서 가져오기"}</button>
-            </div>
-            {stops.length > 0 && (
-              <div className="mt-2 flex flex-wrap items-center gap-2">
-                <div className="min-w-0 flex-1">
-                  <p className="text-[12.5px] font-black text-gray-700 dark:text-gray-200">📍 정류장 좌표</p>
-                  <p className="text-[11px] text-gray-500 dark:text-gray-400">
-                    {geoBusy && geoProgress
-                      ? `찾는 중… ${geoProgress.done}/${geoProgress.total}`
-                      : `${totalNames - missingNames.length}/${totalNames}곳 좌표 있음${missingNames.length > 0 ? ` · ${missingNames.length}곳 남음` : " · 완료"}`}
-                  </p>
-                </div>
-                <button onClick={runGeocode} disabled={geoBusy || missingNames.length === 0}
-                  className="rounded-xl bg-brand-navy-900 px-4 py-2.5 text-sm font-black text-white disabled:opacity-40 dark:bg-white dark:text-brand-navy-900">
-                  {geoBusy ? "채우는 중…" : missingNames.length === 0 ? "✓ 좌표 완료" : `📍 좌표 자동 채우기 (${missingNames.length})`}
-                </button>
-              </div>
-            )}
-          </div>
-        </details>
         {err && <p className="mt-2 rounded-lg bg-red-50 px-3 py-2 text-xs font-bold text-red-600">⚠ {err}</p>}
         {msg && <p className="mt-2 rounded-lg bg-green-50 px-3 py-2 text-xs font-bold text-green-700 dark:bg-green-900/30 dark:text-green-200">✓ {msg}</p>}
+        {showDispatchHint && (
+          <p className="mt-2 flex flex-wrap items-center gap-2 rounded-lg bg-amber-50 px-3 py-2 text-xs font-bold text-amber-800 dark:bg-amber-950/30 dark:text-amber-200">
+            정규 배차 화면에서 새 학생을 차량에 배정하고 저장해야 기사님 화면에 반영됩니다.
+            <Link href="/admin/shuttle/regular-dispatch" className="underline">정규 배차로 가기</Link>
+          </p>
+        )}
         {locationLink && <div className="mt-2 rounded-xl border border-blue-200 bg-blue-50 p-3 text-xs dark:border-blue-800 dark:bg-blue-950/30">
           <p className="font-black text-blue-900 dark:text-blue-100">{locationLink.studentName} 학부모 위치 입력 링크</p>
           <div className="mt-2 flex items-center gap-2"><input readOnly value={locationLink.url} aria-label="학부모 위치 입력 링크" className="min-w-0 flex-1 rounded-lg border border-blue-200 bg-white px-2 py-2 text-gray-700 dark:border-blue-700 dark:bg-gray-900 dark:text-gray-100" /><button type="button" onClick={() => void navigator.clipboard.writeText(locationLink.url)} className="min-h-9 rounded-lg bg-blue-700 px-3 font-black text-white">복사</button></div>
@@ -469,104 +557,87 @@ export default function RegularShuttleClient({ initialStops, importedAt: initial
         </div>}
 
         {stops.length === 0 ? (
-          <div className="mt-4 rounded-xl border border-dashed border-gray-300 p-8 text-center text-sm text-gray-400">아직 가져온 운행리스트가 없습니다. 위에서 「시트에서 가져오기」를 눌러주세요.</div>
+          <div className="mt-4 rounded-xl border border-dashed border-gray-300 p-8 text-center text-sm text-gray-400 dark:border-gray-600">
+            <p>{serviceMonth} 명단이 아직 없습니다.</p>
+            {previousMonth
+              ? <button type="button" disabled={busy} onClick={() => void copyMonth(previousMonth, serviceMonth)} className="mt-3 rounded-xl bg-brand-navy-900 px-4 py-2 text-sm font-black text-white disabled:opacity-50 dark:bg-brand-neon-lime dark:text-brand-navy-900">{previousMonth} 명단 복사해 오기</button>
+              : <p className="mt-1">위의 「학생 추가」로 명단을 만들어 주세요.</p>}
+          </div>
         ) : (
           <>
             {/* 요일 탭 */}
             <div className="mt-3 flex flex-wrap items-center gap-1 rounded-xl bg-gray-100 p-1 dark:bg-gray-900">
               {weekdays.map((w) => (
-                <button key={w.weekday} onClick={() => setActive(w.weekday)}
-                  className={`min-h-9 rounded-lg px-4 text-sm font-black ${activeWd === w.weekday ? "bg-white text-brand-navy-900 shadow dark:bg-gray-700 dark:text-white" : "text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"}`}>
-                  {w.label}
+                <button key={w.weekday} type="button" onClick={() => setActive(w.weekday)}
+                  className={`min-h-9 rounded-lg px-3 text-sm font-black ${active === w.weekday ? "bg-white text-brand-navy-900 shadow dark:bg-gray-700 dark:text-white" : "text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"}`}>
+                  {WEEKDAY_LABELS[w.weekday]}<span className="ml-1 text-[11px] font-bold text-gray-400">{w.count}</span>
                 </button>
               ))}
             </div>
 
-            {/* 보기 전환: 배차·지도 / 운행 목록 */}
-            <div className="mt-3 flex items-center gap-1">
-              {([["dispatch", "🗺 배차·지도"], ["list", "📋 운행 목록"]] as const).map(([m, label]) => (
-                <button key={m} onClick={() => setMode(m)}
-                  className={`rounded-lg px-3 py-1.5 text-[12px] font-black ${mode === m ? "bg-brand-navy-900 text-white dark:bg-brand-neon-lime dark:text-brand-navy-900" : "text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"}`}>
-                  {label}
-                </button>
+            {groups.length === 0 && <div className="mt-3 rounded-xl border border-dashed border-gray-300 p-6 text-center text-sm text-gray-400 dark:border-gray-600">{WEEKDAY_LABELS[active]}요일 셔틀 이용 학생이 없습니다.</div>}
+
+            <div className="mt-3 space-y-4">
+              {groups.map((g) => (
+                <section key={g.classTime || "none"}>
+                  <h4 className="text-[13px] font-black text-gray-800 dark:text-gray-100">{g.classTime || "수업시간 미지정"} <span className="text-[11px] font-bold text-gray-400">{g.students.length}명</span></h4>
+                  <ul className="mt-1.5 space-y-1.5">
+                    {g.students.map((entry) => {
+                      const tp = tel(entry.parentPhone);
+                      const link = entry.studentId ? locationLinks[entry.studentId] : undefined;
+                      const canReissue = link?.status === "ACTIVE" || link?.status === "SUBMITTED";
+                      return (
+                        <li key={entry.key} className="rounded-xl border border-gray-200 p-2.5 dark:border-gray-700">
+                          <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                            <span className="text-[14px] font-black text-gray-900 dark:text-white">{entry.studentName}</span>
+                            {tp && <a href={tp} className="text-[12px] font-bold text-blue-600 dark:text-blue-300">📞 학부모</a>}
+                            {entry.studentId && (
+                              <span className="flex items-center gap-1.5 text-[12px]">
+                                {link && <span className="rounded bg-violet-50 px-1.5 py-0.5 text-[10px] font-black text-violet-700 dark:bg-violet-950/30 dark:text-violet-200">{LOCATION_LINK_STATUS[link.status]}{link.lastSubmittedAt ? ` ${fmtImported(link.lastSubmittedAt)}` : ""}</span>}
+                                <button type="button" disabled={locationLinkBusy === entry.studentId} onClick={() => void createParentLocationLink(entry.studentId!, entry.studentName, canReissue)} className="font-black text-violet-700 disabled:opacity-40 dark:text-violet-300">📍 {canReissue ? "링크 재발급" : "위치 링크"}</button>
+                                {canReissue && link && <button type="button" disabled={locationLinkBusy === entry.studentId} onClick={() => void revokeParentLocationLink(link)} className="font-black text-red-600 disabled:opacity-40 dark:text-red-300">취소</button>}
+                              </span>
+                            )}
+                          </div>
+                          <div className="mt-1 space-y-0.5">
+                            {stopLine("등원", entry.board)}
+                            {stopLine("하원", entry.alight)}
+                            {(entry.board?.note || entry.alight?.note) && <p className="text-[11.5px] text-gray-400">{entry.board?.note ?? entry.alight?.note}</p>}
+                          </div>
+                          <div className="mt-2 flex flex-wrap gap-1.5">
+                            <button type="button" onClick={() => { setDialogErr(null); setDialog({ kind: "move", entry, weekday: active, classTime: g.classTime }); }} className="min-h-8 rounded-lg border border-gray-200 px-3 text-[12px] font-black text-gray-700 dark:border-gray-600 dark:text-gray-200">반이동</button>
+                            <button type="button" onClick={() => { setDialogErr(null); const dir = entry.board ? "BOARD" : "ALIGHT"; setDialog({ kind: "stop", entry, direction: dir, draft: draftFromRow(entry.board ?? entry.alight), applyToAll: false }); }} className="min-h-8 rounded-lg border border-gray-200 px-3 text-[12px] font-black text-gray-700 dark:border-gray-600 dark:text-gray-200">정류장 수정</button>
+                            <button type="button" onClick={() => { setDialogErr(null); setDialog({ kind: "remove", entry, weekday: active }); }} className="min-h-8 rounded-lg border border-red-200 px-3 text-[12px] font-black text-red-600 dark:border-red-800 dark:text-red-300">빼기</button>
+                          </div>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </section>
               ))}
             </div>
-
-            {mode === "dispatch" ? (
-              <div className="mt-3">
-                {/* 기사님 링크 — 하나만 전달하면 매일 그날 요일 운행이 자동으로 뜬다. */}
-                <div className="mb-3 flex flex-wrap items-center gap-2">
-                  <button onClick={copyRegularRunLink} className="rounded-xl bg-brand-navy-900 px-4 py-2.5 text-sm font-black text-white dark:bg-brand-neon-lime dark:text-brand-navy-900">🚌 기사님 운행 링크 복사</button>
-                  <span className="text-[11.5px] text-gray-400">기사님 폰·태블릿에 이 링크 하나만 저장 → 매일 열면 그날 요일 노선·탑승체크</span>
-                </div>
-                {classTimes.length === 0 ? (
-                  <div className="rounded-xl border border-dashed border-gray-300 p-6 text-center text-sm text-gray-400">이 요일에 수업 정차가 없습니다.</div>
-                ) : (
-                  <>
-                    {/* 수업시간 탭 */}
-                    <div className="flex flex-wrap items-center gap-1 rounded-xl bg-gray-100 p-1 dark:bg-gray-900">
-                      {classTimes.map((ct) => (
-                        <button key={ct} onClick={() => setActiveClass(ct)}
-                          className={`min-h-8 rounded-lg px-3 text-[12.5px] font-black ${curClass === ct ? "bg-white text-brand-navy-900 shadow dark:bg-gray-700 dark:text-white" : "text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"}`}>
-                          {ct}
-                        </button>
-                      ))}
-                    </div>
-                    <div className="mt-3 space-y-3">
-                      <RegularRouteSection dayStops={dayStops} classTime={curClass} direction="BOARD" serviceMonth={serviceMonth} geo={geo} onSaved={refreshStops} />
-                      <RegularRouteSection dayStops={dayStops} classTime={curClass} direction="ALIGHT" serviceMonth={serviceMonth} geo={geo} onSaved={refreshStops} />
-                    </div>
-                  </>
-                )}
-                {/* 안내문 제거 — 뒷문장("기사님 링크·탑승 체크는 다음 단계")이 스테일이다.
-                    링크 복사 버튼은 이 화면 위에 이미 있고 탑승 체크도 기사 앱에 구현 완료. */}
-              </div>
-            ) : (
-            <>
-            <p className="mt-3 text-[12.5px] font-black text-gray-700 dark:text-gray-200">📅 {["일", "월", "화", "수", "목", "금", "토"][activeWd]}요일 · {dayStops.length}개 정차</p>
-
-            <ol className="mt-2 space-y-1.5">
-              {dayStops.map((s, i) => {
-                const dir = DIR_META[s.direction] ?? DIR_META.BOARD;
-                const isPivot = s.direction === "PIVOT";
-                const t = tel(s.studentPhone), tp = tel(s.parentPhone);
-                return (
-                  <li key={i} className={`rounded-xl border p-2.5 ${isPivot ? "border-brand-navy-900/30 bg-brand-navy-900/5 dark:border-white/20 dark:bg-white/5" : "border-gray-200 dark:border-gray-700"}`}>
-                    <div className="flex items-center gap-2">
-                      <span className="w-12 shrink-0 text-[13px] font-black text-blue-600 dark:text-blue-300">{s.arriveTime ?? "-"}</span>
-                      <span className={`shrink-0 rounded px-1.5 py-0.5 text-[11px] font-black ${dir.cls}`}>{dir.label}</span>
-                      <span className="min-w-0 flex-1 truncate text-[13.5px] font-bold text-gray-900 dark:text-white">{s.stopName}</span>
-                      {s.latitude != null && s.longitude != null
-                        ? <span title="좌표 있음" className="shrink-0 text-[12px]">📍</span>
-                        : <span title="좌표 없음" className="shrink-0 text-[11px] font-black text-amber-500">⚠︎</span>}
-                      {s.classTime && <span className="shrink-0 text-[11px] font-bold text-gray-400">{s.classTime}</span>}
-                    </div>
-                    {(s.studentName || t || tp) && (
-                      <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 pl-14 text-[12px]">
-                        {s.studentName && <span className="font-bold text-gray-700 dark:text-gray-200">{s.studentName}</span>}
-                        {tp && <a href={tp} className="font-bold text-blue-600 dark:text-blue-300">📞 학부모</a>}
-                        {t && <a href={t} className="font-bold text-green-600 dark:text-green-300">📞 학생</a>}
-                        {s.studentId && (() => {
-                          const link = locationLinks[s.studentId];
-                          const canReissue = link?.status === "ACTIVE" || link?.status === "SUBMITTED";
-                          return <span className="flex items-center gap-1.5">
-                            {link && <span className="rounded bg-violet-50 px-1.5 py-0.5 text-[10px] font-black text-violet-700 dark:bg-violet-950/30 dark:text-violet-200">{LOCATION_LINK_STATUS[link.status]}{link.lastSubmittedAt ? ` ${fmtImported(link.lastSubmittedAt)}` : ""}</span>}
-                            <button type="button" disabled={locationLinkBusy === s.studentId} onClick={() => void createParentLocationLink(s.studentId!, s.studentName ?? "학생", canReissue)} className="font-black text-violet-700 disabled:opacity-40 dark:text-violet-300">📍 {canReissue ? "링크 재발급" : "위치 링크"}</button>
-                            {canReissue && <button type="button" disabled={locationLinkBusy === s.studentId} onClick={() => void revokeParentLocationLink(link)} className="font-black text-red-600 disabled:opacity-40 dark:text-red-300">취소</button>}
-                          </span>;
-                        })()}
-                        {s.note && <span className="text-gray-400">{s.note}</span>}
-                      </div>
-                    )}
-                  </li>
-                );
-              })}
-            </ol>
-            </>
-            )}
           </>
         )}
       </div>
+
+      <datalist id="roster-class-times">{classTimes.map((c) => <option key={c} value={c} />)}</datalist>
+
+      {/* 지도 선택 중에는 입력 모달을 잠시 내린다(두 모달의 Esc·Tab 처리가 겹치지 않게). 입력값은 dialog 상태에 남아 있다. */}
+      {dialog && !picker && (
+        <AdminModal titleId="roster-dialog-title" onClose={() => setDialog(null)} panelClassName="max-w-lg">
+          {renderDialog()}
+        </AdminModal>
+      )}
+      {picker && pickerDraft && (
+        <LocationPickerModal
+          title={picker === "alight" ? "하원 정류장 위치" : picker === "board" ? "등원 정류장 위치" : "정류장 위치"}
+          initialValue={pickerDraft.latitude != null && pickerDraft.longitude != null
+            ? { address: pickerDraft.stopName, placeName: pickerDraft.stopName, latitude: pickerDraft.latitude, longitude: pickerDraft.longitude, source: "MAP_PIN" }
+            : undefined}
+          onConfirm={onPicked}
+          onClose={() => setPicker(null)}
+        />
+      )}
     </div>
   );
 }

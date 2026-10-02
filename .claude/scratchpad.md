@@ -75,21 +75,73 @@
 - 핵심 규칙: 청구 원본=랠리즈(전달 3주차 발행), 사이트는 따라가는 기록. 대사는 읽기 전용, 돈 쓰기는 슬랙 [랠리즈 처리함 · 사이트 납부 반영] 버튼→재확인 선점 UPDATE→markPaymentPaid 한 경로뿐.
 - 매칭 로직 1벌: src/lib/pos/tossplace-match.mjs / 판단: payment-notice.mjs / 서명: webhookSignature.ts·slack/signature.ts
 
+## 구현 기록 (developer) — 셔틀 명단 앱 편집 1단계 (2026-10-02)
+
+구현한 기능: 「정규 셔틀(시트)」 탭을 「셔틀 명단」 화면으로 교체. RegularShuttleStop 을 앱이 직접 편집(추가·빼기·반이동·정류장 수정·다음 달 복사). 스키마 변경 없음.
+
+| 파일 경로 | 변경 내용 | 신규/수정 |
+|----------|----------|----------|
+| src/lib/shuttle/regularRosterEditLogic.ts | 입력 검증·행 생성·화면 묶음 순수 함수 | 신규 |
+| src/lib/shuttle/regularRosterEditLogic.test.ts | node:test 11건 | 신규 |
+| src/lib/shuttle/regularRosterEdit.ts | 서버 편집(raw SQL·트랜잭션·달 단위 advisory lock·ShuttleAuditLog 기록)·학생 검색 | 신규 |
+| src/app/api/admin/shuttle/regular-roster/route.ts | GET 검색/POST add·copyMonth/PATCH move·editStop/DELETE 빼기 | 신규 |
+| src/app/admin/shuttle/regular/page.tsx · RegularShuttleClient.tsx | 명단 화면으로 교체(시트·좌표자동·배차지도·월비교/문자 UI 제거, 위치링크·기사링크 유지) | 수정 |
+| src/app/admin/shuttle/ShuttleSectionTabs.tsx | 라벨 「셔틀 명단」·아이콘 groups | 수정 |
+| tests/regular-shuttle-admin-ui.test.mjs · regular-shuttle-month-diff.test.mjs | 제거된 UI 단정 3건 → 새 화면 계약 단정으로 교체 | 수정 |
+
+tester 참고:
+- 테스트 방법: /admin/shuttle/regular → 학생 추가(검색·요일 복수·등원만/하원만) → 반이동 → 정류장 수정(전체 적용 체크) → 빼기(요일만/전체) → 다음 달 명단 만들기(대상 달 있으면 거부 메시지)
+- 정상 동작: 저장 후 목록 갱신 + 「정규 배차로 가기」 안내 표시. 좌표 없는 정류장은 ⚠ 좌표 없음
+- 주의할 입력: 같은 요일·방향·수업 중복 추가(거부), 도착시각 "24:00"/"오후5시"(거부), 대상 달이 이미 있는 복사(거부)
+- 실행: `node --test src/lib/shuttle/*.test.ts src/lib/regular/*.test.ts` (vitest 없음)
+
+reviewer 참고:
+- 새 행 sortOrder = 그 요일·방향·수업 max+1 (뒤 행과 번호 동률 가능, 정렬만 동률)
+- editStop applyToAll 은 같은 달 같은 stopName 전체(PIVOT·RETURN 운영 정차 포함)의 이름·좌표를 바꾼다. 도착시각은 해당 행만
+- 빼기는 BOARD/ALIGHT 행만, 요청 id 수와 삭제 수가 다르면 전체 롤백
+
+## 테스트 결과 (tester) — 셔틀 명단 앱 편집 1단계 (2026-10-02, 읽기 전용)
+
+| 테스트 항목 | 결과 | 비고 |
+|-----------|------|------|
+| `npx tsc --noEmit` | ✅ 통과 | 오류 0 |
+| `node --test src/lib/shuttle/*.test.ts src/lib/regular/*.test.ts` | ✅ 통과 | 57/57 |
+| `node --test tests/regular-shuttle-*.test.mjs` | ✅ 통과 | 48/48 |
+| 경계 스크래치 테스트(월 형식·요일 0~6·빈 수업시간·도착시각·좌표 한쪽만·12월→다음 해 1월·ids 100/101개·같은 달 복사) | ✅ 통과 | 8건, 임시 파일 삭제 완료 |
+| 첫 화면 달 선택(`months` DESC + `find(m<=현재)`) | ✅ 통과 | 이번 달 이하 중 최신 달 |
+| 탭 라벨 「셔틀 명단」·아이콘 groups | ✅ 통과 | 소스 확인 |
+| 비로그인 접근 차단 | ✅ 통과 | 페이지 307→/login, GET API 403 |
+| 화면 렌더·모달 확인 | ⏭ 생략 | 관리자 로그인 필요(계정 없음). 4000 서버는 타 세션 것(PID 40356)이라 종료 안 함 |
+
+관찰(실패 아님): `buildMoveUpdates` 는 서로 다른 학생의 BOARD+ALIGHT 두 행을 한 번에 옮기는 것도 허용(화면은 한 학생 행만 보내므로 API 직접 호출 시만 해당).
+
+📊 종합: 7개 중 7개 통과 / 0개 실패 (화면 확인 1건 생략)
+
+## 리뷰 결과 (reviewer) — 셔틀 명단 앱 편집 1단계 (2026-10-02)
+
+📊 종합 판정: 수정 필요 (높음 1)
+
+✅ 잘된 점: 모든 SQL 파라미터 바인딩·route+lib 이중 requireAdmin·편집마다 트랜잭션+달 단위 advisory lock+감사 기록. 삭제는 id+serviceMonth+BOARD/ALIGHT 3중 한정, 개수 불일치 시 롤백. 복사는 대상 달 있으면 거부. 추가 행 studentId(실제 Student.id, FK 검증)는 COALESCE 1순위라 신규 배너·reconcile 과 호환. 날짜는 문자열 월 계산·koreaServiceMonth 만 사용. 위치 링크·기사 운행 링크 유지. 관련 테스트 34/34.
+
+🔴 필수 수정:
+- src/lib/shuttle/regularDriverRoute.ts:70·85·47 — 월 인자 없이 호출 → 「다음 달 명단 만들기」(10월 중 11월 생성) 즉시 기사 화면이 11월 명단(getRegularShuttleStops 의 months[0])·11월 저장 노선(MAX → 없음 → 폴백 순서)으로 바뀜. 정류장 행 id 도 새로 생겨 그날 탑승체크 rowId 가 안 맞음. 수정: getRegularDriverClasses 에서 month = "viewDate.slice(0,7) 이하 중 최신 저장 월" 한 번 계산해 세 호출(stops·saved·loadRowIdsByStudentId→getRegularShuttleRiders)에 모두 전달.
+
+🟡 권장 수정:
+- src/app/admin/shuttle/regular-dispatch/page.tsx:18 — 기본 월이 months[0](최신=다음 달). 명단 화면처럼 `months.find(m => m <= koreaServiceMonth())` 로. 같은 줄 폴백 `new Date().toISOString().slice(0,7)` 은 금지 패턴(기존 코드).
+- src/lib/shuttle/regularRosterEdit.ts:529 applyToAll — 새 좌표가 비어 있으면 같은 이름 다른 행 좌표까지 null 로 지움 → `COALESCE($2,"latitude")` 처럼 비어 있으면 유지.
+- (기존 코드) regularDriverRoute.ts:33 weekdayOf 가 `T12:00:00+09:00`+getUTCDay 금지 패턴. 위 수정 때 공용 KST 모듈로 교체 권장.
+
 ## 작업 로그 (최근 10건)
 
 | 날짜 | 작업 내용 | 상태 |
 |------|----------|------|
+| 2026-10-02 | **셔틀 명단 1단계 리뷰 수정 4건(developer)** — ①기사 화면 월 고정: `pickServiceMonthFor`(serviceMonth.ts·테스트 6건)로 그날 달 이하 최신 달을 명단·저장노선·탑승키에 전달, weekdayOf→kstDow ②정규 배차·셔틀 명단 기본 월 같은 함수 사용, toISOString 폴백 제거 ③정류장 수정(단일·일괄) 좌표 COALESCE 유지 ④반이동 다른 학생 섞이면 거부(rosterStudentKey). tsc 0·단위 64/64·tests 54/54. 미커밋 | 검수 대기 |
+| 2026-10-02 | **셔틀 명단 1단계 리뷰(reviewer)** — 수정 필요. 높음 1: 기사 화면이 월 인자 없이 최신 월을 읽어 다음 달 명단 복사 즉시 다음 달로 전환(regularDriverRoute.ts). 권장: 정규 배차 기본 월·applyToAll 좌표 지움. SQL·권한·삭제 범위·reconcile 호환 문제 없음 | 수정 요청 |
+| 2026-10-02 | **셔틀 명단 1단계 검수(tester)** — tsc 0·셔틀 단위 57/57·regular-shuttle 48/48·경계 8건 통과. 화면은 관리자 로그인 필요로 생략(비로그인 307/403 차단 확인). DB 쓰기 0 | 통과 |
+| 2026-10-02 | **셔틀 명단 앱 편집 1단계(developer)** — 시트 탭을 「셔틀 명단」 화면으로 교체, RegularShuttleStop 추가·빼기·반이동·정류장 수정·다음 달 복사 API(raw SQL·ShuttleAuditLog 기록). tsc 0 / 셔틀 단위 57-0 / tests 1750 중 실패 1(기준선 동일). 미커밋 | 검수 대기 |
 | 2026-10-02 | **토스 심사 주문서 리뷰(reviewer)** — 통과. DB 쓰기·청구서 접근 0, 키 없음/라이브 키 시 주문서는 안내·API 404, 금액은 서버 DB 가격(클라는 programId·tier 만), customerName/customerMobilePhone(숫자만) v2 필드명 일치. tsc 0·테스트 13/13·개발서버 /programs(6개 카드·주문서 링크)·주문서 정상/잘못된 tier/없는 id 렌더 확인. 권장만: 안내 화면 HTTP 200 | 통과 |
 | 2026-10-02 | **토스 심사 주문서** — `/programs/order`(상품정보·빈도/금액·주문자 이름/휴대폰(저장 안 함)·카드 라디오·구매조건 동의·결제하기) 신설, 카드 [결제하기]는 주문서로 이동, 결제창 코드는 `lib/payments/tossReviewClient.ts` 한 벌, 공개 /programs 에서 0원 프로그램 숨김(`hasSellablePrice`). 테스트 13/13·tsc 통과·개발서버 렌더 확인 | 검수 대기 |
 | 2026-10-02 | **기록 목록 병합 필터** — 병합 엔진이 기록도 옮기게 된 후속 작업. 흡수 쪽 잔여가 진짜 중복인 목록(학부모·원장 보강권, 보강 일정, 셔틀 예외 예정목록·기사 명단·누락알림 복구)에 notMergedStudent 적용. 결석(UNIQUE 가 상태 무시 → 살아있는 결석이 흡수 쪽에 남을 수 있음)·반변경 신청(남는 게 유일한 기록)은 리뷰 지적으로 예외 유지. 가드 예외 개수 실측 일치 | 완료 |
 | 2026-10-02 | **학생 병합 엔진 참조 목록 보강** — 운영 DB 재실측(SELECT 만)으로 7/26 이후 생긴 학생 참조 12곳(보강권·정규결석·셔틀당일예외·수강변경신청·납부요청·POS알림 등)+운영 미반영 4곳을 `studentMerge/tables.ts` 에 추가. UNIQUE 충돌키·부분 UNIQUE·청구 계열은 Payment 를 따라가게(동결분은 같이 남음)·월별수강대장은 payload CHECK 때문에 흡수 쪽 고정. schema.prisma 대조 누락 가드 테스트 신설. 기병합 8명 잔여 참조 0건이라 재이관 불필요. 발견: studentVisibility 가드 기존 실패(27파일) | 완료 |
 | 2026-10-02 | **결제 절차 문서 테스트 정상화** — SKILL.md 가 9/30 방침(사이트 기준·10월 시트 장부 중단)으로 바뀌었는데 테스트가 옛 문장을 찾아 실패. 같은 안전 계약(완료조건·HELD 해제조건·대상 특정·실행 후 재확인)을 새 문장으로 검사 + first-registration.md 초대 1회·재발송 금지 추가. 이제 `npm test` 전체 1736/1736 통과 | ✅ de22a07e 배포 |
 | 2026-10-02 | **학생 병합 필터 가드 정상화** — 27파일 56건 분류: 학부모 «새 신청» 자녀 선택 5곳에 notMergedStudent(운영 실측 흡수 8명·진행 수강 0건이라 화면 변화 0), 나머지는 사유 붙여 예외 등록(청구·POS 대조·id 단건·게이트·병합엔진이 안 옮기는 기록 목록). `npm test`·`test:guards` 신설 + release-preflight 에 가드 편입. 후속: tables.ts 에 MakeupCredit 등 신규 테이블 추가 필요 | ✅ 667c73be 배포(검수 승인·런타임 오류 0) |
-| 2026-10-02 | **Phase 0 마무리 — 중복 학생 영구삭제 API 차단** — `cleanup-duplicates` POST(이름만으로 청구·출석까지 DELETE)를 410 으로 막고 병합 도구 안내, GET 유지, 재등장 방지 테스트. RLS 는 127개 전부 켜짐·공개권한 0 확인(타 세션 처리). 발견: studentVisibility 가드 테스트가 정규 실행에서 빠져 27파일 누적 위반(별도 작업 분리), 결제 스킬 문서 테스트 1건 기존 실패 | ✅ b3407054 배포 |
-| 2026-10-01 | **토스POS 결제 슬랙 DM 연동 완성·실동작 확인** — 슬랙 앱 `STIZ 결제 알림` 생성·설치(chat:write·im:write), PosPaymentNotice 표 운영 적용, 토스 웹훅이 **비활성**이던 것 발견해 켬. 테스트 DM 첫 시도 `invalid_auth` → 비밀값 3개가 명령어 글자로 저장된 것 발견(클립보드 덮어쓰기·PowerShell 파이프 
-
-). 입력 도구 `scripts/set-pos-secrets.ps1` 로 재입력(클립보드 직접 읽기·형식 검증·줄바꿈 없음, SelfTest 로 사용자와 같은 실행 방식 검증). **테스트 DM 발송(NOTIFIED) → 원장 버튼 클릭 → CONFIRMED·siteMarkedPaid=false 확인** — 전 구간 동작. 남은 검증: 실제 POS 결제 시 토스 웹훅 서명 통과 여부 | 완료·커밋 e1849f5d·dab4249b |
-| 2026-09-30 | **토스POS 결제 슬랙 DM + 버튼 답장(developer)** — 결제 1건=DM 1통, 원장만 버튼, 돈은 2단계 확인+선점 재확인 뒤 markPaymentPaid. tsc·1733 테스트·next build 통과. 미커밋·마이그레이션 미적용 | 검수 대기 |
-| 2026-09-30 | **POS 대사 정확도 수정 2건** — 이미 납부 기록된 결제가 '토스에만'으로 나오던 문제(결제수단 NULL·MANUAL) + 청구월 비교(9월 말 결제=10월분). tsc 0 / 테스트 **1692-0** / build 0 / 2026-09 실행: 박찬민·손지형=기존 기록 매칭, 유한빈·윤서연·정해담·신하율(9·10월)=사이트에 그 달 청구서 없음, 김대건=POS 받았는데 사이트 미납. 쓰기 없음 증빙 통과. 미커밋 | 완료 |
-| 2026-09-29 | **POS 결제 대사 자동화 + 관리자 화면** — 매칭 로직을 `src/lib/pos/` 로 이전해 CLI·웹앱이 한 벌 공유(저장소 내 사본 0을 테스트로 고정). 크론(KST 05:30)·서버 실행부·`/admin/pos-reconcile` 화면 신설. 대사는 **조회 + 기록표 INSERT 한 줄**만 — Payment/청구서/수강/원생 UPDATE·DELETE 부재를 테스트로 단정. 키 미설정 시 예외 대신 FAILED 기록(운영 환경변수 아직 미등록). tsc 0 / 테스트 **1661-0** / build 0 / CLI 실거래 재확인(2026-09: 사이트 17건 ₩1,675,000 vs 토스 25건 ₩3,737,000, 차이 ₩2,062,000, 쓰기 없음 증빙 통과). 미커밋 | 완료 |
-| 2026-09-29 | **갈라진 학부모 계정 4가족 정리(운영 DB 수정)** — 승인 로직이 전화번호를 글자 그대로 비교해 부모 계정을 새로 만들던 버그(9/28 수정·배포)로 이미 갈라진 4가족을 복구. 로그인 계정 쪽으로 자녀 4명(양시우·박윤우·신하율·최율찬)·청구서 3건·알림 4건 이전. 결제는 학생에 붙어 있어 자동으로 따라옴. 빈 껍데기가 된 자동생성 계정은 과거 기록이 가리킬 수 있어 **삭제하지 않음**. 되돌리기 SQL 을 실행 전 파일로 저장(scratchpad/parent-merge-rollback-20260929.sql). 검증: 4가족 모두 로그인 계정에 자녀 1명·앱 노출 조건 통과, 남은 분리 사고 **0건**, 배포 이후 새로 갈라진 계정 0건 | 완료·코드변경 없음 |

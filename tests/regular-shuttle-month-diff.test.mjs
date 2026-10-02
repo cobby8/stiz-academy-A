@@ -22,8 +22,7 @@ test("차량 변동은 학생별 추가·제외·변경으로 구분한다", () 
   assert.match(diff, /parentPhone/);
 });
 
-test("정규 차량 화면은 비교 결과를 보여주되 문자를 자동 발송하지 않는다", () => {
-  assert.match(client, /차량 변동 \{comparison\.length\}명/);
-  assert.match(client, /문자는 자동 발송되지 않습니다/);
-  assert.doesNotMatch(client, /sendManualSms|sendSms|shuttle-notice.*POST/);
+// 2026-10-02 월 비교·변동 문자 미리보기 UI 는 셔틀 명단 화면에서 뺐다(문자 원장 API 는 유지).
+test("셔틀 명단 화면은 문자를 발송하지 않는다", () => {
+  assert.doesNotMatch(client, /sendManualSms|sendSms|shuttle-notice.*POST|regular-notice/);
 });

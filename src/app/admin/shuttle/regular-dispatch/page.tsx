@@ -7,6 +7,7 @@ import { getRegularShuttleStops, getRegularStopsWithoutCoords } from "@/lib/shut
 import RegularStopGeocodePanel from "@/components/shuttle/RegularStopGeocodePanel";
 import { getRegularShuttleMonths } from "@/lib/shuttle/regularImport";
 import { prisma } from "@/lib/prisma";
+import { koreaServiceMonth, pickServiceMonthFor } from "@/lib/regular/serviceMonth";
 
 export const dynamic = "force-dynamic";
 
@@ -15,7 +16,12 @@ export const dynamic = "force-dynamic";
 export default async function RegularDispatchPage({ searchParams }: { searchParams: Promise<{ month?: string }> }) {
   const months = await getRegularShuttleMonths();
   const requestedMonth = (await searchParams).month;
-  const serviceMonth = requestedMonth && months.includes(requestedMonth) ? requestedMonth : (months[0] ?? new Date().toISOString().slice(0, 7));
+  // 기본 월 = 이번 달(KST) 이하의 최신 명단 달. 「다음 달 명단 만들기」로 미래 달이 생겨도 이번 달을 먼저 보여 준다.
+  // 이번 달 이하가 없으면 최신 달(months[0]), 명단이 아예 없으면 이번 달.
+  const currentMonth = koreaServiceMonth();
+  const serviceMonth = requestedMonth && months.includes(requestedMonth)
+    ? requestedMonth
+    : (pickServiceMonthFor(months, currentMonth) ?? months[0] ?? currentMonth);
   const weekdays = await getRegularShuttleWeekdays(serviceMonth);
   const initialDay = weekdays[0] ?? "Mon";
 

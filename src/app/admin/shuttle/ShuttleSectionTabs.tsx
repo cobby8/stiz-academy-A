@@ -9,7 +9,7 @@ import { usePathname } from "next/navigation";
 const ITEMS: Array<{ key: string; href: string; label: string; icon: string }> = [
   // 매달 사용하는 정규 수업 메뉴를 앞에 두고, 계절성 방학특강 메뉴는 뒤로 배치한다.
   { key: "regular-dispatch", href: "/admin/shuttle/regular-dispatch", label: "정규 배차", icon: "route" },
-  { key: "regular", href: "/admin/shuttle/regular", label: "정규 셔틀(시트)", icon: "commute" },
+  { key: "regular", href: "/admin/shuttle/regular", label: "셔틀 명단", icon: "groups" },
   { key: "vehicle", href: "/admin/shuttle", label: "차량 관리", icon: "directions_bus" },
   { key: "notice", href: "/admin/seasonal/shuttle-notice", label: "등원시간 안내", icon: "sms" },
   { key: "dispatch", href: "/admin/seasonal/dispatch", label: "방학특강 배차", icon: "route" },

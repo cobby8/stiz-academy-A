@@ -1,10 +1,12 @@
-import { getRegularShuttleStops } from "./regularImport";
+import { getRegularShuttleMonths, getRegularShuttleStops } from "./regularImport";
 import { getRegularAbsentPeople } from "./regularRun";
 import { getShuttleExceptionsForDate } from "./parent-shuttle-exception";
 import { describeException } from "./dayExceptionRules";
 import { getSavedRegularDispatchRoute } from "@/lib/regular/regularDispatchRoute";
 import { getRegularShuttleRiders } from "@/lib/regular/shuttleRoster";
 import { DOW_NAMES } from "@/lib/regular/shuttleRosterLogic";
+import { pickServiceMonthFor } from "@/lib/regular/serviceMonth";
+import { kstDow } from "@/lib/datetime/kst";
 import { matchAbsentee } from "@/lib/regular/regularAbsenceMatch";
 import {
   assembleRegularDriverClasses,
@@ -29,9 +31,9 @@ import type { RegularShuttleStop } from "./regularSheet";
  * ⚠️ PgBouncer 트랜잭션 모드 → 하위 조회는 모두 $queryRawUnsafe 를 쓰는 기존 함수만 호출한다.
  */
 
-// KST 날짜의 요일(0=일 … 6=토). 정오 기준이라 UTC 변환에도 날짜가 밀리지 않는다.
+// KST 날짜의 요일(0=일 … 6=토). 공용 모듈(kstDow)로 계산해 시간대가 개입하지 않는다.
 function weekdayOf(dateIso: string): number {
-  return new Date(`${dateIso}T12:00:00+09:00`).getUTCDay();
+  return kstDow(dateIso);
 }
 
 const DIRECTIONS: RouteDirection[] = ["PICKUP", "DROPOFF"];
@@ -41,10 +43,11 @@ async function loadRowIdsByStudentId(
   dayOfWeek: string,
   direction: RouteDirection,
   orderIndex: Map<string, number>,
+  serviceMonth?: string,
 ): Promise<Map<string, string[]>> {
   const out = new Map<string, string[]>();
   try {
-    const roster = await getRegularShuttleRiders({ direction, dayOfWeek });
+    const roster = await getRegularShuttleRiders({ direction, dayOfWeek, serviceMonth });
     // 좌표 없는 이용자(unassigned)도 포함해야 저장 노선에 남아 있는 학생을 놓치지 않는다.
     for (const rider of [...roster.riders, ...roster.unassigned]) {
       const rowId = rider.stopRowId ?? null;
@@ -66,8 +69,13 @@ export async function getRegularDriverClasses(viewDate: string): Promise<DriverC
   const weekday = weekdayOf(viewDate);
   const dayOfWeek = DOW_NAMES[weekday];
 
+  // 그날이 속한 달 "이하"의 최신 명단 달을 한 번만 정해 명단·저장노선·탑승키 조회에 모두 넘긴다.
+  // 왜: 「다음 달 명단 만들기」로 미래 달 행이 먼저 생겨도 기사님 화면은 그날 달 명단을 봐야 한다.
+  // 해당 달이 없으면 undefined → 각 함수의 기존 동작(최신 달).
+  const serviceMonth = pickServiceMonthFor(await getRegularShuttleMonths(), viewDate);
+
   const [{ stops }, absentees, shuttleExceptions] = await Promise.all([
-    getRegularShuttleStops(),
+    getRegularShuttleStops(serviceMonth),
     getRegularAbsentPeople(viewDate),
     getShuttleExceptionsForDate(viewDate),
   ]);
@@ -82,7 +90,7 @@ export async function getRegularDriverClasses(viewDate: string): Promise<DriverC
 
   // 요일·방향별 저장 노선. 테이블이 없거나 실패하면 null → 자동으로 폴백.
   const [savedPickup, savedDropoff] = await Promise.all(
-    DIRECTIONS.map((d) => getSavedRegularDispatchRoute(dayOfWeek, d)),
+    DIRECTIONS.map((d) => getSavedRegularDispatchRoute(dayOfWeek, d, serviceMonth)),
   );
   const saved: Record<RouteDirection, { vehicles?: unknown } | null> = { PICKUP: savedPickup, DROPOFF: savedDropoff };
 
@@ -92,7 +100,7 @@ export async function getRegularDriverClasses(viewDate: string): Promise<DriverC
   const empty = new Map<string, string[]>();
   const [mapPickup, mapDropoff] = await Promise.all(
     DIRECTIONS.map((d) =>
-      pickRegularRouteSource(saved[d]) === "SAVED" ? loadRowIdsByStudentId(dayOfWeek, d, orderIndex) : Promise.resolve(empty),
+      pickRegularRouteSource(saved[d]) === "SAVED" ? loadRowIdsByStudentId(dayOfWeek, d, orderIndex, serviceMonth) : Promise.resolve(empty),
     ),
   );
 

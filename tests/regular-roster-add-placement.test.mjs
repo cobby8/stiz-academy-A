@@ -34,9 +34,12 @@ test("학생 추가 저장은 삽입 계획(planRosterInsert)으로 요일 전�
   assert.match(client, /endPlacedMonths/);
 });
 
-test("학생 정보 불러오기는 관리자 전용 조회 — ACTIVE 수강만, 병합 학생 제외", () => {
+test("학생 정보 불러오기는 관리자 전용 조회 — 다니는·휴원 수강(퇴원 제외), 병합 학생 제외", () => {
   assert.match(route, /getRosterStudentContext\(params\.get\("studentId"\)/);
   assert.match(lib, /export async function getRosterStudentContext\(rawStudentId: unknown\): Promise<RosterStudentContext> \{\s+await requireAdmin\(\);/);
-  assert.match(lib, /e\."status"='ACTIVE'/);
+  // 복귀 직전 휴원생을 미리 배정할 수 있게 PAUSED 까지(2026-10-03 운영 실측), 화면은 휴원을 미리 체크하지 않는다.
+  assert.match(lib, /e\."status" IN \('ACTIVE','PAUSED'\)/);
+  assert.match(client, /filter\(\(o\) => !o\.paused\)/);
+  assert.match(client, /휴원 중인 수업이 있습니다 — 복귀할 수업을 눌러 고르세요/);
   assert.match(lib, /WHERE s\."id"=\$1 AND s\."mergedIntoStudentId" IS NULL/);
 });

@@ -19,7 +19,7 @@ import {
 } from "@/lib/shuttle/regularRosterEditLogic";
 import type { RosterStudentContext, RosterStudentSearchResult } from "@/lib/shuttle/regularRosterEdit";
 import { checkRosterRows } from "@/lib/shuttle/regularRosterCheckLogic";
-import { enrolledClassSlots, resolveCellPlacement, type GeoPoint, type PlacementOverride } from "@/lib/shuttle/regularRosterPlacementLogic";
+import { enrolledClassSlots, resolveCellPlacement, studentRosterRows, type GeoPoint, type PlacementOverride } from "@/lib/shuttle/regularRosterPlacementLogic";
 import DriverOrderView from "./DriverOrderView";
 import AddRiderRoutePanel, { type PanelDirection } from "./AddRiderRoutePanel";
 
@@ -259,7 +259,8 @@ export default function RegularShuttleClient({ initialStops, initialMonth, month
         if ((d.student?.id ?? null) !== (context.student?.id ?? null)) return d;
         // 등록 수업을 미리 고르되, 원장이 이미 직접 추가해 둔 수업 칸은 지우지 않고 합친다.
         const enrolled = studentId
-          ? enrolledClassSlots(context.enrolled, classTimes).map((o) => ({ weekday: o.weekday, classTime: o.classTime }))
+          // 휴원(PAUSED) 수업은 미리 체크하지 않는다 — 원장이 복귀할 수업을 눌러 고른다.
+          ? enrolledClassSlots(context.enrolled, classTimes).filter((o) => !o.paused).map((o) => ({ weekday: o.weekday, classTime: o.classTime }))
           : [];
         const slots = [...enrolled, ...d.slots.filter((s) => !enrolled.some((o) => o.weekday === s.weekday && classTimeKey(o.classTime) === classTimeKey(s.classTime)))];
         return { ...d, context, contextLoading: false, contextError: false, slots };
@@ -455,6 +456,13 @@ export default function RegularShuttleClient({ initialStops, initialMonth, month
     );
   }
 
+  // 학생 추가: 이 학생이 이 달 이미 타는 행 — studentId 일치 + 이름(공백 무시)+학부모 전화 끝4자리 일치(명단 화면과 같은 묶음 규칙).
+  function ridingRows(d: Extract<Dialog, { kind: "add" }>): RegularShuttleStop[] {
+    if (!d.student) return [];
+    const parentPhone = (d.context?.student?.id === d.student.id ? d.context.student.parentPhone : null) ?? d.student.parentPhone;
+    return studentRosterRows(stops, { id: d.student.id, name: d.student.name, parentPhone });
+  }
+
   // 학생 추가: 정류장 후보 — 학생 상세 위치(등·하원) + 이 달 이미 타는 정류장. 누르면 이름·좌표를 채운다.
   function stopCandidates(target: "board" | "alight") {
     if (dialog?.kind !== "add") return null;
@@ -467,11 +475,10 @@ export default function RegularShuttleClient({ initialStops, initialMonth, month
     for (const [label, p] of places) {
       if (p) out.push({ key: `place-${label}`, label: `학생 ${label} · ${p.name || p.address}`, draft: { stopName: p.name || p.address, latitude: p.latitude, longitude: p.longitude } });
     }
-    const sid = dialog.student?.id;
-    if (sid) {
+    {
       const seen = new Set<string>();
-      for (const s of stops) {
-        if (s.studentId !== sid || s.direction !== dir || seen.has(s.stopName)) continue;
+      for (const s of ridingRows(dialog)) {
+        if (s.direction !== dir || seen.has(s.stopName)) continue;
         seen.add(s.stopName);
         out.push({ key: `row-${s.id}`, label: `지금 ${dir === "BOARD" ? "등원" : "하원"} 정류장 · ${s.stopName}`, draft: { stopName: s.stopName, latitude: s.latitude ?? null, longitude: s.longitude ?? null } });
       }
@@ -525,15 +532,16 @@ export default function RegularShuttleClient({ initialStops, initialMonth, month
     if (dialog.kind === "add") {
       const set = (patch: Partial<Extract<Dialog, { kind: "add" }>>) => setDialog((d) => (d?.kind === "add" ? { ...d, ...patch } : d));
       const studentId = dialog.student?.id ?? null;
-      // 이 학생이 이 달 명단에서 이미 타는 행(학생 계정과 연결된 행만).
-      const riding = studentId ? stops.filter((s) => s.studentId === studentId && (s.direction === "BOARD" || s.direction === "ALIGHT")) : [];
+      // 이 학생이 이 달 명단에서 이미 타는 행(학생 연결 행 + 이름·전화로 같은 학생인 미연결 행).
+      const riding = ridingRows(dialog);
       // 등록 수업 → 수업 칩(명단에 같은 시각 글자가 있으면 그 글자). 늦게 온 다른 학생 응답은 쓰지 않는다.
       const enrolledOptions = studentId && dialog.context?.student?.id === studentId ? enrolledClassSlots(dialog.context.enrolled, classTimes) : [];
       const sameSlot = (a: RosterClassSlot, b: RosterClassSlot) => a.weekday === b.weekday && classTimeKey(a.classTime) === classTimeKey(b.classTime);
       const hasSlot = (o: RosterClassSlot) => dialog.slots.some((s) => sameSlot(s, o));
       // 직접 추가한 수업도 칩으로 보여 줘서 눌러 뺄 수 있게 한다.
       const extraSlots = dialog.slots.filter((s) => !enrolledOptions.some((o) => sameSlot(o, s)))
-        .map((s) => ({ ...s, label: `${WEEKDAY_LABELS[s.weekday]} ${s.classTime} · 직접 추가` }));
+        .map((s) => ({ ...s, label: `${WEEKDAY_LABELS[s.weekday]} ${s.classTime} · 직접 추가`, paused: false }));
+      const hasActiveEnrolled = enrolledOptions.some((o) => !o.paused);
       const toggleSlot = (o: RosterClassSlot) => set({ slots: hasSlot(o) ? dialog.slots.filter((s) => !sameSlot(s, o)) : [...dialog.slots, { weekday: o.weekday, classTime: o.classTime }] });
       return (
         <div className="p-4">
@@ -589,7 +597,10 @@ export default function RegularShuttleClient({ initialStops, initialMonth, month
                 <p className="mt-1 text-[12px] font-bold text-red-600">학생 정보를 불러오지 못했습니다(아래에서 수업을 직접 추가할 수 있습니다).</p>
               )}
               {dialog.student && !dialog.contextLoading && !dialog.contextError && enrolledOptions.length === 0 && (
-                <p className="mt-1 text-[12px] font-bold text-amber-600">수강 중인 등록 수업이 없습니다. 아래에서 직접 추가해 주세요.</p>
+                <p className="mt-1 text-[12px] font-bold text-amber-600">등록 수업이 없습니다. 아래에서 직접 추가해 주세요.</p>
+              )}
+              {dialog.student && !dialog.contextLoading && !dialog.contextError && enrolledOptions.length > 0 && !hasActiveEnrolled && (
+                <p className="mt-1 text-[12px] font-bold text-amber-600">휴원 중인 수업이 있습니다 — 복귀할 수업을 눌러 고르세요.</p>
               )}
               <div className="mt-1 flex flex-wrap gap-1">
                 {[...enrolledOptions, ...extraSlots].map((o) => {
@@ -598,6 +609,7 @@ export default function RegularShuttleClient({ initialStops, initialMonth, month
                     <button key={`${o.weekday}|${o.classTime}`} type="button" aria-pressed={on} onClick={() => toggleSlot(o)}
                       className={`min-h-9 rounded-lg px-2.5 text-left text-[12.5px] font-black ${on ? "bg-brand-navy-900 text-white dark:bg-brand-neon-lime dark:text-brand-navy-900" : "bg-gray-100 text-gray-500 dark:bg-gray-900"}`}>
                       {on ? "✓ " : ""}{o.label}
+                      {o.paused && <span className="ml-1.5 rounded bg-amber-100 px-1.5 py-0.5 text-[10.5px] font-black text-amber-800 dark:bg-amber-500/20 dark:text-amber-200">휴원</span>}
                     </button>
                   );
                 })}

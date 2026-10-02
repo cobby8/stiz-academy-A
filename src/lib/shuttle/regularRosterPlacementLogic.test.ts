@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 // @ts-expect-error -- Node's type-stripping runner needs the runtime extension.
-import { classTimeWarning, dowToWeekday, enrolledClassSlots, estimateInsertTime, findRouteCell, matchRosterClassTime, placementToRequest, resolveCellPlacement, suggestPlacement } from "./regularRosterPlacementLogic.ts";
+import { classTimeWarning, dowToWeekday, enrolledClassSlots, estimateInsertTime, findRouteCell, matchRosterClassTime, placementToRequest, resolveCellPlacement, studentRosterRows, suggestPlacement } from "./regularRosterPlacementLogic.ts";
 // @ts-expect-error -- Node's type-stripping runner needs the runtime extension.
 import { buildAddRows, mapPlacementsToMonth, planRosterInsert, validateAddInput, RosterInputError } from "./regularRosterEditLogic.ts";
 // @ts-expect-error -- Node's type-stripping runner needs the runtime extension.
@@ -344,4 +344,32 @@ test("resolveCellPlacement: 추천 기본 → 원장 선택 덮어쓰기 · 시�
   assert.ok(clash.warnings.some((w: string) => /같은 이름 「C」/.test(w)));
   // 범위를 벗어난 옛 선택은 무시하고 추천으로
   assert.equal(resolveCellPlacement({ ...base, override: { choice: { kind: "JOIN", stopIndex: 9 } } }).isSuggested, true);
+});
+
+test("휴원 수업: 칩 후보에 paused 로 표시, 같은 칸에 다니는 수업이 있으면 다니는 쪽 우선", () => {
+  const out = enrolledClassSlots([
+    { weekday: 1, startTime: "17:00", endTime: "18:00", className: "초등A", programName: null, status: "PAUSED" },
+    { weekday: 3, startTime: "17:00", endTime: "18:00", className: "초등A", programName: null, status: "PAUSED" },
+    { weekday: 3, startTime: "17:00", endTime: "18:00", className: "초등B", programName: null, status: "ACTIVE" },
+    { weekday: 5, startTime: "17:00", endTime: "18:00", className: "초등A", programName: null }, // 상태 없으면 다니는 수업
+  ], []);
+  assert.deepEqual(out.map((o: any) => `${o.weekday}:${o.paused}`), ["1:true", "3:false", "5:false"]);
+});
+
+test("이미 타는 행: studentId 일치 + 미연결 행은 이름(공백 무시)+학부모 전화 끝4자리 일치만", () => {
+  seq = 500;
+  const rows = [
+    r({ id: "v1", studentId: "kid", studentName: "이종현", parentPhone: "010-1234-5678" }),
+    r({ id: "v2", studentId: null, studentName: "이 종현", parentPhone: "01099995678", direction: "ALIGHT" }), // 같은 학생(미연결)
+    r({ id: "v3", studentId: null, studentName: "이종현", parentPhone: "010-1234-0000" }), // 전화 다름 → 다른 학생
+    r({ id: "v4", studentId: null, studentName: "이종현", parentPhone: null }), // 전화 없음 → 이름만으로 묶지 않음
+    r({ id: "v5", studentId: "kid", studentName: "이종현", direction: "PIVOT" }), // 운영 정차 제외
+  ];
+  assert.deepEqual(studentRosterRows(rows, { id: "kid", name: "이종현", parentPhone: "010-1234-5678" }).map((x: any) => x.id), ["v1", "v2"]);
+  // 그 달에 studentId 연결 행이 하나도 없어도(새로 고른 학생) 이름+전화로 찾는다
+  const unlinked = rows.filter((x) => x.id === "v2");
+  assert.deepEqual(studentRosterRows(unlinked, { id: "kid", name: "이종현", parentPhone: "010-5555-5678" }).map((x: any) => x.id), ["v2"]);
+  // 같은 이름+전화에 다른 학생 id 가 이미 있으면 묶지 않는다(남의 행 섞임 방지)
+  const other = [r({ id: "w1", studentId: "other", studentName: "이종현", parentPhone: "010-1234-5678" }), ...unlinked];
+  assert.deepEqual(studentRosterRows(other, { id: "kid", name: "이종현", parentPhone: "010-1234-5678" }).map((x: any) => x.id), []);
 });

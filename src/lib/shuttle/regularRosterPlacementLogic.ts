@@ -14,7 +14,7 @@ import { buildFallbackClasses, normalizeStopName, selectDriverDayRows, type Driv
 // @ts-expect-error -- TypeScript runtime test compatibility
 import { parseClassTimeRange } from "./regularRosterCheckLogic.ts";
 // @ts-expect-error -- TypeScript runtime test compatibility
-import { classTimeKey, WEEKDAY_LABELS, type RosterDirection, type RosterPlacementMode } from "./regularRosterEditLogic.ts";
+import { classTimeKey, rosterStudentKeyResolver, WEEKDAY_LABELS, type RosterDirection, type RosterPlacementMode } from "./regularRosterEditLogic.ts";
 // 거리 계산은 정차 병합의 단일 기준 모듈 것을 그대로 쓴다(새 거리 함수를 만들지 않는다).
 // @ts-expect-error -- TypeScript runtime test compatibility
 import { distanceMeters } from "../seasonal/stopMerge.ts";
@@ -68,11 +68,15 @@ export function matchRosterClassTime(start: string, end: string, existingClassTi
   return hit ?? `${minToHhmm(s)}~${minToHhmm(e)}`;
 }
 
-/** 서버가 내려주는 등록 수업(ACTIVE 수강만). */
-export type EnrolledClass = { weekday: number; startTime: string; endTime: string; className: string | null; programName: string | null };
-export type ClassSlotOption = { weekday: number; classTime: string; label: string };
+/**
+ * 서버가 내려주는 등록 수업 — 다니는 수업(ACTIVE)과 휴원 중(PAUSED). 퇴원(WITHDRAWN) 등은 오지 않는다.
+ * 휴원도 내려주는 이유: 복귀 직전 학생을 미리 배정하는 것이 학생 추가의 주 용도라서(2026-10-03 운영 실측: 휴원생 3수업 전부 누락).
+ */
+export type EnrolledClass = { weekday: number; startTime: string; endTime: string; className: string | null; programName: string | null; status?: "ACTIVE" | "PAUSED" };
+/** paused = 휴원 중 수업(미리 체크하지 않고 「휴원」 배지로 보여 준다). */
+export type ClassSlotOption = { weekday: number; classTime: string; label: string; paused: boolean };
 
-/** 등록 수업 → 수업 칸 후보(요일 월→일, 시각 순, 같은 요일·시각은 하나). */
+/** 등록 수업 → 수업 칸 후보(요일 월→일, 시각 순, 같은 요일·시각은 하나 — 다니는 수업이 휴원보다 우선). */
 export function enrolledClassSlots(enrolled: readonly EnrolledClass[], existingClassTimes: readonly string[]): ClassSlotOption[] {
   const out: ClassSlotOption[] = [];
   const seen = new Set<string>();
@@ -81,13 +85,35 @@ export function enrolledClassSlots(enrolled: readonly EnrolledClass[], existingC
     const classTime = matchRosterClassTime(c.startTime, c.endTime, existingClassTimes);
     if (!classTime) continue;
     const key = `${c.weekday}|${classTimeKey(classTime)}`;
-    if (seen.has(key)) continue;
+    const paused = c.status === "PAUSED";
+    if (seen.has(key)) {
+      // 같은 칸에 다니는 수업이 있으면 휴원 표시를 지운다.
+      const prev = out.find((o) => `${o.weekday}|${classTimeKey(o.classTime)}` === key);
+      if (prev && !paused) prev.paused = false;
+      continue;
+    }
     seen.add(key);
     const name = [c.programName, c.className].filter(Boolean).join(" · ");
-    out.push({ weekday: c.weekday, classTime, label: `${WEEKDAY_LABELS[c.weekday]} ${classTime}${name ? ` · ${name}` : ""}` });
+    out.push({ weekday: c.weekday, classTime, label: `${WEEKDAY_LABELS[c.weekday]} ${classTime}${name ? ` · ${name}` : ""}`, paused });
   }
   const rank = (w: number) => (w === 0 ? 7 : w);
   return out.sort((a, b) => rank(a.weekday) - rank(b.weekday) || a.classTime.localeCompare(b.classTime));
+}
+
+// ── 이 학생이 그 달 이미 타는 행 ──────────────────────────────────
+
+/**
+ * 그 달 명단에서 이 학생의 등·하원 행 — studentId 일치 + studentId 없는 행 중 이름(공백 무시)+학부모 전화 끝4자리 일치.
+ * 판정은 명단 화면이 학생을 묶는 rosterStudentKeyResolver 를 그대로 쓴다(학생 자신을 한 줄 덧붙여 이름+전화 → id 연결).
+ * 같은 이름+전화에 다른 studentId 가 있으면 resolver 가 묶지 않으므로 남의 행이 섞이지 않는다.
+ */
+export function studentRosterRows<T extends RegularShuttleStop>(
+  stops: readonly T[],
+  student: { id: string; name: string; parentPhone: string | null },
+): T[] {
+  const keyOf = rosterStudentKeyResolver([...stops, { studentId: student.id, studentName: student.name, parentPhone: student.parentPhone }]);
+  const key = `id:${student.id}`;
+  return stops.filter((s) => (s.direction === "BOARD" || s.direction === "ALIGHT") && !!s.studentName && keyOf(s) === key);
 }
 
 // ── 현재 운행표 한 칸(요일·수업·방향) ────────────────────────────

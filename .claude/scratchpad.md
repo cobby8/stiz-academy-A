@@ -128,6 +128,7 @@
 | 회차 | 날짜 | 수정 내용 | 수정 파일 | 사유 |
 |------|------|----------|----------|------|
 | 1차 | 2026-10-03 | BEFORE 전에 칸 안 번호 겹침을 벌림(spread, 큰 번호 행 함께 밀어 상대 순서 보존·칸 밖 겹침 무시), 명단 조회 정렬에 id COLLATE "C" 추가 / JOIN = 칸 맨 뒤 + 대상 정차 값 복사(밀기 없음), 시각 미검증·미전송, 좌표 없으면 학생 좌표 / 정보 실패 안내·직접 추가 수업 병합 / 패널 버튼 min-h-9 | regularRosterEditLogic.ts, regularRosterEdit.ts, regularImport.ts, RegularShuttleClient.tsx, AddRiderRoutePanel.tsx, 테스트 2 | reviewer R-A1~A6 |
+| 2차 | 2026-10-03 | 등록 수업에 휴원(PAUSED) 포함·상태 전달(퇴원 제외), 휴원 칩은 미체크+「휴원」 배지·안내 문구 분리, 「이미 타는 셔틀」·정류장 후보를 이름+전화 끝4자리(rosterStudentKeyResolver)로 확장, 학부모 전화 보호자 보강 | regularRosterPlacementLogic.ts, regularRosterEdit.ts, RegularShuttleClient.tsx, 테스트 2 | PM 운영 실측: 휴원생 수업 누락 |
 
 ### 리뷰 결과 (reviewer) — 학생 추가: 운행표 대조·중간 삽입 (2026-10-03)
 
@@ -156,4 +157,3 @@
 | 2026-10-02 | **셔틀 명단 월 자동 생성(developer·reviewer)** — 이번 달·다음 달 자동 보장(크론 KST 00:05·화면 진입), 저장 노선 복사, 편집 4종 적용 범위. 리뷰 높음1·권장3 수정(따라잡기 생성 시 탑승체크·기사요청 id 이전, 전화 없는 동명이인 미묶음, 지난 달 기본 THIS_MONTH) | 커밋 146e0cee |
 | 2026-10-02 | **정규 배차 편집 강화 2단계(developer·reviewer)** — 정차·학생 차량 간 이동·빼기·정원 경고·저장 안 됨/이탈 경고(regularEditing 로만). 리뷰 중간2·낮음3 수정(월 전환 재로딩·저장 중 편집 보존·회차 시간 확인) | 커밋 146e0cee |
 | 2026-10-02 | **셔틀 명단 앱 편집 1단계(developer·tester·reviewer)** — 시트 탭을 「셔틀 명단」 화면으로 교체(추가·빼기·반이동·정류장 수정, ShuttleAuditLog). tester 7/7, 리뷰 높음1·권장3 수정(기사 화면 월 고정 pickServiceMonthFor 등) | 커밋 5b9c2bb8 |
-| 2026-10-02 | **토스 심사 주문서 리뷰(reviewer)** — 통과. DB 쓰기·청구서 접근 0, 금액은 서버 DB 가격, v2 필드명 일치. 권장만: 안내 화면 HTTP 200 | 통과 |

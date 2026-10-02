@@ -294,7 +294,7 @@ async function applyInsertPlan(
 
 export type RosterStudentContext = {
   student: RosterStudentSearchResult | null;
-  /** ACTIVE 수강(병합 학생·삭제된 프로그램 제외)의 요일·시각. */
+  /** 다니는(ACTIVE)·휴원(PAUSED) 수강의 요일·시각·상태(병합 학생·삭제된 프로그램·퇴원 제외). */
   enrolled: EnrolledClass[];
   /** 운행 기준점 — 추천 거리 계산용(등원: 차고지 → 학원 / 하원: 학원 → 차고지). 좌표가 이상하면 null. */
   academy: GeoPoint | null;
@@ -319,7 +319,9 @@ export async function getRosterStudentContext(rawStudentId: unknown): Promise<Ro
   if (!studentId) return { student: null, enrolled: [], academy, depot };
 
   const found = await prisma.$queryRawUnsafe<Record<string, unknown>[]>(
-    `SELECT s."id", s."name", s."grade", u."phone" AS "parentPhone",
+    // 학부모 전화: 계정 전화, 없으면 대표 보호자 전화(학생 추가 저장과 같은 규칙) — 「이미 타는 셔틀」 이름+전화 판정에 쓴다.
+    `SELECT s."id", s."name", s."grade",
+            COALESCE(u."phone", (SELECT g."phone" FROM "Guardian" g WHERE g."studentId"=s."id" AND g."phone" IS NOT NULL ORDER BY g."isPrimary" DESC, g."createdAt" ASC LIMIT 1)) AS "parentPhone",
             pk."name" AS "pkName", pk."address" AS "pkAddress", pk."latitude" AS "pkLat", pk."longitude" AS "pkLng",
             dr."name" AS "drName", dr."address" AS "drAddress", dr."latitude" AS "drLat", dr."longitude" AS "drLng"
        FROM "Student" s
@@ -344,12 +346,14 @@ export async function getRosterStudentContext(rawStudentId: unknown): Promise<Ro
   };
 
   // 수강 등록: Enrollment(학생–반, status) → Class(dayOfWeek "Mon"…, startTime/endTime "HH:MM") → Program.
+  // status 는 ACTIVE(다님)·PAUSED(휴원)·WITHDRAWN(퇴원) — 프로젝트 관례(「다니는 수업」= IN ('ACTIVE','PAUSED'))대로 휴원까지.
+  // 복귀 직전 휴원생을 미리 배정하려는 것이 주 용도라 휴원을 빼면 안 된다(화면은 휴원을 미리 체크하지 않는다).
   const classes = await prisma.$queryRawUnsafe<Record<string, unknown>[]>(
-    `SELECT c."dayOfWeek", c."startTime", c."endTime", c."name" AS "className", p."name" AS "programName"
+    `SELECT c."dayOfWeek", c."startTime", c."endTime", c."name" AS "className", p."name" AS "programName", e."status"
        FROM "Enrollment" e
        JOIN "Class" c ON c."id"=e."classId"
        JOIN "Program" p ON p."id"=c."programId"
-      WHERE e."studentId"=$1 AND e."status"='ACTIVE' AND p."deletedAt" IS NULL
+      WHERE e."studentId"=$1 AND e."status" IN ('ACTIVE','PAUSED') AND p."deletedAt" IS NULL
       ORDER BY c."startTime" ASC`,
     studentId,
   );
@@ -363,6 +367,7 @@ export async function getRosterStudentContext(rawStudentId: unknown): Promise<Ro
       endTime: String(c.endTime ?? ""),
       className: (c.className as string | null) ?? null,
       programName: (c.programName as string | null) ?? null,
+      status: c.status === "PAUSED" ? "PAUSED" : "ACTIVE",
     });
   }
   return { student, enrolled, academy, depot };

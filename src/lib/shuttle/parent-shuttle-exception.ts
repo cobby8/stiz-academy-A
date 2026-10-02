@@ -65,7 +65,7 @@ export async function getShuttleExceptionOptions(parentUserId: string): Promise<
             x.direction, x.kind, x.location, x.note
        FROM "ShuttleDayException" x
        JOIN "Student" s ON s.id = x."studentId"
-      WHERE s."parentId" = $1 AND x."canceledAt" IS NULL
+      WHERE s."parentId" = $1 AND ${notMergedStudent("s")} AND x."canceledAt" IS NULL
         AND x."serviceDate" >= $2::date
       ORDER BY x."serviceDate", s.name`,
     parentUserId, today,
@@ -219,7 +219,7 @@ export async function getShuttleExceptionsForDate(date: string): Promise<
          FROM "ShuttleDayException" x
          JOIN "Student" s ON s.id = x."studentId"
          LEFT JOIN "User" u ON u.id = s."parentId"
-        WHERE x."serviceDate" = $1::date AND x."canceledAt" IS NULL`,
+        WHERE x."serviceDate" = $1::date AND x."canceledAt" IS NULL AND ${notMergedStudent("s")}`,
       date,
     );
     return rows

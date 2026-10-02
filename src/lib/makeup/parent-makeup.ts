@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { notMergedStudent } from "@/lib/studentVisibility";
 import { recommendClasses, summarize, type ClassCandidate } from "./credit-rules";
 
 // 학부모용 보강 — 보강권 조회 · 반 추천 · 예약 · 취소.
@@ -62,7 +63,7 @@ export async function getMakeupOverviewForParent(parentUserId: string): Promise<
        JOIN "Student" s ON s.id = mc."studentId"
        LEFT JOIN "MakeupSession" ms ON ms.id = mc."makeupSessionId"
        LEFT JOIN "Class" bc ON bc.id = ms."makeupClassId"
-      WHERE s."parentId" = $1
+      WHERE s."parentId" = $1 AND ${notMergedStudent("s")}
       ORDER BY mc."expiresAt" ASC`,
     parentUserId,
   );

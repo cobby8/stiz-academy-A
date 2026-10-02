@@ -170,7 +170,7 @@ export async function submitEnrollmentChangeRequest(parentUserId: string, input:
        FROM "Enrollment" e
        JOIN "Student" s ON s.id = e."studentId"
        JOIN "Class" c ON c.id = e."classId"
-      WHERE e.id = $1 AND s."parentId" = $2 AND e.status = 'ACTIVE'
+      WHERE e.id = $1 AND s."parentId" = $2 AND e.status = 'ACTIVE' AND ${notMergedStudent("s")}
       LIMIT 1`,
     enrollmentId, parentUserId,
   );

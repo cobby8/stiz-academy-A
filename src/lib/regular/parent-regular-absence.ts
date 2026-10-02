@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { createHash } from "node:crypto";
+import { notMergedStudent } from "@/lib/studentVisibility";
 import {
   REASON_LABEL,
   DAY_KO,
@@ -86,7 +87,7 @@ export async function getUpcomingRegularClassDates(
        FROM "Student" s
        JOIN "Enrollment" e ON e."studentId" = s.id AND e.status = 'ACTIVE'
        JOIN "Class" c ON c.id = e."classId"
-      WHERE s."parentId" = $1
+      WHERE s."parentId" = $1 AND ${notMergedStudent("s")}
       ORDER BY s.name ASC, c."startTime" ASC`,
     parentUserId,
   );
@@ -98,7 +99,7 @@ export async function getUpcomingRegularClassDates(
             to_char(ra.date, 'YYYY-MM-DD') AS "date", ra.reason AS reason, ra.status AS status
        FROM "RegularAbsence" ra
        JOIN "Student" s ON s.id = ra."studentId"
-      WHERE s."parentId" = $1 AND ra.status <> 'CANCELLED'`,
+      WHERE s."parentId" = $1 AND ${notMergedStudent("s")} AND ra.status <> 'CANCELLED'`,
     parentUserId,
   );
   const absByKey = new Map<string, { reason: string; status: string }>();
@@ -159,7 +160,7 @@ async function verifyOwnershipAndClass(
        FROM "Enrollment" e
        JOIN "Student" s ON s.id = e."studentId"
        JOIN "Class" c ON c.id = e."classId"
-      WHERE s."parentId" = $1
+      WHERE s."parentId" = $1 AND ${notMergedStudent("s")}
         AND e."studentId" = $2
         AND e."classId" = $3
         AND e.status = 'ACTIVE'

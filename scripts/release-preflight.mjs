@@ -198,6 +198,8 @@ const checks = [
   ["Prisma 스키마", process.execPath, [prisma, "validate"]],
   ["TypeScript", process.execPath, [tsc, "--noEmit"]],
   ["정책 및 계약 테스트", process.execPath, ["--test", ...testFiles]],
+  // tests/ 밖(src/)에 있어 위 목록에 안 잡히던 가드. 빠지면 병합된 유령 학생 쿼리가 조용히 늘어난다.
+  ["학생 병합 필터 가드", process.execPath, ["--experimental-strip-types", "--test", resolve(root, "src", "lib", "studentVisibility.test.ts")]],
 ];
 
 if (!skipEnv) {

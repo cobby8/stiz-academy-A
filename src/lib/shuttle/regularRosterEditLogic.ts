@@ -17,8 +17,16 @@ export type RosterStopInput = {
   longitude: number | null;
 };
 
+/**
+ * 편집 적용 범위. 명단은 달별 스냅샷이라 이번 달을 고쳐도 이미 만들어진 다음 달엔 남는다.
+ * - FROM_THIS_MONTH(기본): 이 달 + 이후 이미 만들어진 달 모두
+ * - THIS_MONTH: 이 달만
+ */
+export type RosterScope = "THIS_MONTH" | "FROM_THIS_MONTH";
+
 export type RosterAddInput = {
   serviceMonth: string;
+  scope?: RosterScope;
   studentId: string | null;
   studentName: string;
   weekdays: number[];
@@ -72,6 +80,38 @@ export function normalizeRosterMonth(v: unknown): string {
 export function nextServiceMonth(month: string): string {
   const [y, m] = normalizeRosterMonth(month).split("-").map(Number);
   return m === 12 ? `${y + 1}-01` : `${y}-${String(m + 1).padStart(2, "0")}`;
+}
+
+/** 적용 범위 — 비어 있으면 기본값 FROM_THIS_MONTH(이후 달까지). 그 외 값은 거부한다. */
+export function normalizeRosterScope(v: unknown): RosterScope {
+  if (v == null || v === "") return "FROM_THIS_MONTH";
+  if (v === "THIS_MONTH" || v === "FROM_THIS_MONTH") return v;
+  throw new RosterInputError("적용 범위가 올바르지 않습니다.");
+}
+
+/**
+ * 월 자동 생성 계획 — 이번 달과 다음 달이 항상 있게 한다.
+ * 없는 달은 그 달 직전의 가장 최근 달을 복사한다(앞 단계에서 만든 달도 원본이 될 수 있다: 09→10, 10→11).
+ * 명단이 아예 없거나 직전 달이 없으면 그 달은 만들지 않는다.
+ */
+export function planEnsureMonths(existing: readonly string[], currentMonth: string): { sourceMonth: string; targetMonth: string }[] {
+  const isMonth = (m: unknown): m is string => typeof m === "string" && /^20\d{2}-(0[1-9]|1[0-2])$/.test(m);
+  const have = new Set(existing.filter(isMonth));
+  const steps: { sourceMonth: string; targetMonth: string }[] = [];
+  for (const target of [currentMonth, nextServiceMonth(currentMonth)]) {
+    if (have.has(target)) continue; // 이미 있으면 손대지 않는다(멱등)
+    // 'YYYY-MM' 은 사전순 = 시간순이라 문자열 비교로 직전 달을 고른다.
+    const source = [...have].filter((m) => m < target).sort().pop();
+    if (!source) continue;
+    steps.push({ sourceMonth: source, targetMonth: target });
+    have.add(target);
+  }
+  return steps;
+}
+
+/** 'YYYY-MM' 목록 → "10월·11월" (저장 결과 문구용). */
+export function formatRosterMonths(months: readonly string[]): string {
+  return months.map((m) => `${Number(m.slice(5, 7))}월`).join("·");
 }
 
 export function normalizeWeekday(v: unknown): number {
@@ -133,6 +173,7 @@ export function validateAddInput(raw: unknown): RosterAddInput {
   if (!board && !alight) throw new RosterInputError("등원·하원 중 하나 이상 선택해 주세요.");
   return {
     serviceMonth: normalizeRosterMonth(o.serviceMonth),
+    scope: normalizeRosterScope(o.scope),
     studentId,
     studentName,
     weekdays: normalizeWeekdays(o.weekdays),
@@ -151,26 +192,27 @@ export function normalizeIds(v: unknown): string[] {
   return ids;
 }
 
-export function validateRemoveInput(raw: unknown): { serviceMonth: string; ids: string[] } {
+export function validateRemoveInput(raw: unknown): { serviceMonth: string; ids: string[]; scope: RosterScope } {
   const o = obj(raw);
-  return { serviceMonth: normalizeRosterMonth(o.serviceMonth), ids: normalizeIds(o.ids) };
+  return { serviceMonth: normalizeRosterMonth(o.serviceMonth), ids: normalizeIds(o.ids), scope: normalizeRosterScope(o.scope) };
 }
 
-export function validateMoveInput(raw: unknown): { serviceMonth: string; ids: string[]; weekday: number; classTime: string } {
+export function validateMoveInput(raw: unknown): { serviceMonth: string; ids: string[]; weekday: number; classTime: string; scope: RosterScope } {
   const o = obj(raw);
   return {
     serviceMonth: normalizeRosterMonth(o.serviceMonth),
+    scope: normalizeRosterScope(o.scope),
     ids: normalizeIds(o.ids),
     weekday: normalizeWeekday(o.weekday),
     classTime: normalizeClassTime(o.classTime),
   };
 }
 
-export function validateStopEditInput(raw: unknown): { serviceMonth: string; id: string; stop: RosterStopInput; applyToAll: boolean } {
+export function validateStopEditInput(raw: unknown): { serviceMonth: string; id: string; stop: RosterStopInput; applyToAll: boolean; scope: RosterScope } {
   const o = obj(raw);
   const id = text(o.id);
   if (!id) throw new RosterInputError("대상 행이 없습니다.");
-  return { serviceMonth: normalizeRosterMonth(o.serviceMonth), id, stop: normalizeStopInput(o.stop), applyToAll: o.applyToAll === true };
+  return { serviceMonth: normalizeRosterMonth(o.serviceMonth), id, stop: normalizeStopInput(o.stop), applyToAll: o.applyToAll === true, scope: normalizeRosterScope(o.scope) };
 }
 
 export function validateCopyInput(raw: unknown): { sourceMonth: string; targetMonth: string } {
@@ -183,6 +225,11 @@ export function validateCopyInput(raw: unknown): { sourceMonth: string; targetMo
 
 function normName(v: string | null | undefined): string {
   return String(v ?? "").replace(/\s/g, "").toLowerCase();
+}
+
+/** 학부모 전화 끝 4자리(숫자만). 없으면 빈 값. */
+function phoneTail(v: string | null | undefined): string {
+  return String(v ?? "").replace(/\D/g, "").slice(-4);
 }
 
 /** 같은 학생의 행인지. studentId 가 있으면 id 로, 없으면(이름만 등록) 이름으로 비교한다. */
@@ -202,8 +249,16 @@ export function nextSortOrder(rows: RosterExistingRow[], weekday: number, direct
   return base.length > 0 ? Math.max(...base.map((r) => r.sortOrder)) + 1 : 0;
 }
 
-/** 학생 추가 → 생성할 행 목록. 같은 요일·방향·수업에 이미 있으면 중복으로 거부한다. */
-export function buildAddRows(input: RosterAddInput, existing: RosterExistingRow[], studentName: string): RosterNewRow[] {
+/**
+ * 학생 추가 → 생성할 행 목록. 같은 요일·방향·수업에 이미 있으면 중복으로 거부한다.
+ * skipDuplicates=true(이후 달에 함께 추가할 때)면 거부 대신 그 행만 건너뛴다.
+ */
+export function buildAddRows(
+  input: RosterAddInput,
+  existing: RosterExistingRow[],
+  studentName: string,
+  opts: { skipDuplicates?: boolean } = {},
+): RosterNewRow[] {
   const work: RosterExistingRow[] = [...existing];
   const out: RosterNewRow[] = [];
   for (const weekday of input.weekdays) {
@@ -211,6 +266,7 @@ export function buildAddRows(input: RosterAddInput, existing: RosterExistingRow[
       if (!stop) continue;
       const dup = work.some((r) => r.weekday === weekday && r.direction === direction && (r.classTime ?? "") === input.classTime
         && isSameStudent(r, input.studentId, studentName));
+      if (dup && opts.skipDuplicates) continue;
       if (dup) {
         throw new RosterInputError(`${studentName} 학생은 ${WEEKDAY_LABELS[weekday]}요일 ${input.classTime} ${DIRECTION_LABEL[direction]}이 이미 명단에 있습니다.`);
       }
@@ -239,9 +295,10 @@ export function buildMoveUpdates(
     throw new RosterInputError("일부 행을 이 달 명단에서 찾지 못했습니다. 화면을 새로고침해 주세요.");
   }
   const rows = moving as RosterExistingRow[];
-  // 한 번의 반이동은 한 학생의 등·하원 행만 옮긴다. 화면이 행을 모을 때 쓰는 키(rosterStudentKey)와 같은 기준으로
-  // 확인해, 조작된 요청이 다른 학생 행을 섞어 옮기는 것을 막는다.
-  if (new Set(rows.map((r) => rosterStudentKey({ ...r, parentPhone: r.parentPhone ?? null }))).size !== 1) {
+  // 한 번의 반이동은 한 학생의 등·하원 행만 옮긴다. 화면이 행을 모을 때 쓰는 키(그 달 전체로 만든 resolver)와 같은
+  // 기준으로 확인해, 조작된 요청이 다른 학생 행을 섞어 옮기는 것을 막는다.
+  const keyOf = rosterStudentKeyResolver(existing.map((r) => ({ ...r, parentPhone: r.parentPhone ?? null })));
+  if (new Set(rows.map((r) => keyOf({ ...r, parentPhone: r.parentPhone ?? null }))).size !== 1) {
     throw new RosterInputError("한 번에 한 학생의 행만 옮길 수 있습니다. 화면을 새로고침해 주세요.");
   }
   if (new Set(rows.map((r) => r.direction)).size !== rows.length) throw new RosterInputError("같은 방향 행을 한꺼번에 옮길 수 없습니다.");
@@ -289,26 +346,104 @@ export type RosterStudentEntry<T extends RosterStopRow = RosterStopRow> = {
   alight: T | null;
 };
 
-/** 학생 식별키: 학생 id 가 있으면 id, 없으면 이름+학부모 전화 끝 4자리. */
+/** 학생 식별키(행 하나만 보고): 학생 id 가 있으면 id, 없으면 이름+학부모 전화 끝 4자리. */
 export function rosterStudentKey(row: Pick<RosterStopRow, "studentId" | "studentName" | "parentPhone">): string {
   if (row.studentId) return `id:${row.studentId}`;
-  return `name:${normName(row.studentName)}|${String(row.parentPhone ?? "").replace(/\D/g, "").slice(-4)}`;
+  return `name:${normName(row.studentName)}|${phoneTail(row.parentPhone)}`;
+}
+
+type RosterKeyRow = Pick<RosterStopRow, "studentId" | "studentName" | "parentPhone">;
+
+/**
+ * 그 달 전체 행을 보고 학생 식별키를 정하는 함수를 만든다.
+ * 왜: 같은 학생이 등원 행엔 studentId 가 있고 하원 행엔 없으면(시트 이관 잔재) 행 하나만 보는 키로는
+ * 두 사람으로 갈려 화면에 두 줄로 나온다. 같은 이름+학부모전화 끝4자리 행 중 studentId 가 딱 하나로 정해지면
+ * studentId 없는 행도 그 학생으로 묶는다(둘 이상이면 판단하지 않고 기존 키를 쓴다).
+ */
+export function rosterStudentKeyResolver(rows: readonly RosterKeyRow[]): (row: RosterKeyRow) => string {
+  const idsByNamePhone = new Map<string, Set<string>>();
+  for (const r of rows) {
+    // 전화 끝자리가 없으면 이름만으로는 묶지 않는다(동명이인을 한 학생으로 묶어 「이 달 전체 빼기」에 남의 행이 섞이는 것 방지).
+    if (!r.studentId || !normName(r.studentName) || !phoneTail(r.parentPhone)) continue;
+    const np = `${normName(r.studentName)}|${phoneTail(r.parentPhone)}`;
+    const set = idsByNamePhone.get(np) ?? new Set<string>();
+    set.add(r.studentId);
+    idsByNamePhone.set(np, set);
+  }
+  return (row) => {
+    if (row.studentId) return `id:${row.studentId}`;
+    if (!phoneTail(row.parentPhone)) return rosterStudentKey(row);
+    const ids = idsByNamePhone.get(`${normName(row.studentName)}|${phoneTail(row.parentPhone)}`);
+    if (ids && ids.size === 1) return `id:${[...ids][0]}`;
+    return rosterStudentKey(row);
+  };
+}
+
+// ── 이후 달 대응 행 찾기(적용 범위 FROM_THIS_MONTH) ─────────────────
+
+/** 다른 달에서 같은 행을 찾을 때 쓰는 정보 — 학생 + 요일·방향·수업시간. */
+export type RosterRowIdentity = {
+  weekday: number;
+  direction: string;
+  classTime: string | null;
+  studentId: string | null;
+  studentName: string | null;
+  parentPhone?: string | null;
+};
+
+/**
+ * 같은 학생인지(달을 건너 비교). 둘 다 studentId 가 있으면 id 로만,
+ * 한쪽이라도 없으면 이름+학부모전화 끝4자리로 비교한다(studentId 가 한쪽에만 있는 행도 이어지게).
+ */
+export function isSameRosterStudent(a: Omit<RosterRowIdentity, "weekday" | "direction" | "classTime">, b: Omit<RosterRowIdentity, "weekday" | "direction" | "classTime">): boolean {
+  if (a.studentId && b.studentId) return a.studentId === b.studentId;
+  // 한쪽만 studentId 가 있으면 전화 끝자리까지 있어야 같은 학생으로 본다(이름만으로는 동명이인 위험).
+  // 둘 다 없으면(이름만 등록 행끼리 = 복사된 같은 행) 기존 키와 같이 이름+끝자리(빈 값 포함)로 비교한다.
+  if ((a.studentId || b.studentId) && !phoneTail(a.parentPhone)) return false;
+  const name = normName(a.studentName);
+  return name !== "" && name === normName(b.studentName) && phoneTail(a.parentPhone) === phoneTail(b.parentPhone);
+}
+
+/** 다른 달 행 목록에서 원본 행에 대응하는 행(같은 학생·요일·방향·수업시간). 없으면 빈 배열. */
+export function findCounterpartRows<T extends RosterRowIdentity>(source: RosterRowIdentity, rows: readonly T[]): T[] {
+  return rows.filter((r) => r.weekday === source.weekday && r.direction === source.direction
+    && (r.classTime ?? "") === (source.classTime ?? "") && isSameRosterStudent(source, r));
+}
+
+/**
+ * 월 복사 시 저장 노선(payload) 안의 'stop:<행id>' 학생 식별값을 새 달 행 id 로 바꾼다.
+ * 왜: 학생 계정과 연결되지 않은 이름만 등록 행은 배차 식별키가 'stop:'+행id 라서, 행을 복사해 id 가 바뀌면
+ * 새 달 저장 노선에서 그 학생이 빠진 것으로(reconcile) 처리된다. 값이 정확히 일치하는 문자열만 바꾼다.
+ */
+export function remapStopRowIds(payload: unknown, idMap: ReadonlyMap<string, string>): unknown {
+  if (typeof payload === "string") {
+    if (!payload.startsWith("stop:")) return payload;
+    const next = idMap.get(payload.slice(5));
+    return next ? `stop:${next}` : payload;
+  }
+  if (Array.isArray(payload)) return payload.map((v) => remapStopRowIds(v, idMap));
+  if (payload && typeof payload === "object") {
+    return Object.fromEntries(Object.entries(payload as Record<string, unknown>).map(([k, v]) => [k, remapStopRowIds(v, idMap)]));
+  }
+  return payload;
 }
 
 /** 한 요일의 학생 등·하원 행을 수업시간별 학생 목록으로 묶는다(PIVOT·RETURN 같은 운영 정차는 제외). */
 export function groupRosterDay<T extends RosterStopRow>(stops: T[], weekday: number): { classTime: string; students: RosterStudentEntry<T>[] }[] {
   const classes = new Map<string, Map<string, RosterStudentEntry<T>>>();
+  const keyOf = rosterStudentKeyResolver(stops); // 그 달 전체로 키를 정한다(studentId 섞인 행 한 줄로)
   for (const s of stops) {
     if (s.weekday !== weekday || !s.studentName || (s.direction !== "BOARD" && s.direction !== "ALIGHT")) continue;
     const ct = s.classTime ?? "";
     const students = classes.get(ct) ?? new Map<string, RosterStudentEntry<T>>();
     classes.set(ct, students);
-    const key = rosterStudentKey(s);
+    const key = keyOf(s);
     const entry = students.get(key) ?? {
       key, studentId: s.studentId ?? null, studentName: s.studentName, parentPhone: s.parentPhone, studentPhone: s.studentPhone, board: null, alight: null,
     };
     if (s.direction === "BOARD") entry.board = entry.board ?? s;
     else entry.alight = entry.alight ?? s;
+    entry.studentId = entry.studentId ?? s.studentId ?? null; // 묶인 행 중 하나라도 id 가 있으면 그 학생
     entry.parentPhone = entry.parentPhone ?? s.parentPhone;
     entry.studentPhone = entry.studentPhone ?? s.studentPhone;
     students.set(key, entry);
@@ -323,7 +458,34 @@ export function groupRosterDay<T extends RosterStopRow>(stops: T[], weekday: num
 
 /** 그 달 명단에서 한 학생의 모든 등·하원 행 id(「이 달 전체 빼기」용). */
 export function rosterRowIdsForStudent(stops: RosterStopRow[], key: string): string[] {
+  const keyOf = rosterStudentKeyResolver(stops);
   return stops
-    .filter((s) => s.id && s.studentName && (s.direction === "BOARD" || s.direction === "ALIGHT") && rosterStudentKey(s) === key)
+    .filter((s) => s.id && s.studentName && (s.direction === "BOARD" || s.direction === "ALIGHT") && keyOf(s) === key)
     .map((s) => s.id as string);
+}
+
+// ── 월 복사 후 탑승체크·기사 요청 식별값 옮기기 ─────────────────────
+
+/**
+ * 따라잡기 생성(이미 시작된 달을 뒤늦게 만든 경우)일 때만, 그 달 날짜 범위를 돌려준다.
+ * 왜: 그 달 명단이 없던 동안 기사님 화면은 직전 달 행 id 로 탑승체크(ShuttleBoarding)·제외 요청(DriverRequest)을 남겼다.
+ * 새 달이 생기면 화면이 새 행 id 로 바뀌므로, 그 달 날짜에 찍힌 기록을 새 id 로 옮겨야 체크가 사라지거나 중복되지 않는다.
+ * 미래 달(대상 달 > 이번 달)은 아직 기록이 없으므로 null. 범위는 'YYYY-MM-DD' 문자열 비교용 [from, to).
+ */
+export function catchUpDateRange(targetMonth: string, currentMonth: string): { from: string; to: string } | null {
+  if (normalizeRosterMonth(targetMonth) > normalizeRosterMonth(currentMonth)) return null;
+  return { from: `${targetMonth}-01`, to: `${nextServiceMonth(targetMonth)}-01` };
+}
+
+/** (옛 행 id → 새 행 id) 짝을 SQL unnest 용 두 배열로. 빈 값·중복 옛 id 는 뺀다. */
+export function idPairArrays(pairs: readonly { oldId: string; newId: string }[]): { oldIds: string[]; newIds: string[] } {
+  const seen = new Set<string>();
+  const oldIds: string[] = [];
+  const newIds: string[] = [];
+  for (const p of pairs) {
+    const o = String(p.oldId ?? ""), n = String(p.newId ?? "");
+    if (!o || !n || seen.has(o)) continue;
+    seen.add(o); oldIds.push(o); newIds.push(n);
+  }
+  return { oldIds, newIds };
 }

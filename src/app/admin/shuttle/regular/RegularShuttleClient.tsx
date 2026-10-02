@@ -6,10 +6,12 @@ import type { RegularShuttleStop } from "@/lib/shuttle/regularSheet";
 import AdminModal from "@/components/admin/AdminModal";
 import LocationPickerModal, { type MapLocationData } from "@/components/maps/LocationPickerModal";
 import {
+  formatRosterMonths,
   groupRosterDay,
   nextServiceMonth,
   rosterRowIdsForStudent,
   WEEKDAY_LABELS,
+  type RosterScope,
   type RosterStudentEntry,
 } from "@/lib/shuttle/regularRosterEditLogic";
 import type { RosterStudentSearchResult } from "@/lib/shuttle/regularRosterEdit";
@@ -34,10 +36,11 @@ type Dialog =
     useAlight: boolean;
     alightSame: boolean; // 하원 정류장 = 등원 정류장(도착시각만 따로)
     alight: StopDraft;
+    scope: RosterScope;
   }
-  | { kind: "move"; entry: Entry; weekday: number; classTime: string }
-  | { kind: "stop"; entry: Entry; direction: "BOARD" | "ALIGHT"; draft: StopDraft; applyToAll: boolean }
-  | { kind: "remove"; entry: Entry; weekday: number };
+  | { kind: "move"; entry: Entry; weekday: number; classTime: string; scope: RosterScope }
+  | { kind: "stop"; entry: Entry; direction: "BOARD" | "ALIGHT"; draft: StopDraft; applyToAll: boolean; scope: RosterScope }
+  | { kind: "remove"; entry: Entry; weekday: number; scope: RosterScope };
 type PickerTarget = "board" | "alight" | "stop";
 
 const WD_ORDER = [1, 2, 3, 4, 5, 6, 0]; // 월→일
@@ -131,6 +134,8 @@ export default function RegularShuttleClient({ initialStops, initialMonth, month
     [availableMonths, currentMonth, serviceMonth],
   );
   const previousMonth = closestPreviousMonth(availableMonths, serviceMonth);
+  // 편집 모달의 기본 적용 범위: 지난 달을 고칠 때는 「이 달만」(지난 기록 정정이 이번·다음 달까지 번지지 않게), 그 외엔 「이 달부터 계속」.
+  const defaultScope: RosterScope = serviceMonth < currentMonth ? "THIS_MONTH" : "FROM_THIS_MONTH";
 
   // 요일 탭: 월~토는 항상, 일요일은 명단이 있을 때만. 탭마다 학생 수를 보여준다.
   const weekdays = useMemo(() => WD_ORDER
@@ -161,12 +166,18 @@ export default function RegularShuttleClient({ initialStops, initialMonth, month
   }
 
   // 모달 안 저장: 성공하면 모달을 닫고 명단을 다시 읽는다. 실패하면 모달 안에 오류를 보여준다.
+  // 적용 범위(scope)는 모달 상태에서 함께 보낸다. 결과 문구에 실제 반영된 달을 붙인다(예: "10월·11월에 반영").
   async function submitDialog(method: "POST" | "PATCH" | "DELETE", body: Record<string, unknown>, done: string) {
     if (busy) return;
     setBusy(true); setDialogErr(null);
     try {
-      await rosterCall(method, { ...body, serviceMonth });
-      setDialog(null); setMsg(done); setErr(null); setShowDispatchHint(true);
+      const j = await rosterCall(method, { ...body, serviceMonth, scope: dialog && "scope" in dialog ? dialog.scope : undefined });
+      const applied: string[] = Array.isArray(j?.appliedMonths) ? j.appliedMonths : [];
+      const skipped: string[] = Array.isArray(j?.skippedMonths) ? j.skippedMonths : [];
+      const monthNote = applied.length > 0
+        ? ` · ${formatRosterMonths(applied)}에 반영${skipped.length > 0 ? ` (${formatRosterMonths(skipped)}은 해당 학생 행이 없거나 이미 달라 건너뜀)` : ""}`
+        : "";
+      setDialog(null); setMsg(`${done}${monthNote}`); setErr(null); setShowDispatchHint(true);
     } catch (e: unknown) { setDialogErr(e instanceof Error ? e.message : "처리하지 못했습니다."); setBusy(false); return; }
     setBusy(false);
     await loadMonth(serviceMonth);
@@ -188,6 +199,7 @@ export default function RegularShuttleClient({ initialStops, initialMonth, month
     setDialog({
       kind: "add", query: "", results: null, student: null, manualName: "", weekdays: [active], classTime: groups[0]?.classTime ?? "",
       useBoard: true, board: { ...EMPTY_DRAFT }, useAlight: true, alightSame: true, alight: { ...EMPTY_DRAFT },
+      scope: defaultScope,
     });
   }
 
@@ -344,6 +356,29 @@ export default function RegularShuttleClient({ initialStops, initialMonth, month
     );
   }
 
+  // 적용 범위 선택 — 명단은 달별이라 이 달을 고쳐도 이미 만들어진 다음 달엔 그대로 남는다. 기본은 「이 달부터 계속」.
+  function scopeFields(scope: RosterScope) {
+    const laterMonths = availableMonths.filter((m) => m > serviceMonth).sort();
+    const options: { value: RosterScope; label: string; hint: string }[] = [
+      { value: "FROM_THIS_MONTH", label: "이 달부터 계속 적용(기본)", hint: laterMonths.length > 0 ? `${formatRosterMonths([serviceMonth, ...laterMonths])} 명단에 함께 반영합니다.` : "이후 달 명단이 생기면 이 달 명단을 복사해 만듭니다." },
+      { value: "THIS_MONTH", label: "이 달만", hint: `${formatRosterMonths([serviceMonth])} 명단만 고칩니다.` },
+    ];
+    return (
+      <fieldset className="mt-3 rounded-xl border border-gray-200 p-3 dark:border-gray-700">
+        <legend className="px-1 text-[11px] font-bold text-gray-500 dark:text-gray-400">적용 범위</legend>
+        <div className="flex flex-col gap-1.5">
+          {options.map((o) => (
+            <label key={o.value} className="flex items-start gap-2 text-[12.5px] font-bold text-gray-700 dark:text-gray-200">
+              <input type="radio" name="roster-scope" className="mt-0.5" checked={scope === o.value}
+                onChange={() => setDialog((d) => (d ? { ...d, scope: o.value } : d))} />
+              <span>{o.label}<span className="block text-[11px] font-semibold text-gray-400">{o.hint}</span></span>
+            </label>
+          ))}
+        </div>
+      </fieldset>
+    );
+  }
+
   function renderDialog() {
     if (!dialog) return null;
     const footer = (onSave: () => void, saveLabel: string, danger = false) => (
@@ -439,6 +474,7 @@ export default function RegularShuttleClient({ initialStops, initialMonth, month
               )}
             </fieldset>
           </div>
+          {scopeFields(dialog.scope)}
           {errBox}
           {footer(saveAdd, "추가")}
         </div>
@@ -460,6 +496,7 @@ export default function RegularShuttleClient({ initialStops, initialMonth, month
               <input value={dialog.classTime} onChange={(e) => setDialog({ ...dialog, classTime: e.target.value })} list="roster-class-times" className={INPUT} />
             </label>
           </div>
+          {scopeFields(dialog.scope)}
           {errBox}
           {footer(() => void submitDialog("PATCH", { action: "move", ids: entryIds(dialog.entry), weekday: dialog.weekday, classTime: dialog.classTime }, `${dialog.entry.studentName} 학생을 ${WEEKDAY_LABELS[dialog.weekday]}요일 ${dialog.classTime}으로 옮겼습니다.`), "옮기기")}
         </div>
@@ -484,6 +521,7 @@ export default function RegularShuttleClient({ initialStops, initialMonth, month
             <input type="checkbox" className="mt-0.5" checked={dialog.applyToAll} onChange={(e) => setDialog({ ...dialog, applyToAll: e.target.checked })} />
             <span>이 달 「{row?.stopName}」 정류장 전체에 이름·좌표 함께 적용<span className="block text-[11px] font-semibold text-gray-400">도착시각은 이 학생 것만 바뀝니다.</span></span>
           </label>
+          {scopeFields(dialog.scope)}
           {errBox}
           {footer(() => row?.id && void submitDialog("PATCH", { action: "editStop", id: row.id, stop: toStopBody(dialog.draft), applyToAll: dialog.applyToAll }, "정류장을 수정했습니다."), "저장")}
         </div>
@@ -497,11 +535,12 @@ export default function RegularShuttleClient({ initialStops, initialMonth, month
       <div className="p-4">
         <h4 id="roster-dialog-title" className="text-base font-black text-gray-900 dark:text-white">{label} 학생을 명단에서 뺄까요?</h4>
         <p className="mt-1 text-xs text-gray-500">퇴원·셔틀 중단일 때 씁니다. 빼면 이 달 배차 화면에서도 빠진 학생으로 표시됩니다.</p>
+        {scopeFields(dialog.scope)}
         <div className="mt-4 flex flex-col gap-2">
           <button type="button" disabled={busy} onClick={() => void submitDialog("DELETE", { ids: entryIds(dialog.entry) }, `${label} 학생을 ${WEEKDAY_LABELS[dialog.weekday]}요일 명단에서 뺐습니다.`)}
             className="min-h-11 rounded-xl border border-red-200 px-4 text-sm font-black text-red-700 disabled:opacity-50 dark:border-red-800 dark:text-red-200">{WEEKDAY_LABELS[dialog.weekday]}요일만 빼기</button>
           <button type="button" disabled={busy} onClick={() => void submitDialog("DELETE", { ids: allIds }, `${label} 학생을 ${serviceMonth} 명단에서 모두 뺐습니다.`)}
-            className="min-h-11 rounded-xl bg-red-600 px-4 text-sm font-black text-white disabled:opacity-50">이 달 전체 요일 빼기 ({allIds.length}개 정류장)</button>
+            className="min-h-11 rounded-xl bg-red-600 px-4 text-sm font-black text-white disabled:opacity-50">{serviceMonth} 전체 요일 빼기 ({allIds.length}개 정류장)</button>
           <button type="button" onClick={() => setDialog(null)} className="min-h-11 rounded-xl border border-gray-200 px-4 text-sm font-bold text-gray-600 dark:border-gray-700 dark:text-gray-200">취소</button>
         </div>
         {errBox}
@@ -518,6 +557,7 @@ export default function RegularShuttleClient({ initialStops, initialMonth, month
           <div>
             <h3 className="text-base font-black text-gray-900 dark:text-white">셔틀 명단</h3>
             <p className="mt-0.5 text-[12.5px] text-gray-500 dark:text-gray-400">정규 셔틀 이용 학생을 요일·수업별로 관리합니다. 신규·퇴원·반이동은 여기서 바로 고칩니다.</p>
+            <p className="mt-0.5 text-[11.5px] text-gray-400">이번 달·다음 달 명단은 직전 달을 복사해 자동으로 만들어집니다. 다음 달 변경은 월을 바꿔 미리 고쳐 두세요.</p>
           </div>
           <label className="flex flex-col gap-1 text-[11px] font-bold text-gray-500">월
             <select value={serviceMonth} disabled={busy} onChange={(e) => void loadMonth(e.target.value)} className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-bold dark:border-gray-600 dark:bg-gray-900">
@@ -531,11 +571,6 @@ export default function RegularShuttleClient({ initialStops, initialMonth, month
           <button type="button" onClick={openAdd} className="inline-flex min-h-10 items-center gap-1 rounded-xl bg-brand-navy-900 px-4 text-sm font-black text-white dark:bg-brand-neon-lime dark:text-brand-navy-900">
             <span className="material-symbols-outlined text-lg">person_add</span>학생 추가
           </button>
-          {stops.length > 0 && (
-            <button type="button" disabled={busy} onClick={() => void copyMonth(serviceMonth, nextServiceMonth(serviceMonth))} className="inline-flex min-h-10 items-center gap-1 rounded-xl border border-gray-200 px-4 text-sm font-black text-gray-700 disabled:opacity-50 dark:border-gray-600 dark:text-gray-200">
-              <span className="material-symbols-outlined text-lg">content_copy</span>다음 달 명단 만들기
-            </button>
-          )}
           <button type="button" onClick={copyRegularRunLink} className="inline-flex min-h-10 items-center gap-1 rounded-xl border border-gray-200 px-4 text-sm font-black text-gray-700 dark:border-gray-600 dark:text-gray-200">
             <span className="material-symbols-outlined text-lg">directions_bus</span>기사님 운행 링크 복사
           </button>
@@ -605,9 +640,9 @@ export default function RegularShuttleClient({ initialStops, initialMonth, month
                             {(entry.board?.note || entry.alight?.note) && <p className="text-[11.5px] text-gray-400">{entry.board?.note ?? entry.alight?.note}</p>}
                           </div>
                           <div className="mt-2 flex flex-wrap gap-1.5">
-                            <button type="button" onClick={() => { setDialogErr(null); setDialog({ kind: "move", entry, weekday: active, classTime: g.classTime }); }} className="min-h-8 rounded-lg border border-gray-200 px-3 text-[12px] font-black text-gray-700 dark:border-gray-600 dark:text-gray-200">반이동</button>
-                            <button type="button" onClick={() => { setDialogErr(null); const dir = entry.board ? "BOARD" : "ALIGHT"; setDialog({ kind: "stop", entry, direction: dir, draft: draftFromRow(entry.board ?? entry.alight), applyToAll: false }); }} className="min-h-8 rounded-lg border border-gray-200 px-3 text-[12px] font-black text-gray-700 dark:border-gray-600 dark:text-gray-200">정류장 수정</button>
-                            <button type="button" onClick={() => { setDialogErr(null); setDialog({ kind: "remove", entry, weekday: active }); }} className="min-h-8 rounded-lg border border-red-200 px-3 text-[12px] font-black text-red-600 dark:border-red-800 dark:text-red-300">빼기</button>
+                            <button type="button" onClick={() => { setDialogErr(null); setDialog({ kind: "move", entry, weekday: active, classTime: g.classTime, scope: defaultScope }); }} className="min-h-8 rounded-lg border border-gray-200 px-3 text-[12px] font-black text-gray-700 dark:border-gray-600 dark:text-gray-200">반이동</button>
+                            <button type="button" onClick={() => { setDialogErr(null); const dir = entry.board ? "BOARD" : "ALIGHT"; setDialog({ kind: "stop", entry, direction: dir, draft: draftFromRow(entry.board ?? entry.alight), applyToAll: false, scope: defaultScope }); }} className="min-h-8 rounded-lg border border-gray-200 px-3 text-[12px] font-black text-gray-700 dark:border-gray-600 dark:text-gray-200">정류장 수정</button>
+                            <button type="button" onClick={() => { setDialogErr(null); setDialog({ kind: "remove", entry, weekday: active, scope: defaultScope }); }} className="min-h-8 rounded-lg border border-red-200 px-3 text-[12px] font-black text-red-600 dark:border-red-800 dark:text-red-300">빼기</button>
                           </div>
                         </li>
                       );

@@ -117,31 +117,92 @@ reviewer 참고:
 
 📊 종합: 7개 중 7개 통과 / 0개 실패 (화면 확인 1건 생략)
 
-## 리뷰 결과 (reviewer) — 셔틀 명단 앱 편집 1단계 (2026-10-02)
+## 리뷰 결과 (reviewer) — 셔틀 명단 1단계: 높음 1(기사 화면 월 고정)·권장 3 → developer 수정 4건 완료(작업 로그 참조)
 
-📊 종합 판정: 수정 필요 (높음 1)
+## 리뷰 결과 (reviewer) — 셔틀 명단 월 자동 생성 + 적용 범위 (2026-10-02)
 
-✅ 잘된 점: 모든 SQL 파라미터 바인딩·route+lib 이중 requireAdmin·편집마다 트랜잭션+달 단위 advisory lock+감사 기록. 삭제는 id+serviceMonth+BOARD/ALIGHT 3중 한정, 개수 불일치 시 롤백. 복사는 대상 달 있으면 거부. 추가 행 studentId(실제 Student.id, FK 검증)는 COALESCE 1순위라 신규 배너·reconcile 과 호환. 날짜는 문자열 월 계산·koreaServiceMonth 만 사용. 위치 링크·기사 운행 링크 유지. 관련 테스트 34/34.
+📊 종합 판정: 수정 필요 (높음 1 — 배포 당일 기사님 탑승체크 어긋남)
+
+✅ 잘된 점: 복사 CTE 정확(gen_random_uuid 휘발성+두 번 참조 → materialize, 쓰기 CTE 1회 실행, 옛→새 짝 일치). remapStopRowIds 는 값 전체 일치만 치환(부분일치 없음). 멱등(잠금 후 대상 달 COUNT 재확인, READ COMMITTED 새 스냅샷). 잠금 순서(전체→달 오름차순) 일관·THIS_MONTH 는 단일 잠금이라 교착 없음. 평시 화면 진입 비용 = DISTINCT 1쿼리. 크론 인증 makeup-credits 와 동일, 15:05 UTC=KST 00:05. 편집 4종 한 트랜잭션·requireAdmin·파라미터 바인딩·KST 금지패턴 없음. 테스트 node 6/6·로직 20/20.
 
 🔴 필수 수정:
-- src/lib/shuttle/regularDriverRoute.ts:70·85·47 — 월 인자 없이 호출 → 「다음 달 명단 만들기」(10월 중 11월 생성) 즉시 기사 화면이 11월 명단(getRegularShuttleStops 의 months[0])·11월 저장 노선(MAX → 없음 → 폴백 순서)으로 바뀜. 정류장 행 id 도 새로 생겨 그날 탑승체크 rowId 가 안 맞음. 수정: getRegularDriverClasses 에서 month = "viewDate.slice(0,7) 이하 중 최신 저장 월" 한 번 계산해 세 호출(stops·saved·loadRowIdsByStudentId→getRegularShuttleRiders)에 모두 전달.
+- regularRosterEdit.ts:363 copyMonthInTx (+ensure 433) — 오늘(10-02) 기사 화면은 09 명단을 봄(10 없음). 배포 후 누가 화면만 열어도 10월이 생성되며 기사 화면이 10월 새 행 id 로 전환 → 10-01·10-02 에 찍힌 ShuttleBoarding(direction='REGULAR', shuttleRequestId=옛 09 행 id)이 미체크로 보임. 수정: 복사 대상 달 ≤ 이번 달(따라잡기 생성)일 때 같은 tx 에서 그 달 날짜의 REGULAR 탑승체크 shuttleRequestId 를 pairs 로 옛→새 갱신(serviceDate 'YYYY-MM-01' 이상 다음 달 1일 미만). 또는 운영: 마지막 운행 뒤 배포+크론 수동 1회 실행.
 
 🟡 권장 수정:
-- src/app/admin/shuttle/regular-dispatch/page.tsx:18 — 기본 월이 months[0](최신=다음 달). 명단 화면처럼 `months.find(m => m <= koreaServiceMonth())` 로. 같은 줄 폴백 `new Date().toISOString().slice(0,7)` 은 금지 패턴(기존 코드).
-- src/lib/shuttle/regularRosterEdit.ts:529 applyToAll — 새 좌표가 비어 있으면 같은 이름 다른 행 좌표까지 null 로 지움 → `COALESCE($2,"latitude")` 처럼 비어 있으면 유지.
-- (기존 코드) regularDriverRoute.ts:33 weekdayOf 가 `T12:00:00+09:00`+getUTCDay 금지 패턴. 위 수정 때 공용 KST 모듈로 교체 권장.
+- regularRosterEditLogic.ts:375 resolver — 학부모 전화 둘 다 없으면 끝4자리 ""로 같아져, 동명이인(studentId 있는 학생 1명 + 이름만 행)이 한 학생으로 묶임 → 「전체 빼기」에 남의 행 포함. 끝4자리 빈 값이면 묶지 말 것. isSameRosterStudent(:399)도 동일(이후 달 대응 행 오매칭).
+- lockForEdit 기본 FROM_THIS_MONTH — 지난 달(08) 수정도 09·10·11로 전파. 지난 달이면 기본값 THIS_MONTH 권장(문구엔 표시됨).
+- moveRosterRows 감사 로그에 이후 달 옮긴 행 id 없음(remove 는 laterRows 기록). 맞추면 좋음.
+- (기존) importRegularShuttleFromSheet 는 advisory lock 미사용 — 시트 가져오기를 계속 쓰면 편집·복사와 경합.
+
+## 리뷰 결과 (reviewer) — 정규 배차 편집 강화 2단계 (2026-10-02)
+
+📊 종합 판정: 수정 필요 (중간 2 — 데이터 손실·엉뚱한 달 저장 가능)
+
+✅ 잘된 점: 방학특강 회귀 없음(새 UI·확인창·beforeunload 전부 `regularEditing` 가드, onDirtyChange 미전달 시 no-op, DispatchClient 무변). 순수 모듈 깊은 복사·빈 정차 제거·거점 유지·etaManual 해제 정확, 차량 수 불변이라 mapVehicle/reroute 인덱스 안전. 저장 검증(requestId 중복)·기사 화면(빈 정차·빈 차량 섹션 생략) 호환. tsc 0, 신규 테스트 12/12. contracts.test "legacy text-only…" 실패는 HEAD 워크트리에서도 동일 = 기존 실패.
+
+🔴 필수 수정:
+- RegularDispatchClient.tsx:83 + RouteSection.tsx:233 — 월 변경(router.push)은 컴포넌트를 다시 만들지 않고 RouteSection 재조회 deps 가 [date, refreshKey] 뿐이라, 새 달로 바꿔도 세부 조정엔 옛 달 노선+dirty 가 남고 💾 저장 시 serviceMonth=새 달로 옛 달 노선을 덮어씀(기존 결함이나 이번에 기본 펼침+"이동하면 사라집니다" 문구로 노출↑). 수정: RegularDispatchClient 에서 `refreshKey={months.indexOf(serviceMonth)}` 처럼 월마다 바뀌는 값을 넘겨 switchTo 재실행(방학특강 무영향).
+- RouteSection.tsx:255 saveRoute — 저장 요청 중(약 1초) 이동·빼기를 하면 응답 후 setDirty(false) 로 미저장 편집이 「저장됨」 처리 → 배지·이탈 경고·전환 확인 모두 꺼져 조용히 사라짐. 수정: editSeq ref 를 편집마다 +1, 저장 시작 값과 같을 때만 setDirty(false) (또는 saving/loading 중 편집 컨트롤 disabled).
+
+🟡 권장 수정:
+- RouteSection.tsx:331 applyRouteEdit — sugRef(렌더 시점 값)+객체형 setSug. 대기 중인 updater(재경로·저장본 불러오기)가 있으면 덮어씀(08-03 사고와 같은 계열, 확률 낮음). touched 는 [vIdx,toV] 로 미리 알 수 있으니 `setSug(prev => …)` 안에서 계산 권장.
+- removeStudent × 안내 문구 — 시트/명단에 남은 학생은 기사 화면 「확정 전」(leftoverRows) 섹션에 그대로 뜸. 문구에 명시 권장.
+- 학생·정차 이동 메뉴가 다른 수업시간 회차도 고를 수 있음(라벨에 시각은 보임). 다른 수업시간이면 확인창 권장.
+- (기존) 재경로 응답 순서 역전 시 옛 path 가 최종값이 될 수 있음 — 편집 빈도 늘어 노출↑.
+
+## 구현 기록 (developer) — 정규 배차 편집 강화 2단계 (2026-10-02)
+
+📝 정규 배차 손편집: 정차/학생 차량 간 이동·학생 빼기·정원 경고·모바일 ↑↓·자동 제안 확인·초기화 이름 변경·저장 안 됨/이탈 경고·세부 조정 기본 펼침. 새 기능은 `RouteSection` 의 `regularEditing`(기본 false) 로만 켬.
+
+| 파일 | 변경 | 신규/수정 |
+|---|---|---|
+| src/lib/regular/regularRouteEdit.ts | 순수 계산(moveStopToVehicle·moveStudentToVehicle·removeStudentFromRoute·overCapacityVehicles·bestInsertIndex) | 신규 |
+| src/lib/regular/regularRouteEdit.test.ts | node --test 8건 | 신규 |
+| src/components/seasonal/RouteSection.tsx | regularEditing·onDirtyChange prop, dirty 상태, 편집 UI | 수정 |
+| src/app/admin/shuttle/regular-dispatch/RegularDispatchClient.tsx | details open·regularEditing 전달·요일/월 전환 확인 | 수정 |
+| tests/regular-dispatch-editing-ui.test.mjs | 방학특강 회귀 방지 + 연결 소스 테스트 4건 | 신규 |
+
+💡 tester: 정규 배차 → 정차 「→ 차량 이동」 / 학생 옆 ⇄(정차에 2명 이상·거점일 때만)·× → 두 차량 인원·시각 갱신, 「● 저장 안 됨」, 저장 시 정원 초과면 확인창. 같은 장소(≤30m)면 합쳐짐, 무료탑승 거점은 일반 정차와 안 합침·비어도 남음. 방학특강 /admin/seasonal/dispatch 는 변화 없어야 함.
+⚠️ reviewer: 학생 × 는 저장본에서만 빠짐 → 명단에 남아 있으면 다음 저장본 불러올 때 「신규·복귀」 배너로 다시 뜸(의도). 다른 차량으로 옮긴 정차의 수동 확정시각(etaManual)은 풀림.
+
+#### 수정 이력
+| 회차 | 날짜 | 수정 내용 | 수정 파일 | 사유 |
+|---|---|---|---|---|
+| 1차 | 2026-10-02 | 월 변경 시 refreshKey=월(숫자)로 두 방향 재로딩 + 불러오기 완료 전 저장·초기화 차단(routeReady) / editSeq 로 저장 중 편집은 「저장 안 됨」 유지 / applyRouteEdit 를 setSug updater 안 계산으로 / × 확인창에 기사님 '확정 전' 안내 / 다른 수업시간 회차 이동 확인(runTimeChange) | RouteSection.tsx, RegularDispatchClient.tsx, regularRouteEdit(.test).ts, tests/regular-dispatch-editing-ui.test.mjs | reviewer 요청 중간2·낮음3 |
+
+## 구현 기록 (developer) — 셔틀 명단 월 자동 생성 + 적용 범위 (2026-10-02)
+
+📝 이번 달·다음 달 명단 자동 보장(크론 매일 KST 00:05 + 셔틀 명단·정규 배차 화면 진입 시), 저장 노선 함께 복사, 편집 4종 적용 범위(기본 이후 달까지), studentId 섞인 학생 두 줄 표시 수정.
+
+| 파일 | 변경 | 신규/수정 |
+|---|---|---|
+| src/lib/shuttle/regularRosterEditLogic.ts | planEnsureMonths·normalizeRosterScope·findCounterpartRows·isSameRosterStudent·rosterStudentKeyResolver·remapStopRowIds·formatRosterMonths, buildAddRows skipDuplicates | 수정 |
+| src/lib/shuttle/regularRosterEdit.ts | ensureRegularRosterMonths, copyMonthInTx(노선 복사·stop:id 재매핑), lockForEdit(전체 잠금+이후 달 잠금), 편집 4종 scope·appliedMonths/skippedMonths | 수정 |
+| src/app/api/cron/regular-shuttle-months/route.ts | CRON_SECRET 인증 크론 | 신규 |
+| vercel.json | `5 15 * * *` 등록 | 수정 |
+| src/app/admin/shuttle/regular/page.tsx · regular-dispatch/page.tsx | 진입 시 ensure(try/catch) | 수정 |
+| src/app/admin/shuttle/regular/RegularShuttleClient.tsx | 모달 4종 적용 범위 라디오, "10월·11월에 반영" 문구, 「다음 달 명단 만들기」 제거(빈 달 직전 달 복사만) | 수정 |
+| regularRosterEditLogic.test.ts(+8건) · tests/regular-shuttle-auto-month.test.mjs(6건) | 테스트 | 수정/신규 |
+
+💡 tester: 화면 진입만으로 운영 DB 쓰기(10월·11월 생성)가 일어나므로 **개발서버로 화면 열지 말 것**(운영 DB 공유). 순수 테스트·tsc 로 검수. 배포 후 첫 진입 시 2026-10·2026-11 생성 + ShuttleAuditLog `REGULAR_ROSTER_AUTO_MONTH`(actorId null) 2건 확인.
+⚠️ reviewer: ①copyMonthInTx 의 CTE(gen_random_uuid 를 src 에서 한 번 계산 → ins JOIN) ②잠금 순서(전체 `regular-roster:*` → 달 오름차순; THIS_MONTH 편집은 달 잠금만) ③editStop 이후 달에서 applyToAll 은 옛 정류장 이름 기준 ④반이동 이후 달 겹침은 그 달만 건너뜀.
+
+#### 수정 이력
+| 회차 | 날짜 | 수정 내용 | 수정 파일 | 사유 |
+|---|---|---|---|---|
+| 1차 | 2026-10-02 | 따라잡기 생성(대상 달<=이번 달) 시 그 달 날짜의 ShuttleBoarding(REGULAR)·DriverRequest(REMOVE·PENDING) 식별값을 새 행 id 로 이전(unnest 한 번, 건수 감사 기록) · 전화 끝자리 빈 값이면 이름만으로 studentId 학생에 묶지 않음 · 지난 달 편집 기본 범위 THIS_MONTH · 반이동 감사에 이후 달 행 | regularRosterEditLogic.ts·regularRosterEdit.ts·RegularShuttleClient.tsx·테스트 2 | reviewer 요청(높음1·권장3) |
 
 ## 작업 로그 (최근 10건)
 
 | 날짜 | 작업 내용 | 상태 |
 |------|----------|------|
+| 2026-10-02 | **셔틀 명단 월 자동 생성 리뷰(reviewer)** — 수정 필요(높음 1): 10월 따라잡기 생성 순간 기사 화면 행 id 교체로 10-01·02 탑승체크 미표시 → 복사 시 ShuttleBoarding 재매핑 또는 운행 후 배포. 권장: 전화 없는 동명이인 묶임·지난 달 수정 전파. CTE·잠금·멱등·크론 인증 문제 없음 | 수정 요청 |
+| 2026-10-02 | **정규 배차 2단계 리뷰(reviewer)** — 수정 필요(중간 2): 월 변경 시 세부 조정에 옛 달 노선이 남아 새 달로 저장됨·저장 요청 중 편집이 「저장됨」 처리. 방학특강 회귀 없음, tsc 0·테스트 12/12, contracts 실패는 HEAD 에서도 동일(기존) | 수정 요청 |
+| 2026-10-02 | **셔틀 명단 월 자동 생성(developer)** — 이번 달·다음 달 자동 보장(크론 KST 00:05·화면 진입), 저장 노선 함께 복사(이름만 등록 행 stop:id 재매핑), 편집 4종 적용 범위(기본 이후 달까지)·반영 달 문구, 다음 달 만들기 버튼 제거, studentId 섞인 학생 한 줄로. tsc 0·셔틀/정규 단위 80/80·tests 60/60. 운영 DB 쓰기 0. 미커밋 | 검수 대기 |
+| 2026-10-02 | **정규 배차 편집 강화 2단계(developer)** — 정차·학생 차량 간 이동, 학생 빼기(명단 안내 확인창), 정원 초과 표시·저장 전 경고, 모바일 ↑↓, 자동 제안 확인·「↺ 자동 제안으로 초기화」, 저장 안 됨 배지·beforeunload·요일/월 전환 확인, 세부 조정 기본 펼침. 모두 `regularEditing` prop 으로만 켬(방학특강 무변). 리뷰 1차 수정(월 전환 재로딩·저장 중 편집·회차 시간 확인) 반영. tsc 0·단위 118 중 실패 1(contracts.test 기존)·관련 tests 36/36. 미커밋 | 재검수 대기 |
 | 2026-10-02 | **셔틀 명단 1단계 리뷰 수정 4건(developer)** — ①기사 화면 월 고정: `pickServiceMonthFor`(serviceMonth.ts·테스트 6건)로 그날 달 이하 최신 달을 명단·저장노선·탑승키에 전달, weekdayOf→kstDow ②정규 배차·셔틀 명단 기본 월 같은 함수 사용, toISOString 폴백 제거 ③정류장 수정(단일·일괄) 좌표 COALESCE 유지 ④반이동 다른 학생 섞이면 거부(rosterStudentKey). tsc 0·단위 64/64·tests 54/54. 미커밋 | 검수 대기 |
 | 2026-10-02 | **셔틀 명단 1단계 리뷰(reviewer)** — 수정 필요. 높음 1: 기사 화면이 월 인자 없이 최신 월을 읽어 다음 달 명단 복사 즉시 다음 달로 전환(regularDriverRoute.ts). 권장: 정규 배차 기본 월·applyToAll 좌표 지움. SQL·권한·삭제 범위·reconcile 호환 문제 없음 | 수정 요청 |
 | 2026-10-02 | **셔틀 명단 1단계 검수(tester)** — tsc 0·셔틀 단위 57/57·regular-shuttle 48/48·경계 8건 통과. 화면은 관리자 로그인 필요로 생략(비로그인 307/403 차단 확인). DB 쓰기 0 | 통과 |
 | 2026-10-02 | **셔틀 명단 앱 편집 1단계(developer)** — 시트 탭을 「셔틀 명단」 화면으로 교체, RegularShuttleStop 추가·빼기·반이동·정류장 수정·다음 달 복사 API(raw SQL·ShuttleAuditLog 기록). tsc 0 / 셔틀 단위 57-0 / tests 1750 중 실패 1(기준선 동일). 미커밋 | 검수 대기 |
 | 2026-10-02 | **토스 심사 주문서 리뷰(reviewer)** — 통과. DB 쓰기·청구서 접근 0, 키 없음/라이브 키 시 주문서는 안내·API 404, 금액은 서버 DB 가격(클라는 programId·tier 만), customerName/customerMobilePhone(숫자만) v2 필드명 일치. tsc 0·테스트 13/13·개발서버 /programs(6개 카드·주문서 링크)·주문서 정상/잘못된 tier/없는 id 렌더 확인. 권장만: 안내 화면 HTTP 200 | 통과 |
 | 2026-10-02 | **토스 심사 주문서** — `/programs/order`(상품정보·빈도/금액·주문자 이름/휴대폰(저장 안 함)·카드 라디오·구매조건 동의·결제하기) 신설, 카드 [결제하기]는 주문서로 이동, 결제창 코드는 `lib/payments/tossReviewClient.ts` 한 벌, 공개 /programs 에서 0원 프로그램 숨김(`hasSellablePrice`). 테스트 13/13·tsc 통과·개발서버 렌더 확인 | 검수 대기 |
-| 2026-10-02 | **기록 목록 병합 필터** — 병합 엔진이 기록도 옮기게 된 후속 작업. 흡수 쪽 잔여가 진짜 중복인 목록(학부모·원장 보강권, 보강 일정, 셔틀 예외 예정목록·기사 명단·누락알림 복구)에 notMergedStudent 적용. 결석(UNIQUE 가 상태 무시 → 살아있는 결석이 흡수 쪽에 남을 수 있음)·반변경 신청(남는 게 유일한 기록)은 리뷰 지적으로 예외 유지. 가드 예외 개수 실측 일치 | 완료 |
-| 2026-10-02 | **학생 병합 엔진 참조 목록 보강** — 운영 DB 재실측(SELECT 만)으로 7/26 이후 생긴 학생 참조 12곳(보강권·정규결석·셔틀당일예외·수강변경신청·납부요청·POS알림 등)+운영 미반영 4곳을 `studentMerge/tables.ts` 에 추가. UNIQUE 충돌키·부분 UNIQUE·청구 계열은 Payment 를 따라가게(동결분은 같이 남음)·월별수강대장은 payload CHECK 때문에 흡수 쪽 고정. schema.prisma 대조 누락 가드 테스트 신설. 기병합 8명 잔여 참조 0건이라 재이관 불필요. 발견: studentVisibility 가드 기존 실패(27파일) | 완료 |
-| 2026-10-02 | **결제 절차 문서 테스트 정상화** — SKILL.md 가 9/30 방침(사이트 기준·10월 시트 장부 중단)으로 바뀌었는데 테스트가 옛 문장을 찾아 실패. 같은 안전 계약(완료조건·HELD 해제조건·대상 특정·실행 후 재확인)을 새 문장으로 검사 + first-registration.md 초대 1회·재발송 금지 추가. 이제 `npm test` 전체 1736/1736 통과 | ✅ de22a07e 배포 |
-| 2026-10-02 | **학생 병합 필터 가드 정상화** — 27파일 56건 분류: 학부모 «새 신청» 자녀 선택 5곳에 notMergedStudent(운영 실측 흡수 8명·진행 수강 0건이라 화면 변화 0), 나머지는 사유 붙여 예외 등록(청구·POS 대조·id 단건·게이트·병합엔진이 안 옮기는 기록 목록). `npm test`·`test:guards` 신설 + release-preflight 에 가드 편입. 후속: tables.ts 에 MakeupCredit 등 신규 테이블 추가 필요 | ✅ 667c73be 배포(검수 승인·런타임 오류 0) |

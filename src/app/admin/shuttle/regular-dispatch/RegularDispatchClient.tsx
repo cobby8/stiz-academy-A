@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import RouteSection from "@/components/seasonal/RouteSection";
 import type { DispatchSuggestion } from "@/lib/seasonal/shuttle-optimize";
@@ -33,6 +33,15 @@ export default function RegularDispatchClient({ weekdays, initialDay, initialPic
   const [timelineError, setTimelineError] = useState<string | null>(null);
   const visibleMismatches = classTimeMismatches.filter((row) => row.dayOfWeek === day);
   const timelineRows = useMemo(() => buildTimelineRows(timelinePickup, timelineDropoff), [timelinePickup, timelineDropoff]);
+  // 등원·하원 섹션의 '저장 안 한 변경' 여부. 요일·월을 바꾸면 화면이 새 노선으로 바뀌어 편집이 사라지므로 먼저 묻는다.
+  const [dirtyPickup, setDirtyPickup] = useState(false);
+  const [dirtyDropoff, setDirtyDropoff] = useState(false);
+  const onPickupDirty = useCallback((d: boolean) => setDirtyPickup(d), []);
+  const onDropoffDirty = useCallback((d: boolean) => setDirtyDropoff(d), []);
+  // 배차 월이 바뀌면(router.push ?month=) 이 컴포넌트는 그대로 남아 RouteSection 이 다시 불러오지 않는다.
+  // 월마다 다른 refreshKey 를 넘겨 새 달 노선을 다시 불러오게 한다(편집·「저장 안 됨」도 초기화) — 옛 달 노선이 새 달로 저장되는 사고 방지.
+  const monthRefreshKey = Number(serviceMonth.replace(/\D/g, "")) || 0;
+  const confirmLeave = () => !(dirtyPickup || dirtyDropoff) || window.confirm("저장하지 않은 노선 수정이 있습니다. 이동하면 사라집니다. 계속할까요?");
 
   useEffect(() => {
     if (day === initialDay) {
@@ -74,7 +83,7 @@ export default function RegularDispatchClient({ weekdays, initialDay, initialPic
         <div className="flex flex-wrap items-end justify-between gap-2">
           <h3 className="text-base font-black text-gray-900 dark:text-white">정규 셔틀 배차 · 하루 타임라인</h3>
           <label className="flex flex-col gap-1 text-[11px] font-bold text-gray-500">배차 월
-            <select value={serviceMonth} onChange={(event) => router.push(`/admin/shuttle/regular-dispatch?month=${encodeURIComponent(event.target.value)}`)} className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-bold dark:border-gray-600 dark:bg-gray-900">
+            <select value={serviceMonth} onChange={(event) => confirmLeave() && router.push(`/admin/shuttle/regular-dispatch?month=${encodeURIComponent(event.target.value)}`)} className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-bold dark:border-gray-600 dark:bg-gray-900">
               {months.map((month) => <option key={month} value={month}>{month}</option>)}
             </select>
           </label>
@@ -88,7 +97,7 @@ export default function RegularDispatchClient({ weekdays, initialDay, initialPic
         <div className="mt-3 flex flex-wrap items-center gap-1 rounded-xl bg-gray-100 p-1 dark:bg-gray-900">
           {weekdays.length === 0 && <span className="px-2 py-1 text-sm font-bold text-gray-400">셔틀 이용 학생이 있는 요일이 없습니다.</span>}
           {weekdays.map((w) => (
-            <button key={w} onClick={() => setDay(w)}
+            <button key={w} onClick={() => { if (w !== day && confirmLeave()) setDay(w); }}
               className={`min-h-9 rounded-lg px-4 text-sm font-black ${day === w ? "bg-white text-brand-navy-900 shadow dark:bg-gray-700 dark:text-white" : "text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"}`}>
               {DOW_LABEL[w] ?? w}
             </button>
@@ -129,12 +138,13 @@ export default function RegularDispatchClient({ weekdays, initialDay, initialPic
           )}
         </div>
 
-        <details className="mt-3 rounded-2xl border border-gray-200 bg-gray-50 p-3 dark:border-gray-700 dark:bg-gray-900/40">
+        {/* 실제 편집 영역 — 기본으로 펼쳐 둔다(위 타임라인은 요약). 문구 "방향별 세부 조정 열기"는 테스트가 지킨다. */}
+        <details open className="mt-3 rounded-2xl border border-gray-200 bg-gray-50 p-3 dark:border-gray-700 dark:bg-gray-900/40">
           <summary className="cursor-pointer text-sm font-black text-gray-800 dark:text-gray-100">방향별 세부 조정 열기</summary>
-          <p className="mt-1 text-[12px] text-gray-500 dark:text-gray-400">자동 제안, 저장, 경로 재계산은 아직 등원/하원 저장본을 나눠 관리합니다. 위 시간순 노선은 실제 운행 흐름 확인용입니다.</p>
+          <p className="mt-1 text-[12px] text-gray-500 dark:text-gray-400">등원·하원을 따로 고치고 각각 💾 저장하세요. 정차 「→ 차량 이동」, 학생 옆 ⇄·×로 옮기거나 뺍니다.</p>
           <div className="mt-3 space-y-3">
-            <RouteSection initial={initialPickup} date={day} refreshKey={0} apiBase={REGULAR_API} rosterEditable={false} serviceMonth={serviceMonth} drivers={drivers} />
-            <RouteSection initial={initialDropoff} date={day} refreshKey={0} apiBase={REGULAR_API} rosterEditable={false} serviceMonth={serviceMonth} drivers={drivers} />
+            <RouteSection initial={initialPickup} date={day} refreshKey={monthRefreshKey} apiBase={REGULAR_API} rosterEditable={false} serviceMonth={serviceMonth} drivers={drivers} regularEditing onDirtyChange={onPickupDirty} />
+            <RouteSection initial={initialDropoff} date={day} refreshKey={monthRefreshKey} apiBase={REGULAR_API} rosterEditable={false} serviceMonth={serviceMonth} drivers={drivers} regularEditing onDirtyChange={onDropoffDirty} />
           </div>
         </details>
       </div>

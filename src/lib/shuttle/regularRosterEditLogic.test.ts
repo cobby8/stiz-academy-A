@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 // @ts-expect-error -- Node's type-stripping runner needs the runtime extension.
-import { buildAddRows, buildMoveUpdates, groupRosterDay, nextServiceMonth, nextSortOrder, normalizeArriveTime, normalizeClassTime, normalizeCoords, rosterRowIdsForStudent, RosterInputError, validateAddInput, validateCopyInput, validateMoveInput, validateRemoveInput, validateStopEditInput, type RosterExistingRow } from "./regularRosterEditLogic.ts";
+import { buildAddRows, buildMoveUpdates, catchUpDateRange, findCounterpartRows, idPairArrays, formatRosterMonths, groupRosterDay, isSameRosterStudent, nextServiceMonth, normalizeRosterScope, planEnsureMonths, remapStopRowIds, rosterStudentKeyResolver, nextSortOrder, normalizeArriveTime, normalizeClassTime, normalizeCoords, rosterRowIdsForStudent, RosterInputError, validateAddInput, validateCopyInput, validateMoveInput, validateRemoveInput, validateStopEditInput, type RosterExistingRow } from "./regularRosterEditLogic.ts";
 
 // 기존 행 한 줄
 function row(over: Partial<RosterExistingRow> = {}): RosterExistingRow {
@@ -125,4 +125,156 @@ test("화면 묶음: 수업시간별 학생에 등원·하원을 붙이고 운�
   assert.equal(groups[0].students[1].board?.id, "1");
   assert.equal(groups[0].students[1].alight?.id, "2");
   assert.deepEqual(rosterRowIdsForStudent(stops, "id:s2"), ["1", "2", "6"]);
+});
+
+// ── 2026-10-02 월 자동 생성 · 적용 범위 · 두 줄 표시 ─────────────────────
+
+test("월 자동 생성 계획: 이번 달·다음 달이 없으면 직전 최근 달을 차례로 복사한다", () => {
+  // 10월이 없으면 09→10, 그다음 10→11
+  assert.deepEqual(planEnsureMonths(["2026-08", "2026-09"], "2026-10"), [
+    { sourceMonth: "2026-09", targetMonth: "2026-10" },
+    { sourceMonth: "2026-10", targetMonth: "2026-11" },
+  ]);
+  // 이미 둘 다 있으면 아무것도 안 한다(멱등)
+  assert.deepEqual(planEnsureMonths(["2026-09", "2026-10", "2026-11"], "2026-10"), []);
+  // 다음 달만 없으면 이번 달을 원본으로
+  assert.deepEqual(planEnsureMonths(["2026-10"], "2026-10"), [{ sourceMonth: "2026-10", targetMonth: "2026-11" }]);
+  // 몇 달 비어 있어도 가장 최근 달에서 이어 만든다
+  assert.deepEqual(planEnsureMonths(["2026-06"], "2026-10").map((s) => s.sourceMonth), ["2026-06", "2026-10"]);
+  // 연말 넘김
+  assert.deepEqual(planEnsureMonths(["2026-11"], "2026-12"), [
+    { sourceMonth: "2026-11", targetMonth: "2026-12" },
+    { sourceMonth: "2026-12", targetMonth: "2027-01" },
+  ]);
+  // 명단이 아예 없거나 미래 달만 있으면 만들지 않는다
+  assert.deepEqual(planEnsureMonths([], "2026-10"), []);
+  assert.deepEqual(planEnsureMonths(["2027-03"], "2026-10"), []);
+  // 형식이 이상한 달은 원본으로 쓰지 않는다
+  assert.deepEqual(planEnsureMonths(["bad", "2026-13"], "2026-10"), []);
+});
+
+test("적용 범위: 비우면 이후 달까지(FROM_THIS_MONTH), 이상한 값은 거부", () => {
+  assert.equal(normalizeRosterScope(undefined), "FROM_THIS_MONTH");
+  assert.equal(normalizeRosterScope(""), "FROM_THIS_MONTH");
+  assert.equal(normalizeRosterScope("THIS_MONTH"), "THIS_MONTH");
+  assert.throws(() => normalizeRosterScope("ALL"), RosterInputError);
+  assert.equal(validateRemoveInput({ serviceMonth: "2026-10", ids: ["a"] }).scope, "FROM_THIS_MONTH");
+  assert.equal(validateMoveInput({ serviceMonth: "2026-10", ids: ["a"], weekday: 1, classTime: "17:00~18:00", scope: "THIS_MONTH" }).scope, "THIS_MONTH");
+  assert.equal(validateStopEditInput({ serviceMonth: "2026-10", id: "a", stop }).scope, "FROM_THIS_MONTH");
+  assert.equal(validateAddInput({ serviceMonth: "2026-10", studentId: "s1", weekdays: [1], classTime: "17:00~18:00", board: stop, alight: null, scope: "THIS_MONTH" }).scope, "THIS_MONTH");
+});
+
+test("반영 달 문구는 'N월·M월'", () => {
+  assert.equal(formatRosterMonths(["2026-10", "2026-11"]), "10월·11월");
+  assert.equal(formatRosterMonths(["2026-12", "2027-01"]), "12월·1월");
+});
+
+test("이후 달 대응 행: studentId 우선, 없으면 이름+학부모전화 끝4자리 + 요일·방향·수업시간", () => {
+  const later = [
+    row({ id: "n1", studentId: "s1", parentPhone: "010-1111-2222" }),
+    row({ id: "n2", studentId: "s1", direction: "ALIGHT" }),
+    row({ id: "n3", studentId: null, studentName: "이 서준", parentPhone: "01033334444" }),
+    row({ id: "n4", studentId: "s9", studentName: "김민준" }), // 동명이인(다른 id)
+    row({ id: "n5", studentId: "s1", classTime: "18:00~19:00" }),
+  ];
+  // id 로 찾고 방향·수업시간이 다르면 대응 행이 아니다
+  assert.deepEqual(findCounterpartRows(row({ studentId: "s1" }), later).map((r) => r.id), ["n1"]);
+  // 이름만 등록 행: 공백 무시 이름 + 전화 끝4자리
+  assert.deepEqual(findCounterpartRows(row({ studentId: null, studentName: "이서준", parentPhone: "010-3333-4444" }), later).map((r) => r.id), ["n3"]);
+  // 전화 끝자리가 다르면 다른 학생
+  assert.deepEqual(findCounterpartRows(row({ studentId: null, studentName: "이서준", parentPhone: "010-3333-0000" }), later), []);
+  // 요일이 다르면 없음
+  assert.deepEqual(findCounterpartRows(row({ studentId: "s1", weekday: 3 }), later), []);
+  // 한쪽만 studentId 가 있으면 이름+전화로 잇는다, 둘 다 있으면 id 로만
+  assert.equal(isSameRosterStudent({ studentId: "s1", studentName: "김민준", parentPhone: "010-1-2222" }, { studentId: null, studentName: "김 민준", parentPhone: "2222" }), true);
+  assert.equal(isSameRosterStudent({ studentId: "s1", studentName: "김민준" }, { studentId: "s9", studentName: "김민준" }), false);
+  assert.equal(isSameRosterStudent({ studentId: null, studentName: "" }, { studentId: null, studentName: "" }), false);
+});
+
+test("이후 달 학생 추가는 이미 있는 행만 건너뛰고 나머지를 만든다", () => {
+  const input = validateAddInput({ serviceMonth: "2026-10", studentId: "s1", weekdays: [1, 3], classTime: "17:00~18:00", board: stop, alight: null });
+  const existing = [row({ id: "x", weekday: 1, studentId: "s1" })]; // 월요일은 이미 있음
+  assert.throws(() => buildAddRows(input, existing, "김민준"), /이미 명단에 있습니다/); // 고른 달은 거부
+  const extra = buildAddRows(input, existing, "김민준", { skipDuplicates: true });
+  assert.deepEqual(extra.map((r) => r.weekday), [3]);
+  assert.deepEqual(buildAddRows({ ...input, weekdays: [1] }, existing, "김민준", { skipDuplicates: true }), []);
+});
+
+test("두 줄 표시 버그: 같은 이름+전화 끝4자리 중 studentId 가 있으면 id 없는 행도 같은 학생으로 묶는다", () => {
+  const base = { classTime: "17:00~18:00", arriveTime: null, stopName: "A", studentPhone: null, note: null, sortOrder: 0 };
+  const stops = [
+    { ...base, id: "b", weekday: 2, direction: "BOARD", studentName: "목주찬", studentId: "mok", parentPhone: "010-5555-6666" },
+    { ...base, id: "a", weekday: 2, direction: "ALIGHT", studentName: "목 주찬", studentId: null, parentPhone: "01055556666" },
+    // 다른 요일의 id 없는 행도 같은 학생
+    { ...base, id: "c", weekday: 4, direction: "BOARD", studentName: "목주찬", studentId: null, parentPhone: "010-0000-6666" },
+    // 전화 끝자리가 다르면 다른 학생으로 둔다
+    { ...base, id: "d", weekday: 2, direction: "BOARD", studentName: "목주찬", studentId: null, parentPhone: "010-5555-7777" },
+  ];
+  const day = groupRosterDay(stops, 2)[0].students;
+  assert.equal(day.length, 2);
+  const mok = day.find((s) => s.key === "id:mok");
+  assert.equal(mok?.board?.id, "b");
+  assert.equal(mok?.alight?.id, "a");
+  assert.equal(mok?.studentId, "mok");
+  // 「이 달 전체 빼기」도 양쪽 행을 모두 대상으로
+  assert.deepEqual(rosterRowIdsForStudent(stops, "id:mok"), ["b", "a", "c"]);
+  // studentId 없는 행이 먼저 와도 entry.studentId 는 채워진다
+  const reversed = groupRosterDay([stops[1], stops[0]], 2)[0].students;
+  assert.equal(reversed.length, 1);
+  assert.equal(reversed[0].studentId, "mok");
+  // 같은 이름+전화에 studentId 가 둘이면 판단하지 않는다(이름 키 유지)
+  const keyOf = rosterStudentKeyResolver([
+    { studentId: "x1", studentName: "가", parentPhone: "1234" },
+    { studentId: "x2", studentName: "가", parentPhone: "1234" },
+  ]);
+  assert.equal(keyOf({ studentId: null, studentName: "가", parentPhone: "1234" }), "name:가|1234");
+});
+
+test("반이동은 id 있는 행·없는 행이 섞인 같은 학생을 함께 옮긴다", () => {
+  const existing = [
+    row({ id: "b", studentId: "mok", studentName: "목주찬", parentPhone: "010-5555-6666" }),
+    row({ id: "a", direction: "ALIGHT", studentId: null, studentName: "목주찬", parentPhone: "01055556666" }),
+  ];
+  const updates = buildMoveUpdates(["b", "a"], 3, "18:00~19:00", existing);
+  assert.deepEqual(updates.map((u) => [u.id, u.weekday]), [["b", 3], ["a", 3]]);
+});
+
+test("월 복사 시 저장 노선의 'stop:<행id>' 학생 식별값을 새 행 id 로 바꾼다", () => {
+  const payload = { vehicles: [{ driverUserId: "u1", stops: [{ students: [{ requestId: "stop:old1", name: "가" }, { requestId: "s-real", name: "나" }, { requestId: "stop:unknown" }] }] }] };
+  const out = remapStopRowIds(payload, new Map([["old1", "new1"]])) as typeof payload;
+  assert.equal(out.vehicles[0].stops[0].students[0].requestId, "stop:new1");
+  assert.equal(out.vehicles[0].stops[0].students[1].requestId, "s-real"); // 실제 학생 id 는 그대로
+  assert.equal(out.vehicles[0].stops[0].students[2].requestId, "stop:unknown"); // 짝 없는 값은 그대로
+  assert.equal(out.vehicles[0].driverUserId, "u1");
+  assert.equal(payload.vehicles[0].stops[0].students[0].requestId, "stop:old1"); // 원본은 건드리지 않는다
+});
+
+// ── 2026-10-02 리뷰 수정: 따라잡기 생성 탑승체크 이전 · 전화 끝자리 빈 값 ─────────────
+
+test("따라잡기 생성(대상 달 <= 이번 달)일 때만 그 달 날짜 범위를 돌려준다", () => {
+  assert.deepEqual(catchUpDateRange("2026-10", "2026-10"), { from: "2026-10-01", to: "2026-11-01" });
+  assert.deepEqual(catchUpDateRange("2026-12", "2027-01"), { from: "2026-12-01", to: "2027-01-01" }); // 연말
+  assert.equal(catchUpDateRange("2026-11", "2026-10"), null); // 미래 달은 아직 기록이 없다
+  assert.throws(() => catchUpDateRange("bad", "2026-10"), RosterInputError);
+});
+
+test("옛→새 행 id 짝을 unnest 용 두 배열로(빈 값·중복 제외, 순서 보존)", () => {
+  assert.deepEqual(idPairArrays([{ oldId: "a", newId: "A" }, { oldId: "b", newId: "B" }, { oldId: "a", newId: "X" }, { oldId: "", newId: "C" }, { oldId: "d", newId: "" }]), {
+    oldIds: ["a", "b"], newIds: ["A", "B"],
+  });
+  assert.deepEqual(idPairArrays([]), { oldIds: [], newIds: [] });
+});
+
+test("전화 끝자리가 비면 이름만으로 studentId 학생에 묶지 않는다(동명이인 오묶음 방지)", () => {
+  const base = { classTime: "17:00~18:00", arriveTime: null, stopName: "A", studentPhone: null, note: null, sortOrder: 0, weekday: 1 };
+  const stops = [
+    { ...base, id: "1", direction: "BOARD", studentName: "김하준", studentId: "k1", parentPhone: null },
+    { ...base, id: "2", direction: "ALIGHT", studentName: "김하준", studentId: null, parentPhone: null }, // 다른 김하준일 수 있음
+  ];
+  assert.equal(groupRosterDay(stops, 1)[0].students.length, 2);
+  assert.deepEqual(rosterRowIdsForStudent(stops, "id:k1"), ["1"]); // 「이 달 전체 빼기」에 남의 행이 섞이지 않는다
+  // 달을 건너 비교할 때도: 한쪽만 id 가 있고 전화가 없으면 같은 학생으로 보지 않는다
+  assert.equal(isSameRosterStudent({ studentId: "k1", studentName: "김하준", parentPhone: null }, { studentId: null, studentName: "김하준", parentPhone: null }), false);
+  // 이름만 등록 행끼리(복사된 같은 행)는 전화가 없어도 이어진다
+  assert.equal(isSameRosterStudent({ studentId: null, studentName: "김하준", parentPhone: null }, { studentId: null, studentName: "김하준", parentPhone: "" }), true);
 });

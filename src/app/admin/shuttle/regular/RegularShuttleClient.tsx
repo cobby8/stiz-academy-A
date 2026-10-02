@@ -19,7 +19,7 @@ import {
 } from "@/lib/shuttle/regularRosterEditLogic";
 import type { RosterStudentContext, RosterStudentSearchResult } from "@/lib/shuttle/regularRosterEdit";
 import { checkRosterRows } from "@/lib/shuttle/regularRosterCheckLogic";
-import { enrolledClassSlots, resolveCellPlacement, studentRosterRows, type GeoPoint, type PlacementOverride } from "@/lib/shuttle/regularRosterPlacementLogic";
+import { defaultStopFromRiding, enrolledClassSlots, resolveCellPlacement, resolveStudentPoint, studentRosterRows, type PlacementOverride, type ResolvedStudentPoint, type StudentPointSource } from "@/lib/shuttle/regularRosterPlacementLogic";
 import DriverOrderView from "./DriverOrderView";
 import AddRiderRoutePanel, { type PanelDirection } from "./AddRiderRoutePanel";
 
@@ -28,7 +28,8 @@ import AddRiderRoutePanel, { type PanelDirection } from "./AddRiderRoutePanel";
 // 차량 배정은 정규 배차 화면에서 따로 한다(명단이 바뀌면 배차 화면이 자동으로 변동을 감지).
 
 type Entry = RosterStudentEntry<RegularShuttleStop>;
-type StopDraft = { stopName: string; arriveTime: string; latitude: number | null; longitude: number | null };
+// coordSource: 좌표를 어디서 가져왔는지(학생 추가 추천의 학생 위치 우선순위에 쓴다). 저장 요청에는 보내지 않는다.
+type StopDraft = { stopName: string; arriveTime: string; latitude: number | null; longitude: number | null; coordSource?: StudentPointSource | null };
 type Dialog =
   | {
     kind: "add";
@@ -263,7 +264,21 @@ export default function RegularShuttleClient({ initialStops, initialMonth, month
           ? enrolledClassSlots(context.enrolled, stops).filter((o) => !o.paused).map((o) => ({ weekday: o.weekday, classTime: o.classTime }))
           : [];
         const slots = [...enrolled, ...d.slots.filter((s) => !enrolled.some((o) => o.weekday === s.weekday && classTimeKey(o.classTime) === classTimeKey(s.classTime)))];
-        return { ...d, context, contextLoading: false, contextError: false, slots };
+        // 정류장 입력칸이 비어 있으면 이 학생이 이미 타는 셔틀 정류장으로 미리 채운다(같은 방향 우선, 원장이 바꿀 수 있다).
+        let { board, alight, alightSame } = d;
+        if (d.student && context.student) {
+          const riding = studentRosterRows(stops, { id: d.student.id, name: d.student.name, parentPhone: context.student.parentPhone ?? d.student.parentPhone });
+          const fill = (cur: StopDraft, dir: "BOARD" | "ALIGHT"): StopDraft => {
+            if (cur.stopName.trim()) return cur;
+            const def = defaultStopFromRiding(riding, dir);
+            return def ? { ...cur, stopName: def.stopName, latitude: def.latitude, longitude: def.longitude, coordSource: "ROSTER_STOP" } : cur;
+          };
+          board = fill(board, "BOARD");
+          alight = fill(alight, "ALIGHT");
+          // 하원을 따로 채웠고 등원과 다른 정류장이면 「등원과 같은 정류장」을 푼다.
+          if (alightSame && !d.alight.stopName.trim() && alight.stopName && alight.stopName !== board.stopName) alightSame = false;
+        }
+        return { ...d, context, contextLoading: false, contextError: false, slots, board, alight, alightSame };
       });
     } catch (e: unknown) {
       setDialog((d) => (d?.kind === "add" ? { ...d, contextLoading: false, contextError: true } : d));
@@ -287,7 +302,7 @@ export default function RegularShuttleClient({ initialStops, initialMonth, month
     setDialog((d) => {
       if (d?.kind !== "add") return d;
       const fromPlace = (p: RosterStudentSearchResult["pickup"], cur: StopDraft): StopDraft =>
-        p ? { ...cur, stopName: p.name || p.address, latitude: p.latitude, longitude: p.longitude } : cur;
+        p ? { ...cur, stopName: p.name || p.address, latitude: p.latitude, longitude: p.longitude, coordSource: "STUDENT_PLACE" } : cur;
       const board = fromPlace(student.pickup, d.board);
       const alight = fromPlace(student.dropoff, d.alight);
       // 학생을 고르면 자리 선택은 비우고 정보를 새로 불러온다(직접 추가해 둔 수업 칸은 남겨 등록 수업과 합친다).
@@ -297,12 +312,20 @@ export default function RegularShuttleClient({ initialStops, initialMonth, month
   }
 
   // 학생 추가 모달의 방향별 정류장(하원 = 등원과 같으면 등원 정류장). 운행표 패널과 저장이 같은 값을 쓴다.
-  function addDirections(d: Extract<Dialog, { kind: "add" }>): (PanelDirection & { draft: StopDraft })[] {
-    const point = (s: StopDraft): GeoPoint | null => (s.latitude != null && s.longitude != null ? { lat: s.latitude, lng: s.longitude } : null);
-    const alight = d.alightSame && d.useBoard ? d.board : d.alight;
+  // 학생 위치 = 지도 지정 > 명단 정류장(이름 일치·후보 칩) > 학생 상세 위치 > 이미 타는 셔틀 정류장(resolveStudentPoint).
+  // 「등원과 같은 정류장」이면 하원도 등원과 같은 위치를 쓴다.
+  function addDirections(d: Extract<Dialog, { kind: "add" }>): (PanelDirection & { draft: StopDraft; resolved: ResolvedStudentPoint })[] {
+    const student = d.context?.student?.id && d.context.student.id === d.student?.id ? d.context.student : d.student;
+    const places = { pickup: student?.pickup ?? null, dropoff: student?.dropoff ?? null };
+    const riding = ridingRows(d);
+    const resolve = (dir: "BOARD" | "ALIGHT", draft: StopDraft) => resolveStudentPoint({ direction: dir, draft, rosterStops: stops, places, riding });
+    const boardRes = resolve("BOARD", d.board);
+    const same = d.alightSame && d.useBoard;
+    const alight = same ? d.board : d.alight;
+    const alightRes = same ? boardRes : resolve("ALIGHT", alight);
     return [
-      ...(d.useBoard ? [{ dir: "BOARD" as const, stopName: d.board.stopName, point: point(d.board), draft: d.board }] : []),
-      ...(d.useAlight ? [{ dir: "ALIGHT" as const, stopName: alight.stopName, point: point(alight), draft: alight }] : []),
+      ...(d.useBoard ? [{ dir: "BOARD" as const, stopName: d.board.stopName, point: boardRes.point, pointLabel: boardRes.label, draft: d.board, resolved: boardRes }] : []),
+      ...(d.useAlight ? [{ dir: "ALIGHT" as const, stopName: alight.stopName, point: alightRes.point, pointLabel: alightRes.label, draft: alight, resolved: alightRes }] : []),
     ];
   }
 
@@ -324,7 +347,10 @@ export default function RegularShuttleClient({ initialStops, initialMonth, month
     const stopBody = (dir: "BOARD" | "ALIGHT") => {
       const d = dirs.find((x) => x.dir === dir);
       // 시각은 칸마다 다르므로 정류장에는 넣지 않고 placements 로 보낸다.
-      return d ? toStopBody({ ...d.draft, arriveTime: "" }) : null;
+      if (!d) return null;
+      // 명단 정류장과 이름이 같은데 입력값에 좌표가 없으면 그 정류장 좌표로 채워 저장한다.
+      const fill = d.resolved.fillCoords;
+      return toStopBody({ ...d.draft, arriveTime: "", ...(fill ? { latitude: fill.lat, longitude: fill.lng } : {}) });
     };
     void submitDialog("POST", {
       action: "add",
@@ -356,7 +382,7 @@ export default function RegularShuttleClient({ initialStops, initialMonth, month
   function onPicked(value: MapLocationData) {
     if (!picker) return;
     const cur = draftOf(picker);
-    patchDraft(picker, { latitude: value.latitude, longitude: value.longitude, stopName: cur.stopName || value.placeName || value.address });
+    patchDraft(picker, { latitude: value.latitude, longitude: value.longitude, stopName: cur.stopName || value.placeName || value.address, coordSource: "MAP" });
     setPicker(null);
   }
 
@@ -473,14 +499,14 @@ export default function RegularShuttleClient({ initialStops, initialMonth, month
       : ([["하원 위치", student?.dropoff], ["등원 위치", student?.pickup]] as const);
     const out: { key: string; label: string; draft: Partial<StopDraft> }[] = [];
     for (const [label, p] of places) {
-      if (p) out.push({ key: `place-${label}`, label: `학생 ${label} · ${p.name || p.address}`, draft: { stopName: p.name || p.address, latitude: p.latitude, longitude: p.longitude } });
+      if (p) out.push({ key: `place-${label}`, label: `학생 ${label} · ${p.name || p.address}`, draft: { stopName: p.name || p.address, latitude: p.latitude, longitude: p.longitude, coordSource: "STUDENT_PLACE" } });
     }
     {
       const seen = new Set<string>();
       for (const s of ridingRows(dialog)) {
         if (s.direction !== dir || seen.has(s.stopName)) continue;
         seen.add(s.stopName);
-        out.push({ key: `row-${s.id}`, label: `지금 ${dir === "BOARD" ? "등원" : "하원"} 정류장 · ${s.stopName}`, draft: { stopName: s.stopName, latitude: s.latitude ?? null, longitude: s.longitude ?? null } });
+        out.push({ key: `row-${s.id}`, label: `지금 ${dir === "BOARD" ? "등원" : "하원"} 정류장 · ${s.stopName}`, draft: { stopName: s.stopName, latitude: s.latitude ?? null, longitude: s.longitude ?? null, coordSource: "ROSTER_STOP" } });
       }
     }
     if (out.length === 0) return null;

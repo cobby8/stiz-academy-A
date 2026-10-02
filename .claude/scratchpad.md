@@ -63,12 +63,6 @@
 
 ---
 
-## 구현 기록 (developer) — 토스POS ↔ 사이트 결제 월별 대사 (2026-09-18)
-
-(완료·커밋됨 — 상세는 git log 참조: 5a9a793·ddbd479·eae8b702·522c913d·fa52192e 및 이번 슬랙 DM 커밋)
-- 핵심 규칙: 청구 원본=랠리즈(전달 3주차 발행), 사이트는 따라가는 기록. 대사는 읽기 전용, 돈 쓰기는 슬랙 [랠리즈 처리함 · 사이트 납부 반영] 버튼→재확인 선점 UPDATE→markPaymentPaid 한 경로뿐.
-- 매칭 로직 1벌: src/lib/pos/tossplace-match.mjs / 판단: payment-notice.mjs / 서명: webhookSignature.ts·slack/signature.ts
-
 ## 구현 기록 (developer) — 셔틀 관리 3단계 정리 (2026-10-02)
 
 📝 옛 노선 편성 화면 삭제 · 시트 가져오기 API 410 차단 · 시트 전용 함수/파서 제거 · 시트 관련 주석·문구를 「셔틀 명단」 기준으로. 로직·스키마 변경 없음.
@@ -130,6 +124,7 @@
 | 1차 | 2026-10-03 | BEFORE 전에 칸 안 번호 겹침을 벌림(spread, 큰 번호 행 함께 밀어 상대 순서 보존·칸 밖 겹침 무시), 명단 조회 정렬에 id COLLATE "C" 추가 / JOIN = 칸 맨 뒤 + 대상 정차 값 복사(밀기 없음), 시각 미검증·미전송, 좌표 없으면 학생 좌표 / 정보 실패 안내·직접 추가 수업 병합 / 패널 버튼 min-h-9 | regularRosterEditLogic.ts, regularRosterEdit.ts, regularImport.ts, RegularShuttleClient.tsx, AddRiderRoutePanel.tsx, 테스트 2 | reviewer R-A1~A6 |
 | 2차 | 2026-10-03 | 등록 수업에 휴원(PAUSED) 포함·상태 전달(퇴원 제외), 휴원 칩은 미체크+「휴원」 배지·안내 문구 분리, 「이미 타는 셔틀」·정류장 후보를 이름+전화 끝4자리(rosterStudentKeyResolver)로 확장, 학부모 전화 보호자 보강 | regularRosterPlacementLogic.ts, regularRosterEdit.ts, RegularShuttleClient.tsx, 테스트 2 | PM 운영 실측: 휴원생 수업 누락 |
 | 3차 | 2026-10-03 | 등록 수업→명단 칸 변환을 시작 시각 기준(그 요일 최다 글자>다른 요일>등록 시각), 칩에 「→ 셔틀 ○ 칸」 대응 표시 | regularRosterPlacementLogic.ts, RegularShuttleClient.tsx, 테스트 | PM 운영 실측: 16:00~16:55 vs 16:00~17:00 불일치로 운행표 0곳 |
+| 4차 | 2026-10-03 | 추천 학생 위치 출처 우선순위(지도>명단 정류장 이름>학생 상세>이미 타는 정류장) resolveStudentPoint, 빈 정류장칸 이미 타는 정류장으로 미리 채움, 추천 문구에 출처 표시 | regularRosterPlacementLogic.ts, RegularShuttleClient.tsx, AddRiderRoutePanel.tsx, 테스트 | 원장 승인: 학생 좌표 8명뿐이라 추천 전부 맨 뒤 |
 
 ### 리뷰 결과 (reviewer) — 학생 추가: 운행표 대조·중간 삽입 (2026-10-03)
 
@@ -156,4 +151,3 @@
 | 2026-10-02 | **셔틀 명단 = 기사님 화면(developer)** — 기사님 화면 보기(같은 순수 함수)·정차 순서·시각 저장(reorder)·명단 점검·저장 노선 표시·정규 배차 저장 경고. tsc 0·기준선 실패 2건만. 미커밋 | 검수 대기 |
 | 2026-10-02 | **셔틀 관리 3단계 정리(developer)** — 옛 노선 편성 화면 삭제, 시트 가져오기 API 410, 시트 가져오기 함수·CSV 파서 제거, 시트 주석·문구 정리, 테스트 9개 갱신. tsc 0·기준선 실패 2건만. 미커밋 | 검수 대기 |
 | 2026-10-02 | **셔틀 명단 월 자동 생성(developer·reviewer)** — 이번 달·다음 달 자동 보장(크론 KST 00:05·화면 진입), 저장 노선 복사, 편집 4종 적용 범위. 리뷰 높음1·권장3 수정(따라잡기 생성 시 탑승체크·기사요청 id 이전, 전화 없는 동명이인 미묶음, 지난 달 기본 THIS_MONTH) | 커밋 146e0cee |
-| 2026-10-02 | **정규 배차 편집 강화 2단계(developer·reviewer)** — 정차·학생 차량 간 이동·빼기·정원 경고·저장 안 됨/이탈 경고(regularEditing 로만). 리뷰 중간2·낮음3 수정(월 전환 재로딩·저장 중 편집 보존·회차 시간 확인) | 커밋 146e0cee |

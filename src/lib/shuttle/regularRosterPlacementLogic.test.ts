@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 // @ts-expect-error -- Node's type-stripping runner needs the runtime extension.
-import { classTimeWarning, dowToWeekday, enrolledClassSlots, estimateInsertTime, findRouteCell, matchRosterClassTime, placementToRequest, resolveCellPlacement, rosterClassTimeFor, studentRosterRows, suggestPlacement } from "./regularRosterPlacementLogic.ts";
+import { classTimeWarning, dowToWeekday, enrolledClassSlots, estimateInsertTime, findRouteCell, matchRosterClassTime, placementToRequest, resolveCellPlacement, resolveStudentPoint, defaultStopFromRiding, rosterClassTimeFor, studentRosterRows, suggestPlacement } from "./regularRosterPlacementLogic.ts";
 // @ts-expect-error -- Node's type-stripping runner needs the runtime extension.
 import { buildAddRows, mapPlacementsToMonth, planRosterInsert, validateAddInput, RosterInputError } from "./regularRosterEditLogic.ts";
 // @ts-expect-error -- Node's type-stripping runner needs the runtime extension.
@@ -418,4 +418,69 @@ test("등록 수업 칩: 대응 표시 「금 16:00~16:55 → 셔틀 16:00~17:00
   seq = 600;
   const day = [r({ weekday: 5, classTime: "16:00~17:00", stopName: "다산자이" })];
   assert.equal(findRouteCell(day, 5, out[0].classTime, "BOARD").length, 1);
+});
+
+test("학생 위치 우선순위: 지도 지정 > 명단 정류장 이름 > 학생 상세 위치 > 이미 타는 정류장(같은 방향 우선)", () => {
+  seq = 700;
+  const roster = [
+    r({ id: "x1", stopName: "다산자이 정문", latitude: 37.61, longitude: 127.15 }),
+    r({ id: "x2", stopName: "좌표없는곳", latitude: null, longitude: null }),
+  ];
+  const riding = [
+    r({ id: "y1", weekday: 3, direction: "ALIGHT", stopName: "하원정류장", latitude: 37.62, longitude: 127.16 }),
+    r({ id: "y2", weekday: 1, direction: "BOARD", stopName: "등원정류장", latitude: 37.63, longitude: 127.17 }),
+  ];
+  const places = { pickup: { name: "집", address: "주소", latitude: 37.64, longitude: 127.18 }, dropoff: null };
+  const base = { direction: "BOARD" as const, rosterStops: roster, places, riding };
+  const empty = { stopName: "", latitude: null, longitude: null };
+
+  // ① 지도 지정
+  const map = resolveStudentPoint({ ...base, draft: { stopName: "다산자이 정문", latitude: 37.6, longitude: 127.1, coordSource: "MAP" } });
+  assert.equal(map.source, "MAP");
+  assert.deepEqual(map.point, { lat: 37.6, lng: 127.1 });
+  // ② 이름 일치(공백 무시) → 명단 정류장 좌표, 입력값에 좌표 없으면 저장 때 채움
+  const named = resolveStudentPoint({ ...base, draft: { stopName: "다산자이정문", latitude: null, longitude: null } });
+  assert.equal(named.source, "ROSTER_STOP");
+  assert.deepEqual(named.point, { lat: 37.61, lng: 127.15 });
+  assert.deepEqual(named.fillCoords, { lat: 37.61, lng: 127.15 });
+  assert.match(named.label, /명단 정류장 「다산자이 정문」 기준/);
+  // 좌표 없는 명단 정류장 이름은 ②로 안 잡히고 ③으로
+  assert.equal(resolveStudentPoint({ ...base, draft: { ...empty, stopName: "좌표없는곳" } }).source, "STUDENT_PLACE");
+  // ③ 학생 상세 위치(하원 위치가 없으면 등원 위치)
+  const alightPlace = resolveStudentPoint({ ...base, direction: "ALIGHT", draft: empty });
+  assert.equal(alightPlace.source, "STUDENT_PLACE");
+  assert.match(alightPlace.label, /학생 상세 등원 위치 기준/);
+  // ④ 이미 타는 정류장: 같은 방향 우선
+  const noPlace = { ...base, places: { pickup: null, dropoff: null } };
+  const rideBoard = resolveStudentPoint({ ...noPlace, draft: empty });
+  assert.equal(rideBoard.source, "RIDING");
+  assert.match(rideBoard.label, /월요일에 타는 정류장 「등원정류장」 기준/);
+  const rideAlight = resolveStudentPoint({ ...noPlace, direction: "ALIGHT", draft: empty });
+  assert.match(rideAlight.label, /수요일에 타는 정류장 「하원정류장」 기준/);
+  // 같은 방향이 없으면 반대 방향
+  assert.match(resolveStudentPoint({ ...noPlace, riding: [riding[0]], draft: empty }).label, /하원정류장/);
+  // 아무 출처도 없으면 좌표 없음
+  const none = resolveStudentPoint({ ...noPlace, riding: [], draft: empty });
+  assert.equal(none.point, null);
+  assert.equal(none.label, "학생 위치 좌표 없음");
+});
+
+test("정류장 입력칸 미리 채우기: 이미 타는 셔틀 정류장(같은 방향, 좌표 있는 행 우선)", () => {
+  seq = 800;
+  const riding = [
+    r({ direction: "ALIGHT", stopName: "하원A", latitude: 37.6, longitude: 127.1 }),
+    r({ direction: "BOARD", stopName: "등원무좌표", latitude: null, longitude: null }),
+  ];
+  assert.equal(defaultStopFromRiding(riding, "ALIGHT")?.stopName, "하원A");
+  // 등원 행은 좌표가 없어 좌표 있는 반대 방향을 먼저 쓴다
+  assert.equal(defaultStopFromRiding(riding, "BOARD")?.stopName, "하원A");
+  assert.equal(defaultStopFromRiding([riding[1]], "BOARD")?.stopName, "등원무좌표");
+  assert.equal(defaultStopFromRiding([], "BOARD"), null);
+});
+
+test("이름 일치 출처면 그 칸 같은 이름 정차에 합류 추천(학생 위치가 그 정류장 좌표라서)", () => {
+  const rows = sampleDay();
+  const res = resolveStudentPoint({ direction: "BOARD", draft: { stopName: "B", latitude: null, longitude: null }, rosterStops: rows, places: { pickup: null, dropoff: null }, riding: [] });
+  const cell = resolveCellPlacement({ stops: rows, weekday: 1, classTime: "17:00~18:00", direction: "BOARD", stopName: "B", student: res.point, academy: ACADEMY, depot: DEPOT, studentId: null });
+  assert.deepEqual(cell.choice, { kind: "JOIN", stopIndex: 1 });
 });

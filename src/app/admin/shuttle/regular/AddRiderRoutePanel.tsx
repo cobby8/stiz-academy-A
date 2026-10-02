@@ -12,7 +12,8 @@ import { resolveCellPlacement, type GeoPoint, type PlacementChoice, type Placeme
 // 원장은 「여기에 새 정차」(정차 사이) 또는 「합류」(기존 정차)를 눌러 바꿀 수 있다.
 
 type Dir = "BOARD" | "ALIGHT";
-export type PanelDirection = { dir: Dir; stopName: string; point: GeoPoint | null };
+/** pointLabel: 추천에 쓴 학생 위치의 출처(예: 「월요일에 타는 정류장 「X」 기준」). */
+export type PanelDirection = { dir: Dir; stopName: string; point: GeoPoint | null; pointLabel?: string };
 
 /** time 입력칸은 'HH:MM' 두 자리만 받는다. */
 function toTimeInput(v: string | null): string {
@@ -76,7 +77,7 @@ export default function AddRiderRoutePanel({ stops, slots, directions, academy, 
             ? <span className="ml-1.5 rounded bg-green-50 px-1.5 py-0.5 text-[10.5px] font-black text-green-700 dark:bg-green-950/30 dark:text-green-300">추천</span>
             : <button type="button" onClick={() => onOverride(key, null)} className="ml-1.5 text-[11px] font-black text-gray-500 underline">추천으로 되돌리기</button>}
         </p>
-        <p className="mt-0.5 text-[11.5px] text-gray-500 dark:text-gray-400">추천: {res.suggestion.reason}</p>
+        <p className="mt-0.5 text-[11.5px] text-gray-500 dark:text-gray-400">추천: {res.suggestion.reason}{d.pointLabel ? ` (학생 위치: ${d.pointLabel})` : ""}</p>
         <div className="mt-1.5 flex flex-wrap items-center gap-2">
           {res.choice.kind === "JOIN" ? (
             <span className="text-[12px] font-bold text-gray-600 dark:text-gray-300">{label} 시각 <b className="text-blue-600 dark:text-blue-300">{res.arriveTime ?? "미정"}</b> (합류 정차 시각)</span>

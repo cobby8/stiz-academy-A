@@ -281,6 +281,95 @@ export function suggestPlacement(input: {
   };
 }
 
+// ── 추천에 쓰는 학생 위치(방향별) ─────────────────────────────────
+
+/**
+ * 정류장 입력값의 좌표 출처.
+ * MAP = 모달에서 지도로 직접 지정 / ROSTER_STOP = 명단 정류장(후보 칩·이름 일치) / STUDENT_PLACE = 학생 상세 위치 / RIDING = 이미 타는 셔틀 정류장
+ */
+export type StudentPointSource = "MAP" | "ROSTER_STOP" | "STUDENT_PLACE" | "RIDING";
+
+type PlaceLike = { name?: string | null; address?: string | null; latitude: number; longitude: number } | null | undefined;
+
+export type ResolvedStudentPoint = {
+  point: GeoPoint | null;
+  source: StudentPointSource | null;
+  /** 추천 문구에 붙일 출처(한국어). 좌표가 없으면 그 사실을 적는다. */
+  label: string;
+  /** 정류장 이름이 명단 정류장과 같은데 입력값에 좌표가 없으면, 저장할 때 그 정류장 좌표로 채운다. */
+  fillCoords: GeoPoint | null;
+};
+
+const DIR_KO: Record<RosterDirection, string> = { BOARD: "등원", ALIGHT: "하원" };
+
+/** 명단에서 이름(공백 무시)이 같은 정류장 중 좌표 있는 첫 행. */
+function rosterStopByName(stops: readonly RegularShuttleStop[], stopName: string): RegularShuttleStop | null {
+  const key = normalizeStopName(stopName);
+  if (!key) return null;
+  return stops.find((s) => (s.direction === "BOARD" || s.direction === "ALIGHT") && normalizeStopName(s.stopName) === key
+    && pointOf({ lat: s.latitude ?? null, lng: s.longitude ?? null }) != null) ?? null;
+}
+
+/** 이미 타는 셔틀 중 좌표 있는 정류장 — 같은 방향 우선, 없으면 반대 방향. */
+function ridingStop(riding: readonly RegularShuttleStop[], direction: RosterDirection): RegularShuttleStop | null {
+  const located = riding.filter((s) => pointOf({ lat: s.latitude ?? null, lng: s.longitude ?? null }) != null);
+  return located.find((s) => s.direction === direction) ?? located.find((s) => s.direction !== direction) ?? null;
+}
+
+/**
+ * 추천 거리 계산에 쓸 학생 위치를 정한다(2026-10-03 원장 승인 — 학생 상세 위치는 전체 8명뿐이라 추천이 전부 「좌표 없음」이었다).
+ * ① 모달에서 지도로 직접 지정한 좌표
+ * ② 정류장 입력값이 그 달 명단 정류장 이름(공백 무시)과 같으면(후보 칩 포함) 그 정류장 좌표 — 이름이 같으니 그 칸에 있으면 합류 추천
+ * ③ 학생 상세 위치(등원=PICKUP, 하원=DROPOFF, 없으면 반대쪽)
+ * ④ 이 학생이 이미 타는 셔틀 정류장(같은 방향 우선)
+ */
+export function resolveStudentPoint(input: {
+  direction: RosterDirection;
+  draft: { stopName: string; latitude: number | null; longitude: number | null; coordSource?: StudentPointSource | null };
+  rosterStops: readonly RegularShuttleStop[];
+  places: { pickup: PlaceLike; dropoff: PlaceLike };
+  riding: readonly RegularShuttleStop[];
+}): ResolvedStudentPoint {
+  const { draft } = input;
+  const draftPoint = pointOf({ lat: draft.latitude, lng: draft.longitude });
+  // ①
+  if (draft.coordSource === "MAP" && draftPoint) return { point: draftPoint, source: "MAP", label: "지도에서 지정한 위치 기준", fillCoords: null };
+  // ②
+  const named = rosterStopByName(input.rosterStops, draft.stopName);
+  if (named) {
+    const p = { lat: named.latitude as number, lng: named.longitude as number };
+    return { point: p, source: "ROSTER_STOP", label: `명단 정류장 「${named.stopName}」 기준`, fillCoords: draftPoint ? null : p };
+  }
+  // ③
+  const own = input.direction === "BOARD" ? input.places.pickup : input.places.dropoff;
+  const other = input.direction === "BOARD" ? input.places.dropoff : input.places.pickup;
+  for (const [place, kind] of [[own, input.direction], [other, input.direction === "BOARD" ? "ALIGHT" : "BOARD"]] as const) {
+    const p = place ? pointOf({ lat: place.latitude, lng: place.longitude }) : null;
+    if (p) return { point: p, source: "STUDENT_PLACE", label: `학생 상세 ${DIR_KO[kind as RosterDirection]} 위치 기준`, fillCoords: null };
+  }
+  // ④
+  const ride = ridingStop(input.riding, input.direction);
+  if (ride) {
+    return {
+      point: { lat: ride.latitude as number, lng: ride.longitude as number }, source: "RIDING",
+      label: `${WEEKDAY_LABELS[ride.weekday]}요일에 타는 정류장 「${ride.stopName}」 기준`, fillCoords: null,
+    };
+  }
+  // 출처가 하나도 없지만 입력값에 좌표가 있으면(예: 예전 방식으로 채워진 값) 그것이라도 쓴다.
+  if (draftPoint) return { point: draftPoint, source: draft.coordSource ?? null, label: "입력한 정류장 좌표 기준", fillCoords: null };
+  return { point: null, source: null, label: "학생 위치 좌표 없음", fillCoords: null };
+}
+
+/**
+ * 정류장 입력칸이 비어 있을 때 미리 채울 값 — 이 학생이 이미 타는 셔틀 정류장(같은 방향 우선, 좌표 있는 행 우선).
+ * 원장이 바꿀 수 있게 입력칸에 넣기만 한다(출처 = ROSTER_STOP: 명단 정류장 이름이라 ② 규칙으로 그대로 쓰인다).
+ */
+export function defaultStopFromRiding(riding: readonly RegularShuttleStop[], direction: RosterDirection): { stopName: string; latitude: number | null; longitude: number | null; weekday: number } | null {
+  const pick = ridingStop(riding, direction) ?? riding.find((s) => s.direction === direction) ?? riding[0] ?? null;
+  if (!pick) return null;
+  return { stopName: pick.stopName, latitude: pick.latitude ?? null, longitude: pick.longitude ?? null, weekday: pick.weekday };
+}
+
 /** 등원은 수업 시작 이후, 하원은 수업 종료 이전이면 경고(같은 시각은 정상 — 명단 점검과 같은 기준). */
 export function classTimeWarning(direction: RosterDirection, classTime: string, time: string | null): string | null {
   const t = toMin(time);

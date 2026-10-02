@@ -54,8 +54,8 @@ test("신규 학생 최초 등록은 청구 알림과 Rallyz 학부모 초대까
   assert.match(skill, /registration is not complete merely because the student and class rows exist/);
   assert.match(skill, /invoice and notification, and parent invitation/);
   assert.match(skill, /This is a required outcome, not blanket execution permission/);
-  assert.match(skill, /Keep the invoice, invoice notification, and Rallyz parent invitation `HELD`/);
-  assert.match(skill, /specific student, branch, class, period, amount, masked recipient, delivery method, and item count/);
+  // 보류 해제 조건까지 한 문장으로 묶어 검사한다 — 해제 조건이 느슨해지면 여기서 걸린다.
+  assert.match(skill, /Keep the invoice, invoice notification, and Rallyz parent invitation `HELD` until the user's current request or an action-time preview authorizes the specific student, branch, class, period, amount, masked recipient, delivery method, and item count/);
   assert.match(skill, /Re-read the applicable systems, invoice state, and parent connection after execution/);
   assert.match(firstRegistration, /send its requested parent notification, and invite the verified guardian once/);
   assert.match(firstRegistration, /Do not resend an invitation or recreate an invoice after an uncertain response/);

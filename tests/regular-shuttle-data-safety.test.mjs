@@ -15,6 +15,8 @@ const transpiledOrderPayload = ts.transpileModule(`${serviceMonthTs}\n${orderPay
 const { validateRegularStopOrderPayload } = await import(`data:text/javascript;base64,${Buffer.from(transpiledOrderPayload).toString("base64")}`);
 
 const importSource = readFileSync("src/lib/shuttle/regularImport.ts", "utf8");
+const rosterEdit = readFileSync("src/lib/shuttle/regularRosterEdit.ts", "utf8");
+const sheetImportApi = readFileSync("src/app/api/admin/shuttle/regular-import/route.ts", "utf8");
 const roster = readFileSync("src/lib/regular/shuttleRoster.ts", "utf8");
 const diff = readFileSync("src/lib/regular/regularShuttleDiff.ts", "utf8");
 const route = readFileSync("src/lib/regular/regularDispatchRoute.ts", "utf8");
@@ -23,30 +25,23 @@ const parent = readFileSync("src/lib/shuttle/parent.ts", "utf8");
 const orderApi = readFileSync("src/app/api/admin/shuttle/regular-order/route.ts", "utf8");
 const noticeApi = readFileSync("src/app/api/admin/shuttle/regular-notice/route.ts", "utf8");
 
-test("월 차량표 이관은 전체 삭제 없이 증분 동기화한다", () => {
-  const transactionAt = importSource.indexOf("prisma.$transaction(async (tx)");
-  const deleteAt = importSource.indexOf('DELETE FROM "RegularShuttleStop" WHERE "id"=$1 AND "serviceMonth"=$2');
-  const insertAt = importSource.indexOf('tx.$executeRawUnsafe(\n        `INSERT INTO "RegularShuttleStop"');
-  assert.ok(transactionAt >= 0 && deleteAt > transactionAt && insertAt > deleteAt);
-  assert.doesNotMatch(importSource, /DELETE FROM "RegularShuttleStop" WHERE "serviceMonth"=\$1/);
-  assert.match(importSource, /canonicalStopName/);
-  assert.match(importSource, /existingByKey/);
+// 2026-10-02 구글 시트 가져오기 종료 — 앱에서 편집한 명단이 시트 기준으로 덮어써지면 안 된다.
+test("구글 시트 가져오기 API 는 410 으로 막고 DB 를 건드리지 않는다", () => {
+  assert.match(sheetImportApi, /status: 410/);
+  assert.match(sheetImportApi, /구글 시트 가져오기는 종료됐습니다\. 셔틀 명단 화면에서 직접 편집하세요\./);
+  assert.doesNotMatch(sheetImportApi, /prisma|importRegularShuttleFromSheet|request\.json/);
+  assert.doesNotMatch(importSource, /importRegularShuttleFromSheet|docs\.google\.com|fetch\(/);
 });
 
-test("확인보류·비활성 학생은 저장하지 않고 target serviceMonth 상태를 사용한다", () => {
-  assert.match(importSource, /reconcileActiveStudents\(parsed\.stops, month\)/);
-  assert.match(importSource, /targetYear, targetMonth/);
-  assert.match(importSource, /StudentRegistrationLedger/);
-  assert.match(importSource, /if \(!resolved\) \{ held\.add\(stop\.studentName\); return \[\]; \}/);
-  assert.match(importSource, /if \(resolved\.monthStatus !== "ACTIVE"\) \{ excluded\.add\(stop\.studentName\); return \[\]; \}/);
-  assert.match(importSource, /BOOL_OR\(l\.status='ACTIVE'\)[\s\S]*BOOL_OR\(l\.status='PAUSED'\)[\s\S]*BOOL_OR\(l\.status='WITHDRAWN'\)/);
-  assert.doesNotMatch(importSource, /FROM "Enrollment"[\s\S]*current/i);
-  assert.match(importSource, /heldLimit/);
+test("셔틀 명단 삭제는 id·월 단위로만 하고 월 전체를 지우지 않는다", () => {
+  assert.match(rosterEdit, /DELETE FROM "RegularShuttleStop"\s+WHERE "id" = ANY\(\$1::text\[\]\) AND "serviceMonth"=\$2/);
+  assert.doesNotMatch(rosterEdit, /DELETE FROM "RegularShuttleStop"\s+WHERE "serviceMonth"=\$1/);
+  assert.doesNotMatch(importSource, /DELETE FROM "RegularShuttleStop"/);
 });
 
 test("정규 차량표는 studentId를 저장하고 월 비교·배차가 이를 우선한다", () => {
   assert.match(schema, /model RegularShuttleStop[\s\S]*studentId\s+String\?/);
-  assert.match(importSource, /"studentName","studentId","studentPhone"/);
+  assert.match(rosterEdit, /"studentName","studentId","studentPhone"/);
   assert.match(diff, /if \(stop\.studentId\) return `student:\$\{stop\.studentId\}`/);
   assert.match(roster, /COALESCE\(rss\."studentId", st\."id", 'stop:' \|\| rss\."id"\)/);
 });

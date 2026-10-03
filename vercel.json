@@ -55,6 +55,10 @@
       "schedule": "*/5 * * * *"
     },
     {
+      "path": "/api/cron/regular-shuttle-months",
+      "schedule": "5 15 * * *"
+    },
+    {
       "path": "/api/cron/makeup-credits",
       "schedule": "30 15 * * *"
     },

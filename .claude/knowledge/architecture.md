@@ -55,3 +55,9 @@
 - **발견자**: developer
 - **내용**: 설치 화면은 학부모 `/app`(→`/mypage/install`, `app/parent-app/ParentAppInstallClient.tsx`)과 선생님 `/staff/install`(`app/teacher-app/StaffAppInstallClient.tsx`) 두 개다. 두 화면의 판단 로직은 전부 순수 모듈로 뺀다 — 기기/브라우저 판별은 `lib/pwa/installEnvironment.ts`, **화면 표시 판단(대기/설치버튼/수동안내/인앱탈출)은 `lib/pwa/installReadiness.ts`**(`resolveInstallScreenView`·`shouldWaitForInstallPrompt`·`INSTALL_PROMPT_WAIT_MS=1500`). 이유: 크롬은 `beforeinstallprompt` 를 마운트 후 1~2초 뒤에 쏘는데, 그 전에 "이미 설치돼 있으면 설치 버튼이 나타나지 않습니다" 수동 안내가 먼저 보여 사용자가 설치 불가로 오해하고 이탈했다. 그래서 안드로이드/PC 만 1.5초 대기 창을 두고 그동안 안내를 감춘다. **iOS·인앱 브라우저·이미 설치됨은 대기하지 않는다**(애플은 이 이벤트를 아예 안 보내므로 기다리면 순손해). 대기 창은 표시를 미루는 것일 뿐 `prompt()` 자동 호출은 금지(user activation 밖에서 부르면 이벤트가 무효화됨). 회귀 테스트가 잠근 소스 표현이 있다 — `tests/pwa-install-environment.test.mjs` 는 두 화면에 `deviceState !== "checking" && !inAppBrowser` 문자열이 그대로 있길 요구하므로, 조건을 `view.showManualGuide` 로 갈아치우지 말고 **AND 로 덧붙인다**. 대기 로직 테스트는 `tests/pwa-install-wait-window.test.mjs`(TS 를 transpileModule 로 실행 검증).
 - **참조횟수**: 0
+
+### 2026-10-03 셔틀 명단 중간 삽입은 「다음 정차 첫 행 앞」 + 요일 전체 sortOrder 밀기
+- **분류**: architecture
+- **발견자**: developer
+- **내용**: 기사님 화면(groupSheetStops)은 같은 정류장 이름 행을 **처음 나온 행 위치**에 한 정차로 묶는다. 그래서 정차 k 와 k+1 사이에 새 정차를 넣을 때 「k 의 마지막 행 뒤」 기준이면 같은 정류장이 흩어진 칸(A,B,A)에서 B 뒤로 밀린다 → 「k+1 의 첫 행 앞(BEFORE)」으로 넣는다. sortOrder 는 요일 안 번호(다른 수업·방향·PIVOT/RETURN 과 섞임)라 `그 달·요일 sortOrder ≥ 기준 +1` 후 기준 번호를 새 행에 준다 → 다른 행 상대 순서 불변. 칸 안에 번호가 겹친 학생 행(A(5)·B(5))이 있으면 먼저 화면 순서(sortOrder, 겹치면 id 바이트 순 — 명단 조회 ORDER BY "id" COLLATE "C")대로 벌린 뒤 넣는다. 합류(JOIN)는 번호를 밀지 않고 칸 맨 뒤 + 대상 행의 stopName 글자·좌표·시각 복사(같은 이름은 첫 위치로 묶이므로 결과 동일). 순수 계획 `planRosterInsert`·추천 `regularRosterPlacementLogic.ts`, 실행 테스트가 buildFallbackClasses 로 다시 그려 검증한다.
+- **참조횟수**: 0

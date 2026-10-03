@@ -7,7 +7,7 @@ import Badge from "@/components/ui/Badge";
 import AnimateOnScroll from "@/components/ui/AnimateOnScroll";
 import CTABanner from "@/components/landing/CTABanner";
 import { buildPublicMetadata } from "@/lib/publicMetadata";
-import { readTossReviewConfig } from "@/lib/payments/tossReview";
+import { hasSellablePrice, listReviewTierOptions, readTossReviewConfig } from "@/lib/payments/tossReview";
 import ProgramPayButton from "./ProgramPayButton";
 
 export const revalidate = 60;
@@ -81,10 +81,13 @@ function getAgeColor(targetAge: string | null): { bg: string; text: string; bord
 }
 
 export default async function ProgramsPage() {
-    const [programs, settings] = await Promise.all([
+    const [allPrograms, settings] = await Promise.all([
         getPrograms() as Promise<Program[]>,
         getAcademySettings() as Promise<any>,
     ]);
+    // 0원 프로그램 숨김 — 가격 칸이 모두 0/빈 값이면 공개 화면에서 뺀다(토스 심사 기준: 0원 상품 노출 불가).
+    // getPrograms 자체는 관리자 화면 등도 쓰므로 여기서만 거른다.
+    const programs = allPrograms.filter((program) => hasSellablePrice(program));
     const phone = settings.contactPhone || "010-0000-0000";
     // 토스페이먼츠 가맹 심사용 결제 버튼 — 테스트 키가 있을 때만 보인다(라이브 키·미설정이면 숨김).
     const reviewPayEnabled = readTossReviewConfig(process.env) !== null;
@@ -114,6 +117,18 @@ export default async function ProgramsPage() {
                         <p className="text-sm mt-2">문의: {phone}</p>
                     </div>
                 ) : (
+                    <>
+                    {/* 판매정책 표시 — 결제사 심사 필수(서비스 제공기간이 상품 화면에 명확히 보여야 함) */}
+                    <div className="mb-6 rounded-xl border border-gray-200 bg-gray-50 p-4 text-sm leading-6 text-gray-700 break-keep dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300">
+                        <p>
+                            <strong className="text-gray-900 dark:text-white">수강 기간</strong> 월 수강료는 <strong>4주(1개월) 단위</strong>로 결제하며,
+                            서비스 제공기간은 결제한 달의 수업 4주입니다. 셔틀비는 별도입니다.
+                        </p>
+                        <p className="mt-1">
+                            <strong className="text-gray-900 dark:text-white">환불</strong> 「학원법 시행령」 교습비 반환기준에 따릅니다 —{" "}
+                            <a href="/terms" className="font-bold text-brand-orange-500 underline underline-offset-2 dark:text-brand-neon-lime">환불 규정 보기</a>
+                        </p>
+                    </div>
                     <div data-tour-target="program-cards" className="grid md:grid-cols-2 gap-6">
                         {programs.map((program, i) => {
                             const days = program.days
@@ -237,10 +252,8 @@ export default async function ProgramsPage() {
                                             {reviewPayEnabled && (
                                                 <ProgramPayButton
                                                     programId={program.id}
-                                                    tiers={(tiers.length > 0
-                                                        ? tiers.map((t) => ({ key: t.key as string, label: t.label, amount: Number(program[t.key]) }))
-                                                        : [{ key: "price", label: "월 수강료", amount: program.price }]
-                                                    ).filter((option) => Number.isInteger(option.amount) && option.amount > 0)}
+                                                    // 주문서와 같은 규칙으로 빈도 목록을 만든다(공용 함수 — 사본 금지)
+                                                    tiers={listReviewTierOptions(program)}
                                                 />
                                             )}
                                         </div>
@@ -249,6 +262,7 @@ export default async function ProgramsPage() {
                             );
                         })}
                     </div>
+                    </>
                 )}
             </SectionLayout>
 

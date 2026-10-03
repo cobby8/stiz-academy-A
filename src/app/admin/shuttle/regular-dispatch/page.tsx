@@ -7,15 +7,24 @@ import { getRegularShuttleStops, getRegularStopsWithoutCoords } from "@/lib/shut
 import RegularStopGeocodePanel from "@/components/shuttle/RegularStopGeocodePanel";
 import { getRegularShuttleMonths } from "@/lib/shuttle/regularImport";
 import { prisma } from "@/lib/prisma";
+import { koreaServiceMonth, pickServiceMonthFor } from "@/lib/regular/serviceMonth";
+import { ensureRegularRosterMonths } from "@/lib/shuttle/regularRosterEdit";
 
 export const dynamic = "force-dynamic";
 
 // 정규 셔틀 동적배차(신청서 좌표 기반) — 방학특강 배차 화면을 요일 기준으로 재사용한다.
-// 구글시트 정규 셔틀(/admin/shuttle/regular)과는 별개의 새 화면(정합 명단 소스).
+// 명단 편집은 「셔틀 명단」 탭(/admin/shuttle/regular)이 맡고, 이 화면은 그 명단으로 노선을 짠다.
 export default async function RegularDispatchPage({ searchParams }: { searchParams: Promise<{ month?: string }> }) {
+  // 이번 달·다음 달 명단(과 저장 노선)이 없으면 직전 달을 복사해 만든다. 실패해도 화면은 뜬다.
+  try { await ensureRegularRosterMonths(); } catch (e) { console.error("[admin/shuttle/regular-dispatch] 명단 월 자동 생성 실패", e); }
   const months = await getRegularShuttleMonths();
   const requestedMonth = (await searchParams).month;
-  const serviceMonth = requestedMonth && months.includes(requestedMonth) ? requestedMonth : (months[0] ?? new Date().toISOString().slice(0, 7));
+  // 기본 월 = 이번 달(KST) 이하의 최신 명단 달. 「다음 달 명단 만들기」로 미래 달이 생겨도 이번 달을 먼저 보여 준다.
+  // 이번 달 이하가 없으면 최신 달(months[0]), 명단이 아예 없으면 이번 달.
+  const currentMonth = koreaServiceMonth();
+  const serviceMonth = requestedMonth && months.includes(requestedMonth)
+    ? requestedMonth
+    : (pickServiceMonthFor(months, currentMonth) ?? months[0] ?? currentMonth);
   const weekdays = await getRegularShuttleWeekdays(serviceMonth);
   const initialDay = weekdays[0] ?? "Mon";
 

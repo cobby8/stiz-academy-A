@@ -20,7 +20,7 @@ import type { RegularShuttleRider } from "./shuttleRosterLogic";
  *
  * ⚠️ 저장/화면 연결(관리자 화면·저장 roster)은 Phase 2. 이 함수는 "호출 시 배차 제안 반환"까지만.
  * ⚠️ T맵은 방학특강과 동일하게 "편집/계산 시에만" 호출(localOnly=true 면 미호출·직선 추정).
- * ⚠️ 스키마 변경 없음(계산만). 기존 seasonal/구글시트 정규 셔틀 무변경.
+ * ⚠️ 스키마 변경 없음(계산만). 기존 seasonal/셔틀 명단(정규) 무변경.
  */
 
 const DOW_KO: Record<string, string> = {

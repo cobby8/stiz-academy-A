@@ -9,6 +9,7 @@ import { loadTsModule } from "./_ts-module.mjs";
 
 const {
     readTossReviewConfig, resolveReviewOrder, makeReviewOrderId, isReviewOrderId, isReviewPriceTier,
+    hasSellablePrice, listReviewTierOptions, normalizeMobilePhone,
 } = await loadTsModule("src/lib/payments/tossReview.ts");
 
 test("두 키가 모두 test_ 일 때만 켜진다 — 라이브 키·빈 값·한쪽만은 꺼짐", () => {
@@ -58,9 +59,57 @@ test("심사용 결제 코드는 청구서·납부 기록을 건드리지 않는
     for (const file of [
         "src/app/api/payments/toss-review/checkout/route.ts",
         "src/app/payments/review/success/page.tsx",
+        "src/app/programs/order/page.tsx",
+        "src/app/programs/order/OrderForm.tsx",
+        "src/lib/payments/tossReviewClient.ts",
+        "src/app/programs/ProgramPayButton.tsx",
     ]) {
         const source = await readFile(file, "utf8");
         // "deletedAt" 같은 컬럼 이름에 걸리지 않게 실제 쓰기 구문 모양만 찾는다.
         assert.doesNotMatch(source, /INSERT\s+INTO|UPDATE\s+"|DELETE\s+FROM|payment-ledger|markPaymentPaid|\$executeRaw/i, `${file} 에 쓰기 구문이 생겼습니다`);
     }
+});
+
+// ── 주문서(2026-10-02) — 토스 심사 결제경로 "상품 → 주문서 → 결제창" ──
+
+const empty = { price: 0, priceWeek1: null, priceWeek2: null, priceWeek3: null, priceDaily: null };
+
+test("0원 프로그램 판정 — 가격 칸이 모두 0/빈 값이면 공개 화면에 내놓지 않는다", () => {
+    assert.equal(hasSellablePrice(empty), false, "여름방학 특강처럼 0원이면 숨김");
+    assert.equal(hasSellablePrice({ ...empty, priceWeek2: 0, priceDaily: 0 }), false);
+    assert.equal(hasSellablePrice({ ...empty, priceDaily: 200000 }), true);
+    assert.equal(hasSellablePrice({ ...empty, price: 150000 }), true);
+    assert.equal(hasSellablePrice({ ...empty, price: -1 }), false);
+});
+
+test("수업 빈도 목록 — 금액 있는 주간 칸만, 없으면 월 수강료 한 칸", () => {
+    assert.deepEqual(listReviewTierOptions({ price: 150000, priceWeek1: 120000, priceWeek2: 0, priceWeek3: null, priceDaily: 300000 }), [
+        { key: "priceWeek1", label: "주 1회", amount: 120000 },
+        { key: "priceDaily", label: "매일반", amount: 300000 },
+    ]);
+    assert.deepEqual(listReviewTierOptions({ ...empty, price: 150000 }), [{ key: "price", label: "월 수강료", amount: 150000 }]);
+    assert.deepEqual(listReviewTierOptions(empty), []);
+});
+
+test("휴대폰 번호는 숫자만 남기고 01X 형식만 받는다", () => {
+    assert.equal(normalizeMobilePhone("010-1234-5678"), "01012345678");
+    assert.equal(normalizeMobilePhone(" 010 1234 5678 "), "01012345678");
+    assert.equal(normalizeMobilePhone("011-123-4567"), "0111234567");
+    assert.equal(normalizeMobilePhone("02-123-4567"), null, "집 전화는 안 됨");
+    assert.equal(normalizeMobilePhone("010-1234-567"), null);
+    assert.equal(normalizeMobilePhone("010-1234-56789"), null);
+    assert.equal(normalizeMobilePhone("010a12345678"), null);
+    assert.equal(normalizeMobilePhone(undefined), null);
+});
+
+test("프로그램 카드 [결제하기]는 결제창을 바로 열지 않고 주문서로 보낸다", async () => {
+    const source = await readFile("src/app/programs/ProgramPayButton.tsx", "utf8");
+    assert.match(source, /\/programs\/order\?program=/);
+    assert.doesNotMatch(source, /requestPayment|js\.tosspayments\.com/, "결제창 코드는 tossReviewClient.ts 한 곳에만");
+});
+
+test("결제창 코드는 공용 모듈 한 벌 — 주문서가 그걸 쓴다", async () => {
+    const order = await readFile("src/app/programs/order/OrderForm.tsx", "utf8");
+    assert.match(order, /openReviewCardPayment/);
+    assert.doesNotMatch(order, /js\.tosspayments\.com/);
 });

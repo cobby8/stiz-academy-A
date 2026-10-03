@@ -265,7 +265,7 @@ export default function RegularDriverClient({ token, date, classes, initialBoard
                 <div className="mb-1.5 flex items-center gap-1.5">
                   <p className="flex-1 text-[16px] font-black text-blue-700">
                     ⬆ 등원(승차)
-                    {/* 원장이 아직 노선을 확정하지 않은 요일 — 시트 명단 순서라는 걸 기사님께 알린다 */}
+                    {/* 원장이 아직 노선을 확정하지 않은 요일 — 셔틀 명단 순서라는 걸 기사님께 알린다 */}
                     {c.pending && <span className="ml-1.5 rounded-md bg-amber-100 px-1.5 py-0.5 text-[12px] font-black text-amber-700">임시 순서 · 확정 전</span>}
                   </p>
                   {!isEditing && (

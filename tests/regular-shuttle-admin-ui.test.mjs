@@ -11,6 +11,8 @@ const seasonalRouteSection = readFileSync("src/components/seasonal/RouteSection.
 const regularDispatch = readFileSync("src/lib/regular/shuttle-dispatch.ts", "utf8");
 const regularPayload = readFileSync("src/lib/regular/regularDispatchPayload.ts", "utf8");
 const regularDispatchClient = readFileSync("src/app/admin/shuttle/regular-dispatch/RegularDispatchClient.tsx", "utf8");
+const rosterRoute = readFileSync("src/app/api/admin/shuttle/regular-roster/route.ts", "utf8");
+const rosterLib = readFileSync("src/lib/shuttle/regularRosterEdit.ts", "utf8");
 
 test("정규 셔틀 월 선택은 한국시간과 가장 가까운 이전 월을 사용한다", () => {
   assert.match(client, /timeZone: "Asia\/Seoul"/);
@@ -27,17 +29,27 @@ test("모바일에서도 정차 순서를 위아래 버튼으로 바꿀 수 있�
 });
 
 test("정차 순서 저장은 현재 선택한 운영 월을 함께 보내 다른 월 수정을 막는다", () => {
-  assert.match(client, /serviceMonth=\{serviceMonth\}/);
   assert.match(routeSection, /body: JSON\.stringify\(\{ serviceMonth, updates \}\)/);
 });
 
-test("문자 미리보기는 공용 접근성 모달과 승인·발송 2단계를 쓴다", () => {
-  assert.match(client, /<AdminModal titleId="shuttle-message-preview-title"/);
-  assert.match(client, /승인 전에는 발송되지 않으며, 승인 후 별도 발송할 수 있습니다/);
-  assert.doesNotMatch(client, /확인 및 복사만 가능합니다/);
-  assert.match(client, /noticeAction\("APPROVE"/);
-  assert.match(client, /noticeAction\("SEND"/);
-  assert.match(client, /아래 승인만으로 문자가 발송되지는 않습니다/);
+// 2026-10-02 셔틀 명단 화면 교체: 시트 가져오기·배차 지도·월 비교/문자 미리보기 UI 를 명단 화면에서 뺐다.
+// (문자 원장 API 는 남아 있어 아래 테스트가 계속 지킨다.)
+test("셔틀 명단 화면은 시트 가져오기·배차 지도·문자 발송 UI 없이 앱 편집 API 만 쓴다", () => {
+  assert.doesNotMatch(client, /regular-import|RegularRouteSection|regular-notice|docs\.google\.com/);
+  assert.match(client, /\/api\/admin\/shuttle\/regular-roster/);
+  assert.match(client, /정규 배차 화면에서 새 학생을 차량에 배정하고 저장해야 기사님 화면에 반영됩니다/);
+  assert.match(client, /href="\/admin\/shuttle\/regular-dispatch"/);
+  assert.match(client, /\/api\/admin\/shuttle\/regular-run-link/);
+});
+
+test("셔틀 명단 편집은 관리자 가드·raw SQL·변경 기록을 지킨다", () => {
+  assert.match(rosterRoute, /requireAdmin\(\)/);
+  assert.match(rosterLib, /await requireAdmin\(\)/);
+  assert.doesNotMatch(rosterLib, /prisma\.regularShuttleStop|tx\.regularShuttleStop|\.shuttleAuditLog\./);
+  assert.match(rosterLib, /INSERT INTO "ShuttleAuditLog"/);
+  assert.match(rosterLib, /pg_advisory_xact_lock/);
+  // 다음 달 만들기는 대상 달에 명단이 있으면 덮어쓰지 않는다
+  assert.match(rosterLib, /명단이 이미 있습니다/);
 });
 
 test("문자 원장은 변경 시 승인을 무효화하고 승인된 최신 payload만 한 번 발송한다", () => {

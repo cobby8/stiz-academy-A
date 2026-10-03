@@ -207,7 +207,7 @@ export async function cancelShuttleException(parentUserId: string, exceptionId: 
 /**
  * 기사님 명단이 읽는 그날 예외 목록.
  *
- * 정규 셔틀 명단(RegularShuttleStop)은 구글시트에서 온 **글자**라 학생 id 가 없다.
+ * 정규 셔틀 명단(RegularShuttleStop) 행엔 학생 id 가 없을 수 있다(시트 이관 시절 행은 **글자**만 있다).
  * 그래서 결석 매칭과 같은 방식으로 이름·전화로 이어 붙인다.
  */
 export async function getShuttleExceptionsForDate(date: string): Promise<

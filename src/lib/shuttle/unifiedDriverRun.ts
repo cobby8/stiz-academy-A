@@ -1,7 +1,7 @@
 import { getDispatchForView } from "@/lib/seasonal/shuttle-optimize";
 import { getBoardingMap } from "@/lib/seasonal/shuttleRun";
 import { prisma } from "@/lib/prisma";
-// 정규 쪽 "그날 무엇을 띄울지"(확정 저장 노선 우선 · 없으면 시트 명단 폴백)는 이 게이트웨이 한곳에서만 만든다.
+// 정규 쪽 "그날 무엇을 띄울지"(확정 저장 노선 우선 · 없으면 셔틀 명단 폴백)는 이 게이트웨이 한곳에서만 만든다.
 import { getRegularDriverClasses } from "./regularDriverRoute";
 import { getRegularBoardingMap } from "./regularRun";
 import {
@@ -18,7 +18,7 @@ import type { DriverClass } from "./regularDriverRouteLogic";
  *
  * ⚠️ 탑승 체크의 저장·조회 경로는 종류별로 그대로 둔다.
  *    · 특강: ShuttleBoarding(direction='PICKUP'|'DROPOFF', shuttleRequestId)
- *    · 정규: ShuttleBoarding(direction='REGULAR', shuttleRequestId=시트 정차행 id)
+ *    · 정규: ShuttleBoarding(direction='REGULAR', shuttleRequestId=명단 정차행 id)
  *    화면 상태만 접두사 키(S:/R:)로 합쳐 쓰고, 저장할 땐 각자 원래 API·원래 키로 되돌린다.
  *
  * ⚠️ PgBouncer 트랜잭션 모드 → 하위 조회는 전부 $queryRawUnsafe 를 쓰는 기존 함수만 호출한다.
@@ -131,7 +131,7 @@ export type UnifiedDriverRun = {
 
 /** 그날 운행 전체(특강+정규)를 시각순 한 줄 목록으로. */
 export async function loadUnifiedDriverRun(viewDate: string): Promise<UnifiedDriverRun> {
-  // 정규는 구글시트를 읽는다. 시트가 죽어도 **매일 쓰이는 방학특강 화면이 같이 죽으면 안 되므로** 따로 감싼다.
+  // 정규는 셔틀 명단(DB)을 따로 읽는다. 정규 쪽이 실패해도 **매일 쓰이는 방학특강 화면이 같이 죽으면 안 되므로** 따로 감싼다.
   const regularSafe = async (): Promise<{ classes: DriverClass[]; boarding: Record<string, BoardingStatus> }> => {
     try {
       const [classes, boarding] = await Promise.all([

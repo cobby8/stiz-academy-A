@@ -71,3 +71,41 @@ export function makeReviewOrderId(randomPart: string) {
 export function isReviewOrderId(orderId: unknown): orderId is string {
     return typeof orderId === "string" && /^REVIEW-[A-Za-z0-9]{6,40}$/.test(orderId);
 }
+
+/** 금액으로 쓸 수 있는 값인가 — 양의 정수만(0원·빈 칸·소수는 안 됨). */
+function isSellableAmount(value: unknown): value is number {
+    return typeof value === "number" && Number.isInteger(value) && value > 0;
+}
+
+/**
+ * 공개 화면에 내놓을 수 있는 프로그램인가 — 가격 칸 5개 중 하나라도 1원 이상이면 true.
+ * 토스 심사 기준상 0원 상품은 노출하면 안 되므로, 공개 프로그램 화면이 이걸로 거른다.
+ */
+export function hasSellablePrice(program: Omit<ReviewProgramPrices, "name">): boolean {
+    return REVIEW_PRICE_TIERS.some((tier) => isSellableAmount(program[tier.key]));
+}
+
+export type ReviewTierOption = { key: ReviewPriceTier; label: string; amount: number };
+
+/**
+ * 고를 수 있는 수업 빈도(가격 칸) 목록 — 프로그램 카드의 [결제하기]와 주문서가 같이 쓴다.
+ * 주 1~3회·매일반 중 금액이 있는 칸을 쓰고, 하나도 없으면 "월 수강료"(price) 한 칸으로 대신한다.
+ */
+export function listReviewTierOptions(program: Omit<ReviewProgramPrices, "name">): ReviewTierOption[] {
+    const weekly = REVIEW_PRICE_TIERS.filter((tier) => tier.key !== "price")
+        .filter((tier) => isSellableAmount(program[tier.key]))
+        .map((tier) => ({ key: tier.key, label: tier.label, amount: program[tier.key] as number }));
+    if (weekly.length > 0) return weekly;
+    return isSellableAmount(program.price) ? [{ key: "price", label: "월 수강료", amount: program.price }] : [];
+}
+
+/**
+ * 휴대폰 번호를 숫자만 남겨 검증한다. 010-1234-5678 / 01012345678 / 011-123-4567 모두 허용.
+ * 올바르면 숫자 문자열(토스 customerMobilePhone 형식), 아니면 null.
+ */
+export function normalizeMobilePhone(input: unknown): string | null {
+    if (typeof input !== "string") return null;
+    const digits = input.replace(/[\s-]/g, "");
+    // 010 은 뒤 8자리, 011·016~019(옛 번호)는 7~8자리
+    return /^(010\d{8}|01[16789]\d{7,8})$/.test(digits) ? digits : null;
+}

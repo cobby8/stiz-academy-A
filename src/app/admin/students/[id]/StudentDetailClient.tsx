@@ -7,6 +7,7 @@ import { todayKst } from "@/lib/datetime/kst";
 import LocationPickerModal, { type MapLocationData } from "@/components/maps/LocationPickerModal";
 import AdminModal from "@/components/admin/AdminModal";
 import ParentRequestLinkPanel from "./ParentRequestLinkPanel";
+import GuardianPanel from "./GuardianPanel";
 
 type MediaItem = { url: string; type: "image" | "video" };
 
@@ -470,7 +471,6 @@ export default function StudentDetailClient({
 
     // 지도 모달 확정 → /api/admin/shuttle(studentLocation·confirmLocation)로 저장
     // 서버 updateStudentShuttleLocation은 좌표·주소 필수(없으면 400). 성공 시 응답 location으로 로컬만 갱신.
-    // 참고 패턴: src/app/admin/shuttle/ShuttleRouteAdminClient.tsx:196 saveRequestLocation
     async function saveShuttleLocation(kind: "PICKUP" | "DROPOFF", value: MapLocationData) {
         if (!studentId) return;
         setShuttleSaving(true);
@@ -1145,6 +1145,9 @@ export default function StudentDetailClient({
                             </div>
                         )}
                     </div>
+
+                    {/* 보호자 여러 명(엄마·할머니 등) 관리 — 계정 전화는 읽기 전용으로만 표시 */}
+                    <GuardianPanel studentId={student.id} accountPhone={student.parent.phone ?? null} />
 
                     {/* 셔틀 (배차용 실제 위치 — StudentShuttleLocation) */}
                     <div className={CARD_CLASS}>

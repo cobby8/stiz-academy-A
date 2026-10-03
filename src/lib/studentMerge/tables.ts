@@ -18,6 +18,21 @@ export type StudentRefTable = {
    * 양쪽 행이 모두 이 조건을 만족할 때만 충돌로 본다(예: 취소 안 된 행끼리만 하루 1건).
    */
   conflictWhere?: (alias: string) => string;
+  /**
+   * UNIQUE 충돌로 못 옮길 때, 흡수 쪽 행이 더 "살아있는" 상태면 대표 쪽 행이 그 값을 승계한다.
+   * (Enrollment 의 promote 와 같은 생각) 그래야 흡수 쪽에 남는 행이 진짜 중복이 되어 화면에서 숨겨도 된다.
+   * priority 에 없는 상태는 0으로 본다 — 모르는 값으로는 승계하지 않는다.
+   * updatedAt 은 건드리지 않는다(병합은 사람이 한 수정이 아니라서).
+   * ⚠️ 결석 알림 복구 키에는 상태가 들어가므로, 최근 14일 안의 대표 행이 "취소 → 신고"로 승계되면
+   *    원장에게 같은 결석 알림이 한 번 더 갈 수 있다(학부모 발송 아님). 2026-10-04 허용으로 결정.
+   * 부분 UNIQUE(conflictWhere)와는 함께 쓰지 않는다 — 짝 찾기 SQL이 그 조건을 모른다(tables.test.ts 가 막는다).
+   */
+  promoteOnConflict?: {
+    statusColumn: string;
+    priority: Record<string, number>;
+    /** 승계할 컬럼(statusColumn 포함). 학생·충돌 키·id·시각 컬럼은 넣지 않는다 */
+    copyColumns: string[];
+  };
   /** Payment의 연월 동결 규칙을 그대로 따라야 하는 청구 계열 테이블 */
   billingScoped?: boolean;
   /**
@@ -68,7 +83,19 @@ export const STUDENT_REF_TABLES: StudentRefTable[] = [
     followsParents: [{ column: "paymentId", parentTable: "Payment" }],
   },
   { table: "RallyzAttendanceSyncItem", column: "studentId" },
-  { table: "RegularAbsence", column: "studentId", conflictKeys: ["classId", "date"] },
+  {
+    // UNIQUE(studentId, classId, date) 는 상태를 보지 않는다. 대표 쪽이 취소(CANCELLED)이고
+    // 흡수 쪽이 신고(REPORTED)·확인(CONFIRMED)이면 살아있는 결석이 흡수 쪽에 남아 기사 명단에서 빠진다.
+    // → 대표 행이 흡수 쪽 상태·사유를 승계한다.
+    table: "RegularAbsence",
+    column: "studentId",
+    conflictKeys: ["classId", "date"],
+    promoteOnConflict: {
+      statusColumn: "status",
+      priority: { CONFIRMED: 3, REPORTED: 2, CANCELLED: 1 },
+      copyColumns: ["status", "reason", "note", "reportedByUserId", "resolvedByUserId"],
+    },
+  },
   { table: "RegularShuttleStop", column: "studentId" },
   {
     table: "ShuttleDayException",

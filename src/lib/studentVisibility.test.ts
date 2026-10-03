@@ -63,17 +63,9 @@ const ALLOWED_WITHOUT_FILTER: Record<string, { count: number; reason: string }> 
 
     // 기록 테이블 (2026-10-02 정리)
     // 병합 엔진(tables.ts)이 이제 보강권·결석·셔틀 예외·반 변경 신청까지 대표 학생에게 옮긴다.
-    // 흡수 쪽에 남는 행이 "진짜 중복"인 보강권·보강 일정·셔틀 예외 목록은 필터를 걸었다.
+    // 흡수 쪽에 남는 행이 "진짜 중복"인 보강권·보강 일정·셔틀 예외·결석 목록은 필터를 걸었다.
+    // (결석은 병합 때 대표 행이 더 살아있는 흡수 쪽 상태를 승계한다 — tables.ts promoteOnConflict)
     // 아래는 남는 행이 유일한 기록일 수 있는 목록 + id·키를 지정한 단건 처리라 거르지 않는다.
-    "lib/regular/admin-regular-absence.ts": {
-        count: 1,
-        reason: "원장 결석 목록 — 결석 UNIQUE(반·날짜)가 상태를 안 봐서, 대표 쪽이 취소면 살아 있는 결석이 흡수 쪽에 남는다",
-    },
-    "lib/shuttle/regularRun.ts": { count: 1, reason: "날짜별 결석자 명단(기사용) — 위와 같은 이유로 숨기면 기사가 기다린다" },
-    "lib/operational-notification-reconciliation.ts": {
-        count: 1,
-        reason: "결석 누락 알림 복구 — 위와 같은 이유(셔틀 예외 쪽은 필터 적용)",
-    },
     "lib/makeup/parent-makeup.ts": {
         count: 3,
         reason: "보강권 id 지정 예약 옵션·예약·취소 3건(부모 소유 확인 포함)",

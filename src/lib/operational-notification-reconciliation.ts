@@ -14,7 +14,7 @@ export async function reconcileOperationalNotifications(limit = 20) {
     `SELECT ra.id, ra."studentId" AS "studentId", s.name AS "studentName", ra."classId" AS "classId", c.name AS "className",
             to_char(ra.date,'YYYY-MM-DD') AS date, ra.reason, ra.status, to_char(ra."updatedAt",'YYYYMMDDHH24MISSUS') AS "eventVersion"
        FROM "RegularAbsence" ra JOIN "Student" s ON s.id=ra."studentId" JOIN "Class" c ON c.id=ra."classId"
-      WHERE ra."updatedAt" >= NOW()-INTERVAL '14 days' AND ra.status IN ('REPORTED','CANCELLED')
+      WHERE ra."updatedAt" >= NOW()-INTERVAL '14 days' AND ra.status IN ('REPORTED','CANCELLED') AND ${notMergedStudent("s")}
         AND NOT EXISTS (SELECT 1 FROM "NotificationDelivery" nd WHERE nd."stableEventKey" =
           ('regular-absence:'||ra.id||':'||CASE WHEN ra.status='CANCELLED' THEN 'CANCELED' ELSE 'REPORTED' END||':'||
            to_char(ra."updatedAt",'YYYYMMDDHH24MISSUS')||CASE WHEN ra.status='CANCELLED' THEN ''

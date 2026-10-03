@@ -247,6 +247,60 @@ export function moveGuardSql(t: StudentRefTable, winnerLiteral: string): string 
   return guard;
 }
 
+/**
+ * 충돌한 두 행 중 흡수 쪽 상태가 더 살아있어 대표 쪽이 승계해야 하는지.
+ * 모르는 상태(우선순위 표에 없음)는 0 — 흡수 쪽이 모르는 값이면 승계하지 않는다.
+ */
+export function shouldPromoteOnConflict(
+  priority: Record<string, number>,
+  winnerStatus: string | null,
+  loserStatus: string | null,
+): boolean {
+  const w = priority[winnerStatus ?? ""] ?? 0;
+  const l = priority[loserStatus ?? ""] ?? 0;
+  return l > w;
+}
+
+/**
+ * UNIQUE 충돌 쌍(대표 행 w, 흡수 행 l)과 승계할 컬럼 값을 함께 읽는 SELECT.
+ * 결과 컬럼: "winnerRowId", "loserRowId", 그리고 승계 컬럼마다 "w:<컬럼>", "l:<컬럼>" (text).
+ */
+export function conflictPairsSql(
+  t: StudentRefTable,
+  winnerLiteral: string,
+  loserLiteral: string,
+): string {
+  const promo = t.promoteOnConflict;
+  if (!promo || !t.conflictKeys?.length) {
+    throw new Error(`${t.table}: promoteOnConflict 에는 conflictKeys 가 필요하다`);
+  }
+  const on = t.conflictKeys
+    .map((k) => `(w."${k}" IS NOT DISTINCT FROM l."${k}")`)
+    .join(" AND ");
+  const cols = promo.copyColumns
+    .map((c) => `w."${c}"::text AS "w:${c}", l."${c}"::text AS "l:${c}"`)
+    .join(", ");
+  return `SELECT w.id AS "winnerRowId", l.id AS "loserRowId", ${cols}
+     FROM "${t.table}" l
+     JOIN "${t.table}" w ON w."${t.column}" = ${winnerLiteral} AND ${on}
+    WHERE l."${t.column}" = ${loserLiteral}
+    ORDER BY l.id`;
+}
+
+/** 대표 행이 흡수 행의 값을 승계하는 UPDATE (updatedAt 은 그대로 둔다) */
+export function promoteRowSql(
+  t: StudentRefTable,
+  winnerRowLiteral: string,
+  loserRowLiteral: string,
+): string {
+  const promo = t.promoteOnConflict;
+  if (!promo) throw new Error(`${t.table}: promoteOnConflict 설정이 없다`);
+  const sets = promo.copyColumns.map((c) => `"${c}" = l."${c}"`).join(", ");
+  return `UPDATE "${t.table}" w SET ${sets}
+     FROM "${t.table}" l
+    WHERE w.id = ${winnerRowLiteral} AND l.id = ${loserRowLiteral}`;
+}
+
 /** 옮기지 못하고 흡수 쪽에 남긴 행의 로그 사유 */
 export function moveSkipNote(t: StudentRefTable): string {
   if (t.keepOnLoser) return t.keepOnLoser;

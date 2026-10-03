@@ -107,3 +107,16 @@ test("엔진이 자동으로 옮기는 목록에 청구 본체(Payment·청구�
     assert.equal(auto.has(name), true, `${name} 이(가) 병합 대상에서 빠졌다`);
   }
 });
+
+test("상태 승계 설정은 충돌 키가 있는 테이블에만, 학생·키·시각 컬럼 없이 상태 컬럼을 포함해 둔다", () => {
+  for (const t of STUDENT_REF_TABLES.filter((x: StudentRefTable) => x.promoteOnConflict)) {
+    const promo = t.promoteOnConflict!;
+    assert.ok(t.conflictKeys?.length, `${t.table}: 충돌 키 없이 승계 설정만 있다`);
+    // 짝 찾기 SQL(conflictPairsSql)은 부분 UNIQUE 조건을 모른다 → 실제로 옮겨질 행까지 승계 대상이 된다.
+    assert.equal(t.conflictWhere, undefined, `${t.table}: 승계 설정과 부분 UNIQUE(conflictWhere)는 함께 쓸 수 없다`);
+    assert.ok(promo.copyColumns.includes(promo.statusColumn), `${t.table}: 상태 컬럼을 승계하지 않는다`);
+    const forbidden = new Set(["id", t.column, "createdAt", "updatedAt", ...(t.conflictKeys ?? [])]);
+    const bad = promo.copyColumns.filter((c) => forbidden.has(c));
+    assert.deepEqual(bad, [], `${t.table}: 승계하면 안 되는 컬럼`);
+  }
+});

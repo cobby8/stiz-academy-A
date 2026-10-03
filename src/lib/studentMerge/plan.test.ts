@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 // @ts-expect-error -- Node's type-stripping runner needs the runtime extension.
-import { chooseRepresentative, countActive, finalEnrollmentStatuses, isBillingRowMovable, moveGuardSql, moveSkipNote, planEnrollmentMerge, SOFT_SKIP_STATUS, statusPriority, type EnrollmentRow, type MergeCandidate } from "./plan.ts";
+import { chooseRepresentative, countActive, finalEnrollmentStatuses, conflictPairsSql, isBillingRowMovable, moveGuardSql, moveSkipNote, promoteRowSql, shouldPromoteOnConflict, planEnrollmentMerge, SOFT_SKIP_STATUS, statusPriority, type EnrollmentRow, type MergeCandidate } from "./plan.ts";
 // @ts-expect-error -- Node's type-stripping runner needs the runtime extension.
 import { STUDENT_REF_TABLES, type StudentRefTable } from "./tables.ts";
 
@@ -209,4 +209,36 @@ test("이동 가드: 기존 충돌 규칙(출석 sessionId)은 예전 SQL 과 �
     sql.replace(/\s+/g, " ").trim(),
     `AND NOT EXISTS ( SELECT 1 FROM "Attendance" rival WHERE rival."studentId" = 'W' AND (rival."sessionId" IS NOT DISTINCT FROM src."sessionId") )`,
   );
+});
+
+test("결석 충돌 승계: 흡수 쪽이 더 살아있을 때만 대표 행이 상태를 이어받는다", () => {
+  const p = refTable("RegularAbsence").promoteOnConflict!.priority;
+  // 대표 취소 + 흡수 신고/확인 → 승계 (안 하면 살아있는 결석이 숨겨져 기사가 기다린다)
+  assert.equal(shouldPromoteOnConflict(p, "CANCELLED", "REPORTED"), true);
+  assert.equal(shouldPromoteOnConflict(p, "CANCELLED", "CONFIRMED"), true);
+  assert.equal(shouldPromoteOnConflict(p, "REPORTED", "CONFIRMED"), true);
+  // 대표가 같거나 더 살아있으면 그대로
+  assert.equal(shouldPromoteOnConflict(p, "REPORTED", "REPORTED"), false);
+  assert.equal(shouldPromoteOnConflict(p, "CONFIRMED", "REPORTED"), false);
+  assert.equal(shouldPromoteOnConflict(p, "REPORTED", "CANCELLED"), false);
+  // 모르는 상태로는 승계하지 않는다
+  assert.equal(shouldPromoteOnConflict(p, "CANCELLED", "UNKNOWN"), false);
+  assert.equal(shouldPromoteOnConflict(p, null, null), false);
+});
+
+test("결석 충돌 승계 SQL: 같은 반·날짜 쌍을 찾고, updatedAt·학생·키는 건드리지 않는다", () => {
+  const t = refTable("RegularAbsence");
+  const pairs = conflictPairsSql(t, "'W'", "'L'");
+  assert.match(pairs, /JOIN "RegularAbsence" w ON w\."studentId" = 'W'/);
+  assert.match(pairs, /\(w\."classId" IS NOT DISTINCT FROM l\."classId"\)/);
+  assert.match(pairs, /\(w\."date" IS NOT DISTINCT FROM l\."date"\)/);
+  assert.match(pairs, /WHERE l\."studentId" = 'L'/);
+  assert.match(pairs, /w\."status"::text AS "w:status", l\."status"::text AS "l:status"/);
+
+  const upd = promoteRowSql(t, "'wr'", "'lr'");
+  assert.match(upd, /^UPDATE "RegularAbsence" w SET "status" = l\."status", "reason" = l\."reason"/);
+  assert.match(upd, /WHERE w\.id = 'wr' AND l\.id = 'lr'/);
+  for (const forbidden of ["updatedAt", "studentId", "classId", "date", "createdAt"]) {
+    assert.doesNotMatch(upd, new RegExp(`"${forbidden}" =`), `${forbidden} 는 승계하면 안 된다`);
+  }
 });

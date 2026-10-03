@@ -14,8 +14,11 @@ import {
   chooseRepresentative,
   countActive,
   finalEnrollmentStatuses,
+  conflictPairsSql,
   moveGuardSql,
   moveSkipNote,
+  promoteRowSql,
+  shouldPromoteOnConflict,
   planEnrollmentMerge,
   SOFT_SKIP_STATUS,
   type EnrollmentPlan,
@@ -88,6 +91,8 @@ export type TableMoveResult = {
   column: string;
   moved: number;
   softSkipped: number;
+  /** 충돌한 대표 행이 흡수 행의 상태를 승계한 수 (promoteOnConflict) */
+  promoted: number;
 };
 
 export type PairResult = {
@@ -185,6 +190,43 @@ async function moveTable(
   // UNIQUE 충돌·청구월 동결·부모 따라가기 조건 (plan.ts 의 순수 함수 — 테스트로 고정)
   const guard = moveGuardSql(t, w);
 
+  // 충돌로 못 옮기는 행 중 흡수 쪽이 더 살아있으면 대표 행이 먼저 승계한다(그 뒤 흡수 행은 SOFT_SKIP).
+  let promoted = 0;
+  if (t.promoteOnConflict) {
+    const promo = t.promoteOnConflict;
+    const pairs = await runner.query<Record<string, string | null>>(conflictPairsSql(t, w, l));
+    for (const pair of pairs) {
+      const winnerRowId = String(pair.winnerRowId);
+      const loserRowId = String(pair.loserRowId);
+      const ws = pair[`w:${promo.statusColumn}`] ?? null;
+      const ls = pair[`l:${promo.statusColumn}`] ?? null;
+      if (!shouldPromoteOnConflict(promo.priority, ws, ls)) continue;
+
+      for (const c of promo.copyColumns) {
+        const oldValue = pair[`w:${c}`] ?? null;
+        const newValue = pair[`l:${c}`] ?? null;
+        if (oldValue === newValue) continue;
+        await runner.execute(
+          logInsert({
+            mergeId,
+            winnerId,
+            loserId,
+            table: t.table,
+            rowId: winnerRowId,
+            column: c,
+            oldValue,
+            newValue,
+            action: "UPDATE",
+            note: `흡수 쪽(${loserRowId})이 더 살아있는 상태(${ls})라 대표 행이 승계`,
+          }),
+        );
+      }
+      const n = await runner.execute(promoteRowSql(t, sqlText(winnerRowId), sqlText(loserRowId)));
+      if (n !== 1) throw new Error(`${t.table} 상태 승계 영향 행이 ${n}건 (기대 1건) — 전체 중단`);
+      promoted += 1;
+    }
+  }
+
   // 옮기기 전에 대상 행 ID를 먼저 확보해야 로그에 남길 수 있다.
   const targets = await runner.query<{ id: string }>(
     `SELECT src.id FROM "${t.table}" src WHERE src."${t.column}" = ${l}${guard}`,
@@ -226,7 +268,7 @@ async function moveTable(
     );
   }
 
-  return { table: t.table, column: t.column, moved, softSkipped: skipped.length };
+  return { table: t.table, column: t.column, moved, softSkipped: skipped.length, promoted };
 }
 
 /** 한 쌍 병합 */
@@ -542,7 +584,7 @@ export async function mergePair(
     loser,
     enrollmentPlan,
     finalActiveClasses,
-    tableMoves: tableMoves.filter((t) => t.moved > 0 || t.softSkipped > 0),
+    tableMoves: tableMoves.filter((t) => t.moved > 0 || t.softSkipped > 0 || t.promoted > 0),
     billingMoved: { payments: movedPayments, invoices: movedInvoices, transactions: movedTx },
     billingFrozenLeftBehind: Number(frozenLeft?.n ?? 0),
     parentAction,

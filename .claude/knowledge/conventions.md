@@ -192,3 +192,9 @@
 - **발견자**: developer
 - **내용**: 원장이 고치는 화면(셔틀 명단 「기사님 화면」 보기)과 실제 운영 화면(기사님 `/driver/[token]`)이 각자 묶음 로직을 가지면 한쪽만 고쳐져 «관리자가 본 순서 ≠ 기사님이 보는 순서»가 된다(옛 `RegularRouteSection.groupStops` 가 그 사본). 방법: 고르기·정렬·묶음을 순수 모듈(`regularDriverRouteLogic.ts` 의 `selectDriverDayRows`·`buildFallbackClasses`)에 두고 양쪽이 import, 날짜별 요소(결석)는 `() => false` 로 주입. `tests/regular-roster-driver-view.test.mjs` 가 import·자체 group 함수 금지·저장→재조립 왕복을 단정한다. 순서 저장은 «그 칸이 쓰던 sortOrder 번호만 돌려 쓰기»(슬롯 재배정)라 다른 칸 순서가 안 바뀐다.
 - **참조횟수**: 0
+
+### [2026-10-03] 보호자(Guardian)는 학생 상세 「보호자」 카드로 편집 — 전화는 숫자만, 계정(User) 전화와 분리
+- **분류**: convention
+- **발견자**: developer
+- **내용**: 편집 경로 = `src/app/actions/guardians.ts`(requireAdmin, 수정·삭제는 `id AND "studentId"` 두 조건) + 순수 로직 `src/lib/guardians/guardianLogic.ts`. Guardian.phone 은 숫자만 저장(계절학기 승인이 `COALESCE(phone,'') = 숫자` 로 글자 비교함). 주 보호자는 학생당 1명(지정은 `SET "isPrimary" = (id = $1)` 한 문장), 주 보호자를 바꿔도 Student.parentId→User.phone(로그인·알림톡)은 건드리지 않는다. ⚠️ 엑셀 업로드 덮어쓰기는 Guardian 을 전부 지우고 보호자2·3만 다시 넣는다 — 카드로 추가한 보호자가 사라질 수 있다.
+- **참조횟수**: 0

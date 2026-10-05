@@ -16,6 +16,8 @@ export type RegistrationEvidence = {
     syncAttempts: Array<{ target: string; status: string; verifiedAt: Date | null }> }>;
   invoiceCandidates: number;
   now?: number;
+  /** 시트 원장 은퇴(2026-10~) 여부. true 면 "시트 등록·재조회" 항목을 만들지 않는다(확인할 시트가 없다). 없으면 옛 동작. */
+  sheetRetired?: boolean;
 };
 
 function object(value: unknown): Record<string, unknown> {
@@ -55,7 +57,9 @@ export function registrationReadiness(input: RegistrationEvidence) {
       return { target, attempts: attempts.map(attempt => {
         const verifiedAt = instant(attempt.verifiedAt);
         let issue: string | null = null;
-        if (attempt.status !== "SUCCEEDED") issue = "재조회 성공 상태 아님";
+        // 시트 은퇴로 건너뛴 칸은 실패가 아니라 "확인 대상 아님"이다.
+        if (target === "SHEET" && attempt.status === "SKIPPED") issue = "시트 운영 종료로 건너뜀";
+        else if (attempt.status !== "SUCCEEDED") issue = "재조회 성공 상태 아님";
         else if (!verifiedAt) issue = "유효한 재조회 시각 없음";
         else if (!createdAt) issue = "명령 생성 시각 확인 필요";
         else if (Date.parse(verifiedAt) < Date.parse(createdAt)) issue = "명령 생성 전 재조회 기록";
@@ -68,7 +72,8 @@ export function registrationReadiness(input: RegistrationEvidence) {
       effectiveMonth: command.effectiveMonth ?? null, eventDate: text(after.effectiveDate), createdAt,
       reasons, targets };
   });
-  for (const target of ["SHEET", "RALLYZ"] as const) {
+  // 시트 은퇴 상태면 시트 항목은 빼고 랠리즈만 확인한다.
+  for (const target of (input.sheetRetired ? ["RALLYZ"] : ["SHEET", "RALLYZ"]) as Array<"SHEET" | "RALLYZ">) {
     const linked = evidence.filter(row => row.reasons.length === 1).length;
     checks.push({ key: target, label: target === "SHEET" ? "시트 등록·재조회" : "Rallyz 등록·재조회", status: "CHECK_REQUIRED", detail: `신청·학생·배정 반 출처가 연결된 원장 ${linked}건 / 후보 ${evidence.length}건. 확정 수강 시작일 미확정으로 등록 완료 판단 보류. 승인 처리일과 신청 개월은 시작일 근거로 사용하지 않습니다.` });
   }

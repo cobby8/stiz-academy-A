@@ -70,7 +70,8 @@ test("시트 보류(HELD)는 수동 확인 때 풀려 랠리즈 확인 → SYNCE
   // 랠리즈 확인은 여전히 시트 SUCCEEDED 와 HELD 아님을 요구한다(순서 보존)
   const rallyz = ops.slice(ops.indexOf("export async function recordOperationsExternalCheck"), ops.indexOf("export async function applyOperationsSheet"));
   assert.match(rallyz, /target: "RALLYZ"/);
-  assert.match(rallyz, /sheet\[0\]\?\.status !== "SUCCEEDED"/);
+  // 2026-10-06 시트 은퇴: 시트 선행 조건은 SUCCEEDED 또는 SKIPPED(isSheetTargetDone). 순서 강제 자체는 유지된다.
+  assert.match(rallyz, /!isSheetTargetDone\(sheet\[0\]\.status\)/);
   assert.match(rallyz, /commandStatus === "HELD"/);
 });
 
@@ -113,5 +114,6 @@ test("화면: 복귀는 「시트에 반영」을 숨기고 보류 문구를 한
   assert.equal(rules.sheetHoldDisplayReason("PAUSE", "시트 행 없음"), "시트 행 없음");
   assert.equal(rules.sheetHoldDisplayReason("PAUSE", null), "관리자 확인 필요");
   assert.match(client, /sheetHoldDisplayReason\(row\.kind, row\.syncHoldReason\)/);
-  assert.match(client, /\{row\.kind !== "RESUME" && \(\s*<button[\s\S]*?onClick=\{\(\) => applySheet\(row\)\}/);
+  // 2026-10-06 시트 은퇴: 시트 칸이 SKIPPED 인 건도 「시트에 반영」을 숨긴다.
+  assert.match(client, /\{row\.kind !== "RESUME" && !sheetSkipped && \(\s*<button[\s\S]*?onClick=\{\(\) => applySheet\(row\)\}/);
 });

@@ -77,7 +77,8 @@ test("상태 집계도 먼저 커밋하고 감사로그는 best-effort로 분리
 });
 
 test("성공 skip은 외부 재호출 없이 집계 상태를 자가 복구한다", () => {
-  assert.match(action, /row\.attemptStatus === "SUCCEEDED"\) \{\s*await refreshOperationsStatuses\(commandId\)/);
+  // 2026-10-06 시트 은퇴: 성공(SUCCEEDED)뿐 아니라 건너뜀(SKIPPED)도 시트를 다시 부르지 않고 집계만 복구한다.
+  assert.match(action, /if \(isSheetTargetDone\(row\.attemptStatus\)\) \{\s*await refreshOperationsStatuses\(commandId\)/);
   assert.match(action, /if \(!changed\) \{\s*await refreshOperationsStatuses\(commandId\)/);
   assert.match(action, /claim\.skipped \|\| !claim\.token\) \{\s*await refreshOperationsStatuses\(commandId\)/);
 });

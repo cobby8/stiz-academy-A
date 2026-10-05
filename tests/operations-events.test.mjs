@@ -113,7 +113,9 @@ test("원장은 홈페이지 완료, 시트·랠리즈 대기이며 청구·알�
   const source = fs.readFileSync(new URL("../src/lib/operations-events/index.ts", import.meta.url), "utf8");
   assert.match(source, /'HELD','HELD'/);
   assert.match(source, /target === "WEBSITE"/);
-  assert.match(source, /websiteDone \? "SUCCEEDED" : "PENDING"/);
+  // 2026-10-06 시트 은퇴: 홈페이지 외 칸은 initialSyncAttempt 가 정한다(시트=은퇴 시 SKIPPED, 랠리즈=PENDING).
+  assert.match(source, /websiteDone \? "SUCCEEDED" : initial\.status/);
+  assert.match(source, /initialSyncAttempt\(target, sheetRetired\)/);
   assert.match(source, /ON CONFLICT \("idempotencyKey"\) DO NOTHING/);
   assert.match(source, /DELETE FROM "OperationsRequest" WHERE id=\$1/);
 });

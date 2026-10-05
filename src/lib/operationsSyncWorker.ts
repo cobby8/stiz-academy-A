@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { ensureOperationsSyncInfrastructure } from "@/lib/operationsSyncInfrastructure";
+import { isSheetTargetDone } from "@/lib/operations-sync/sheetRetirement";
 
 const ACTIVE_LEASE_MINUTES = 10;
 const SUPPORTED_SHEET_KINDS = new Set(["PAUSE", "WITHDRAW"]);
@@ -133,13 +134,14 @@ export function classifyOperationsSyncWork(row: OperationsSyncWorkerRow, now = n
   }
 
   if (row.target === "RALLYZ") {
-    if (row.sheetStatus !== "SUCCEEDED") {
+    // 시트 은퇴로 건너뛴(SKIPPED) 시트도 끝난 것으로 본다.
+    if (!isSheetTargetDone(row.sheetStatus)) {
       return item("WAITING_FOR_SHEET", "구글 시트 반영과 재확인이 먼저 필요합니다.", false);
     }
     return item("READY_FOR_RALLYZ_CHECK", "랠리즈 반영 확인이 필요합니다.");
   }
 
-  if (row.sheetStatus !== "SUCCEEDED" || row.rallyzStatus !== "SUCCEEDED") {
+  if (!isSheetTargetDone(row.sheetStatus) || row.rallyzStatus !== "SUCCEEDED") {
     return item("WAITING_FOR_EXTERNALS", "시트와 랠리즈가 모두 완료되어야 홈페이지 반영을 진행합니다.", false);
   }
   return item("READY_FOR_WEBSITE_APPLY", "홈페이지 반영 준비가 끝났습니다.");

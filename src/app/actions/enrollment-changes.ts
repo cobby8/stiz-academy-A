@@ -81,3 +81,11 @@ export async function confirmEnrollmentChangeRallyz(commandId: string) {
 export async function confirmEnrollmentChangeSheetManually(commandId: string) {
   return runEnrollmentSyncAction("시트 직접 수정 확인", () => recordOperationsSheetManualCheck(commandId));
 }
+
+/**
+ * 시트 은퇴 상태(시트 칸 SKIPPED)의 복귀 보류 해제. 서버 함수는 위와 같다 —
+ * SKIPPED 칸은 건드리지 않고 복귀 어댑터 보류만 풀어 랠리즈 확인으로 넘긴다. 오류 문구 이름만 다르다.
+ */
+export async function releaseEnrollmentChangeHoldSheetRetired(commandId: string) {
+  return runEnrollmentSyncAction("보류 해제", () => recordOperationsSheetManualCheck(commandId));
+}

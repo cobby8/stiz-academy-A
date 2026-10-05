@@ -75,6 +75,10 @@
       "schedule": "30 20 * * *"
     },
     {
+      "path": "/api/cron/admin-daily-digest",
+      "schedule": "30 23 * * *"
+    },
+    {
       "path": "/api/cron/pos-notice-sweep",
       "schedule": "*/10 * * * *"
     }

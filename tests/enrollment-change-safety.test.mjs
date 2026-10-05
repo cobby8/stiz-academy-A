@@ -20,8 +20,9 @@ test('due PAUSE/WITHDRAW are applied to website with guarded update; others stay
   assert.match(due, /if \(changed !== 1\) throw/);
   // 신청은 관리자 즉시 변경과 같은 의미(APPLIED + appliedAt), 역시 조건부
   assert.match(due, /SET status = 'APPLIED', "appliedAt" = now\(\)[\s\S]*WHERE id = \$1 AND status = 'APPROVED' AND "appliedAt" IS NULL/);
-  // 운영 원장: 홈페이지만 완료, 시트·랠리즈는 확인 필요
-  assert.match(due, /websiteDone \? "SUCCEEDED" : "PENDING"/);
+  // 운영 원장: 홈페이지만 완료, 랠리즈는 확인 필요. 시트는 은퇴(2026-10-06~) 시 SKIPPED, 스위치 "0" 이면 PENDING.
+  assert.match(due, /websiteDone \? "SUCCEEDED" : initial\.status/);
+  assert.match(due, /initialSyncAttempt\("SHEET", isSheetSyncRetired\(process\.env\)\)/);
   assert.match(due, /'APPROVED',\$4,\$4,now\(\),now\(\)/);
   // 적용 경로의 새 SQL 은 raw 만 쓴다(PgBouncer)
   const ledger = due.slice(due.indexOf('async function insertAutoAppliedLedger'));

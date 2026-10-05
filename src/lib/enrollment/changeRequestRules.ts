@@ -31,7 +31,9 @@ export const CHANGE_STATUS_LABEL: Record<string, string> = {
 export function syncCheckBadge(sheetStatus: string | null | undefined, rallyzStatus: string | null | undefined):
   { label: string; needsCheck: boolean } | null {
   if (!sheetStatus && !rallyzStatus) return null;
-  const sheetDone = sheetStatus === "SUCCEEDED";
+  // 시트 은퇴(2026-10~)로 건너뛴 SKIPPED 도 시트 확인 완료로 본다 → "랠리즈 확인 필요" / "반영 완료" 만 남는다.
+  // (이 파일은 테스트가 단독으로 불러오므로 import 없이 적는다. 공용 isSheetTargetDone 과 같은 규칙인지 tests/sheet-retirement.test.mjs 가 대조한다.)
+  const sheetDone = sheetStatus === "SUCCEEDED" || sheetStatus === "SKIPPED";
   const rallyzDone = rallyzStatus === "SUCCEEDED";
   if (sheetDone && rallyzDone) return { label: "반영 완료", needsCheck: false };
   if (!sheetDone && !rallyzDone) return { label: "사이트 반영됨 · 시트·랠리즈 확인 필요", needsCheck: true };

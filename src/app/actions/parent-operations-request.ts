@@ -6,6 +6,7 @@ import { requireAdmin } from "@/lib/auth-guard";
 import { prisma } from "@/lib/prisma";
 import { operationsRequestKey, SYNC_TARGETS } from "@/lib/operationsSync";
 import { ensureOperationsSyncInfrastructure } from "@/lib/operationsSyncInfrastructure";
+import { initialSyncAttempt, isSheetSyncRetired } from "@/lib/operations-sync/sheetRetirement";
 import {
   interpretParentOperationsRequest as interpretRequest,
   validateConfirmedParentOperationsDraft,
@@ -205,9 +206,11 @@ export async function submitParentOperationsRequest(token: string, sourceText: s
           }),
         );
         for (const target of SYNC_TARGETS) {
+          // 시트 은퇴(기본) 상태면 SHEET 칸은 처음부터 SKIPPED — 만들 시트 원장이 없다.
+          const initial = initialSyncAttempt(target, isSheetSyncRetired(process.env));
           await tx.$executeRawUnsafe(
-            `INSERT INTO "OperationsSyncAttempt" (id,"commandId",target,status) VALUES ($1,$2,$3,'PENDING')`,
-            crypto.randomUUID(), commandId, target,
+            `INSERT INTO "OperationsSyncAttempt" (id,"commandId",target,status,"externalReference") VALUES ($1,$2,$3,$4,$5)`,
+            crypto.randomUUID(), commandId, target, initial.status, initial.externalReference,
           );
         }
       }

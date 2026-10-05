@@ -4,6 +4,7 @@ import { CHANGE_KIND_LABEL, type ChangeKind } from "@/lib/enrollment/changeReque
 import { computeClassChangeProration, describeProration, type ProrationResult } from "@/lib/enrollment/proration";
 import { getMonthlyClassDates, loadAnnualPlanEvents } from "@/lib/enrollment/monthlyClassDates";
 import { DEFAULT_HOLD_REASON, planDueEnrollmentChange } from "@/lib/enrollment/due-change-plan";
+import { initialSyncAttempt, isSheetSyncRetired } from "@/lib/operations-sync/sheetRetirement";
 
 // ── 원장의 수강 변경 승인/거절 + 적용일이 된 건 반영 ────────────────────────
 //
@@ -119,11 +120,13 @@ const LINKED_COMMAND_SQL = `(c."idempotencyKey" = 'enrollment-change:' || r.id
 /**
  * 사이트에는 자동 적용됐지만 시트·랠리즈 확인이 안 끝난 건(별칭 r = 신청).
  * 보류(HELD)된 명령은 사람이 다른 경로로 정리해야 하므로 여기서도 "확인 필요"로 센다.
+ * 시트 은퇴로 건너뛴 SHEET(SKIPPED)는 확인할 것이 없으므로 "확인 필요"가 아니다(SKIPPED 는 SHEET 칸만 인정).
  */
 const NEEDS_CHECK_SQL = `EXISTS (SELECT 1 FROM "OperationsCommand" c
     JOIN "OperationsSyncAttempt" a ON a."commandId" = c.id
    WHERE ${LINKED_COMMAND_SQL}
-     AND a.target IN ('SHEET','RALLYZ') AND a.status <> 'SUCCEEDED')`;
+     AND ((a.target = 'SHEET' AND a.status NOT IN ('SUCCEEDED','SKIPPED'))
+       OR (a.target = 'RALLYZ' AND a.status <> 'SUCCEEDED')))`;
 
 /** 확인 필요 건수 — 탭 이름과 상단 경고에 쓴다. 기본 탭이 "검토 중"이어도 놓치지 않게. */
 export async function countEnrollmentChangesNeedingCheck(): Promise<number> {
@@ -291,7 +294,8 @@ export async function applyDueEnrollmentChangesWithSummary(): Promise<DueEnrollm
           afterJson: { enrollmentChangeRequestId: row.id, fromClassId: row.fromClassId,
             toClassId: row.toClassId, parentConfirmed, effectiveDate: row.effectiveDate },
           billingStatus: "HELD", notificationStatus: "HELD",
-          syncAttempts: { create: ["SHEET", "RALLYZ", "WEBSITE"].map(target => ({ target, status: "PENDING" })) },
+          // 시트 은퇴(기본) 상태면 SHEET 칸은 처음부터 SKIPPED(+표식). 나머지는 PENDING.
+          syncAttempts: { create: ["SHEET", "RALLYZ", "WEBSITE"].map(target => ({ target, ...initialSyncAttempt(target, isSheetSyncRetired(process.env)) })) },
         }},
         auditLogs: { create: { action: "ENROLLMENT_CHANGE_SYNC_HELD", actorType: "ADMIN", actorUserId: actor,
           detailsJson: { enrollmentChangeRequestId: row.id, reason } } },
@@ -322,7 +326,8 @@ type RawTx = {
 
 /**
  * 자동 적용한 휴원·퇴원을 운영 원장에 남긴다.
- * 홈페이지 = 이미 완료(SUCCEEDED), 시트·랠리즈 = 확인 필요(PENDING).
+ * 홈페이지 = 이미 완료(SUCCEEDED), 랠리즈 = 확인 필요(PENDING),
+ * 시트 = 은퇴 상태(기본)면 건너뜀(SKIPPED·SHEET_RETIRED), 스위치를 "0" 으로 되돌리면 확인 필요(PENDING).
  * 요청 APPROVED · 명령 PENDING 이라 기존 서버 액션(applyOperationsSheet → recordOperationsExternalCheck)이 그대로 동작한다.
  * 관리자는 「수강 변경 신청」 화면의 "확인 필요" 탭에서 행마다 시트 반영·랠리즈 반영 확인 버튼으로 이어간다.
  * (옛 운영 동기화 화면 /admin/operations-sync 는 폐기돼 /admin 으로 돌려보낸다.)
@@ -362,13 +367,17 @@ async function insertAutoAppliedLedger(tx: RawTx, input: {
     JSON.stringify({ ...base, autoAppliedWebsite: true,
       enrollments: [{ id: enrollment.id, status: input.nextStatus, className: enrollment.className }] }),
   );
+  // 시트 은퇴(기본) 상태면 SHEET 칸은 처음부터 SKIPPED(+표식) → 남는 확인은 랠리즈뿐.
+  const sheetInitial = initialSyncAttempt("SHEET", isSheetSyncRetired(process.env));
   for (const target of ["SHEET", "RALLYZ", "WEBSITE"]) {
     const websiteDone = target === "WEBSITE";
+    const initial = target === "SHEET" ? sheetInitial : initialSyncAttempt(target, false);
     await tx.$executeRawUnsafe(
-      `INSERT INTO "OperationsSyncAttempt" (id,"commandId",target,status,attempts,"verifiedAt")
-       VALUES ($1,$2,$3,$4,$5,$6)`,
+      `INSERT INTO "OperationsSyncAttempt" (id,"commandId",target,status,attempts,"verifiedAt","externalReference")
+       VALUES ($1,$2,$3,$4,$5,$6,$7)`,
       crypto.randomUUID(), commandId, target,
-      websiteDone ? "SUCCEEDED" : "PENDING", websiteDone ? 1 : 0, websiteDone ? new Date() : null,
+      websiteDone ? "SUCCEEDED" : initial.status, websiteDone ? 1 : 0, websiteDone ? new Date() : null,
+      websiteDone ? null : initial.externalReference,
     );
   }
   await tx.$executeRawUnsafe(
@@ -376,7 +385,7 @@ async function insertAutoAppliedLedger(tx: RawTx, input: {
      VALUES ($1,$2,'ENROLLMENT_CHANGE_AUTO_APPLIED','SYSTEM',$3,$4::jsonb)`,
     crypto.randomUUID(), requestId, actor,
     JSON.stringify({ enrollmentChangeRequestId: row.id, commandId, enrollmentId: enrollment.id,
-      from: enrollment.status, to: input.nextStatus, sheet: "PENDING", rallyz: "PENDING", notificationsSent: false }),
+      from: enrollment.status, to: input.nextStatus, sheet: sheetInitial.status, rallyz: "PENDING", notificationsSent: false }),
   );
 }
 

@@ -7,6 +7,7 @@ import { requireAdmin } from "@/lib/auth-guard";
 import { ensureOperationsSyncInfrastructure } from "@/lib/operationsSyncInfrastructure";
 import { applySheetEnrollmentStatus } from "@/lib/googleSheetsOperations";
 import { sheetHoldReleaseDecision } from "@/lib/enrollment/sheetManualCheckRules";
+import { isSheetTargetDone } from "@/lib/operations-sync/sheetRetirement";
 
 type OperationsRequestRow = {
   id: string;
@@ -294,7 +295,10 @@ export async function applyOperationsWebsite(requestId: string) {
       WHERE c."requestId"=$1 AND c.status IN ('PENDING','PARTIAL') AND a.status IN ('PENDING','FAILED')
         AND NOT EXISTS (
           SELECT 1 FROM "OperationsSyncAttempt" pending
-          WHERE pending."commandId"=c.id AND pending.target IN ('SHEET','RALLYZ') AND pending.status <> 'SUCCEEDED'
+          WHERE pending."commandId"=c.id
+            -- 시트는 은퇴로 건너뜀(SKIPPED)도 끝난 것으로 본다. 랠리즈는 실제 확인(SUCCEEDED)만.
+            AND ((pending.target='SHEET' AND pending.status NOT IN ('SUCCEEDED','SKIPPED'))
+              OR (pending.target='RALLYZ' AND pending.status <> 'SUCCEEDED'))
         )`, requestId,
   );
   if (commands.length === 0) {
@@ -405,7 +409,8 @@ export async function recordOperationsExternalCheck(commandId: string, target: "
        FROM "OperationsSyncAttempt" a JOIN "OperationsCommand" c ON c.id=a."commandId"
       WHERE a."commandId"=$1 AND a.target='SHEET'`, commandId,
   );
-  if (sheet[0]?.status !== "SUCCEEDED") throw new Error("구글 시트 반영과 재확인을 먼저 완료해 주세요.");
+  // 시트 선행 조건: 실제 반영(SUCCEEDED) 또는 시트 은퇴로 건너뜀(SKIPPED)이면 랠리즈 확인으로 넘어간다.
+  if (!sheet[0] || !isSheetTargetDone(sheet[0].status)) throw new Error("구글 시트 반영과 재확인을 먼저 완료해 주세요.");
   if (!sheet[0].parentConfirmed || !sheet[0].effectiveDate) throw new Error("확정된 적용일이 없는 기존 요청은 랠리즈 반영을 확인할 수 없습니다.");
   if (sheet[0].effectiveDate > kstTodayYmd()) throw new Error(`적용일(${sheet[0].effectiveDate}) 이전에는 랠리즈 반영을 확인할 수 없습니다.`);
   if (sheet[0].commandStatus === "HELD") throw new Error("보류된 변경은 랠리즈 반영을 확인할 수 없습니다.");
@@ -473,7 +478,8 @@ export async function applyOperationsSheet(commandId: string) {
   if (!['PAUSE', 'WITHDRAW'].includes(row.kind)) throw new Error("이 변경 종류는 아직 시트 자동 반영을 지원하지 않습니다.");
   if (!row.parentConfirmed || !row.effectiveDate || !row.fromClassId || !row.className || !row.classDayOfWeek) throw new Error("확정된 적용일과 대상 수업이 없는 기존 요청은 자동 반영하지 않습니다.");
   if (row.effectiveDate > kstTodayYmd()) throw new Error(`적용일(${row.effectiveDate}) 이전에는 시트에 반영할 수 없습니다.`);
-  if (row.attemptStatus === "SUCCEEDED") {
+  // 이미 반영됐거나(SUCCEEDED) 시트 은퇴로 건너뛴(SKIPPED) 칸은 시트를 건드리지 않는다.
+  if (isSheetTargetDone(row.attemptStatus)) {
     await refreshOperationsStatuses(commandId);
     return { ok: true as const, skipped: true };
   }
@@ -567,6 +573,31 @@ export async function recordOperationsSheetManualCheck(commandId: string) {
     // 사이트가 먼저 반영된 자동 적용 건만 대상이다. 사이트 반영 충돌 등 다른 이유의 보류는 여기서 풀지 않는다.
     if (website?.status !== "SUCCEEDED") throw new Error("사이트 반영이 끝난 건만 시트 수동 확인을 할 수 있습니다.");
     if (!sheet) throw new Error("시트 반영 기록을 찾을 수 없습니다.");
+    // 시트 은퇴로 건너뛴 칸(SKIPPED)은 시트를 고칠 일이 없다 → 시트 칸은 절대 건드리지 않는다.
+    if (sheet.status === "SKIPPED") {
+      if (command.status !== "HELD") return { changed: false };
+      // 단, 복귀(RESUME) 어댑터 미지원 보류는 시트 때문에 걸린 보류라, 은퇴 후엔 풀어 줘야 랠리즈 확인으로 끝난다.
+      // 같은 판정 함수를 거친다 → 학생 미확정·신청 미연결·정책 보류는 그대로 거부(시트 충돌 분기는 FAILED 조건이라 해당 없음).
+      const decision = sheetHoldReleaseDecision({
+        kind: command.kind, studentId: command.studentId, enrollmentChangeRequestId: command.enrollmentChangeRequestId,
+        holdReason: command.holdReason, sheetStatus: sheet.status, sheetError: sheet.error,
+      });
+      if (!decision.ok) throw new Error(decision.reason);
+      await tx.$executeRawUnsafe(
+        `UPDATE "OperationsCommand" SET status='PENDING', "holdReason"=NULL, "updatedAt"=now() WHERE id=$1 AND status='HELD'`, commandId,
+      );
+      // 누가·언제·왜(시트 은퇴 상태에서 보류 해제)·직전 사유를 같은 거래로 남긴다.
+      await tx.$executeRawUnsafe(
+        `INSERT INTO "OperationsAuditLog" (id,"requestId",action,"actorType","actorUserId","detailsJson")
+         VALUES ($1,$2,'COMMAND_HOLD_RELEASED','ADMIN',$3,$4::jsonb)`,
+        crypto.randomUUID(), command.requestId, admin.appUserId,
+        JSON.stringify({
+          commandId, target: "SHEET", manual: true, note: "시트 은퇴 상태에서 보류 해제",
+          sheetStatus: sheet.status, previousCommandStatus: command.status, previousHoldReason: command.holdReason,
+        }),
+      );
+      return { changed: true };
+    }
     if (sheet.status === "SUCCEEDED" && command.status !== "HELD") return { changed: false };
     if (sheet.processing) throw new Error("시트 자동 반영이 진행 중입니다. 잠시 후 상태를 다시 확인해 주세요.");
     // 보류(HELD)는 원인이 시트 쪽일 때만 푼다(시트 충돌·복귀 어댑터 미지원). 정책 보류는 사람 확인 신호를 지우지 않는다.

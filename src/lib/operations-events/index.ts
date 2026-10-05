@@ -2,6 +2,7 @@ import type { Prisma } from "@prisma/client";
 
 import { prisma } from "../prisma";
 import { SYNC_TARGETS } from "../operationsSync";
+import { initialSyncAttempt, isSheetSyncRetired } from "../operations-sync/sheetRetirement";
 import { assertOperationsEventPayloadMatch, prepareWebsiteOperationsEvent, type WebsiteOperationsEvent } from "./policy";
 
 export type { WebsiteOperationsEvent } from "./policy";
@@ -80,18 +81,22 @@ export async function enqueueWebsiteOperationsEventInTransaction(
     return { created: false, requestId: existing.requestId, commandId: existing.id, idempotencyKey };
   }
 
+  // 시트 은퇴(기본) 상태면 SHEET 칸은 처음부터 SKIPPED — 만들 시트 원장이 없다.
+  const sheetRetired = isSheetSyncRetired(process.env);
   for (const target of SYNC_TARGETS) {
     const websiteDone = target === "WEBSITE";
+    const initial = initialSyncAttempt(target, sheetRetired);
     await tx.$executeRawUnsafe(
       `INSERT INTO "OperationsSyncAttempt"
-        (id,"commandId",target,status,attempts,"verifiedAt")
-       VALUES ($1,$2,$3,$4,$5,$6)`,
+        (id,"commandId",target,status,attempts,"verifiedAt","externalReference")
+       VALUES ($1,$2,$3,$4,$5,$6,$7)`,
       crypto.randomUUID(),
       commandId,
       target,
-      websiteDone ? "SUCCEEDED" : "PENDING",
+      websiteDone ? "SUCCEEDED" : initial.status,
       websiteDone ? 1 : 0,
       websiteDone ? new Date() : null,
+      websiteDone ? null : initial.externalReference,
     );
   }
 

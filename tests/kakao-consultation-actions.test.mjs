@@ -4,6 +4,8 @@ import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 import ts from 'typescript';
 import { randomUUID } from 'node:crypto';
+// 시트 은퇴 스위치(순수 판정, DB·외부 접근 없음)는 실제 모듈을 그대로 쓴다(2026-10-06).
+import * as sheetRetirement from '../src/lib/operations-sync/sheetRetirement.ts';
 const source = readFileSync('src/app/actions/kakao-parent-intake-admin.ts', 'utf8');
 const compiled = ts.transpileModule(source, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS } }).outputText;
 const revision = '2026-09-09 01:00:00.123456+00';
@@ -64,6 +66,7 @@ function fixture(options = {}) {
     '@/lib/prisma':{ prisma },
     '@/lib/operationsSync':{ operationsRequestKey:() => 'synthetic-key', SYNC_TARGETS:['WEBSITE','SHEET','RALLYZ'] },
     '@/lib/operationsSyncInfrastructure':{ ensureOperationsSyncInfrastructure:async () => { calls.infrastructure++; } },
+    '@/lib/operations-sync/sheetRetirement':sheetRetirement,
   };
   const exports={};
   vm.compileFunction(compiled,['require','exports','crypto'])(id => { assert.ok(Object.hasOwn(dependencies,id),id); return dependencies[id]; },exports,{randomUUID});

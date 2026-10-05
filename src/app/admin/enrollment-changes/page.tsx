@@ -1,4 +1,5 @@
 import { countEnrollmentChangesNeedingCheck, getEnrollmentChangeRequests } from "@/lib/enrollment/admin-change-request";
+import { isSheetSyncRetired } from "@/lib/operations-sync/sheetRetirement";
 import EnrollmentChangesClient from "./EnrollmentChangesClient";
 
 export const dynamic = "force-dynamic";
@@ -18,5 +19,6 @@ export default async function EnrollmentChangesPage({
     getEnrollmentChangeRequests(status),
     countEnrollmentChangesNeedingCheck(),
   ]);
-  return <EnrollmentChangesClient rows={rows} status={status} needsCheckCount={needsCheckCount} />;
+  // 시트 원장 은퇴 여부는 서버 환경변수로만 정해진다 → 화면에 그대로 넘겨 문구·버튼을 맞춘다.
+  return <EnrollmentChangesClient rows={rows} status={status} needsCheckCount={needsCheckCount} sheetRetired={isSheetSyncRetired(process.env)} />;
 }

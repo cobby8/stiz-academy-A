@@ -2,6 +2,7 @@ import Link from "next/link";
 import { requireAdmin } from "@/lib/auth-guard";
 import { prisma } from "@/lib/prisma";
 import { registrationReadiness } from "@/lib/enrollment/registration-readiness";
+import { isSheetSyncRetired } from "@/lib/operations-sync/sheetRetirement";
 
 export const dynamic = "force-dynamic";
 
@@ -30,7 +31,9 @@ export default async function RegistrationReadinessPage() {
         assignedClassIds: [...new Set((app.assignedClassId ?? "").split(",").map((id) => id.trim()).filter(Boolean))],
         activeClassIds: enrollments.filter((row) => row.studentId === app.convertedStudentId).map((row) => row.classId),
         shuttleNeeded: app.shuttleNeeded, commands: commands.filter((row) => row.studentId === app.convertedStudentId),
-        invoiceCandidates: invoices.filter((row) => row.studentId === app.convertedStudentId).length });
+        invoiceCandidates: invoices.filter((row) => row.studentId === app.convertedStudentId).length,
+        // 시트 원장 은퇴(기본) 상태면 시트 항목을 만들지 않는다.
+        sheetRetired: isSheetSyncRetired(process.env) });
       return <section key={app.id} className="border rounded-xl p-4 space-y-3">
         <h2 className="font-bold">{app.childName} · 등록 절차 확인 필요</h2>
         <p className="text-sm break-all">신청 ID: {app.id} / 학생 ID: {app.convertedStudentId ?? "미연결"}</p>

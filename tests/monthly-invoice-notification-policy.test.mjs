@@ -38,10 +38,11 @@ test("학부모 청구 알림은 0원과 명시적 HELD 건을 제외한다", ()
   assert.equal(isMonthlyInvoiceNotificationEligible({ amount: 130000, notificationHeld: true }), false);
 });
 
-test("청구 생성과 알림 발송은 별도 승인으로 유지하면서 발송 의무를 안내한다", () => {
-  assert.match(financeClient, /링크 발송 \(필수\)/);
-  assert.match(financeClient, /별도 승인 후 발송/);
-  assert.match(financeClient, /0원·보류 건을 제외한 청구서는 링크 발송이 필수/);
+// 2026-10-06 B안: 학부모 청구 안내는 랠리즈 전담 — "발송 필수" 안내를 "사이트 청구는 장부용" 으로 바꿨다.
+test("청구 생성과 알림 발송은 분리하고, 청구 안내는 랠리즈 전담임을 안내한다", () => {
+  assert.doesNotMatch(financeClient, /링크 발송 \(필수\)/);
+  assert.doesNotMatch(financeClient, /링크 발송이 필수|반드시 링크 발송|반드시 발송해야/);
+  assert.match(financeClient, /청구서는 랠리즈에서 생성·발송합니다\. 사이트 청구는 장부용/);
 
   const generateAt = financeClient.indexOf("generateMonthlyInvoices(year, month");
   const sendAt = financeClient.indexOf("sendInvoiceLinksForMonth(year, month)");

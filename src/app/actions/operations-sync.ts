@@ -6,6 +6,7 @@ import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/auth-guard";
 import { ensureOperationsSyncInfrastructure } from "@/lib/operationsSyncInfrastructure";
 import { applySheetEnrollmentStatus } from "@/lib/googleSheetsOperations";
+import { sheetHoldReleaseDecision } from "@/lib/enrollment/sheetManualCheckRules";
 
 type OperationsRequestRow = {
   id: string;
@@ -524,6 +525,88 @@ export async function applyOperationsSheet(commandId: string) {
   await refreshOperationsStatuses(commandId);
   revalidatePath("/admin/operations-sync");
   return { ok: true as const, skipped: false };
+}
+
+/**
+ * 「시트 직접 수정 완료」 수동 확인.
+ * 시트 행 없음·학생 식별 불가·공통 상태 충돌처럼 자동 시트 반영이 끝내 안 되는 건은
+ * 원장이 구글 시트를 직접 고친 뒤 이 확인으로 SHEET 를 SUCCEEDED 로 기록한다.
+ * - 사이트(WEBSITE) 반영이 이미 끝난 휴원·퇴원·복귀 건만 허용한다(사이트 반영 전 건은 기존 순서를 지킨다).
+ * - 시트 사유로 보류(HELD)된 명령은 보류를 풀어 랠리즈 확인 → SYNCED 로 이어지게 한다.
+ * - 누가·언제·"수동 확인"·직전 상태/사유를 감사기록에 남긴다(거래 안에서 함께 커밋).
+ */
+export async function recordOperationsSheetManualCheck(commandId: string) {
+  const admin = await requireAdmin();
+  await ensureOperationsSyncInfrastructure();
+  const result = await prisma.$transaction(async (tx) => {
+    // 명령 행을 잠가 자동 시트 반영·랠리즈 확인과 동시에 상태를 바꾸지 못하게 한다.
+    const commands = await tx.$queryRawUnsafe<Array<{
+      requestId: string; status: string; holdReason: string | null; kind: string; studentId: string | null;
+      effectiveDate: string | null; parentConfirmed: boolean; enrollmentChangeRequestId: string | null;
+    }>>(
+      `SELECT "requestId", status, "holdReason", kind, "studentId", "afterJson"->>'effectiveDate' AS "effectiveDate",
+              (c."afterJson"->>'parentConfirmed' = 'true') AS "parentConfirmed",
+              c."afterJson"->>'enrollmentChangeRequestId' AS "enrollmentChangeRequestId"
+         FROM "OperationsCommand" c WHERE id=$1 FOR UPDATE`, commandId,
+    );
+    const command = commands[0];
+    if (!command) throw new Error("변경 기록을 찾을 수 없습니다.");
+    if (command.status === "SYNCED") return { changed: false };
+    // 복귀(RESUME)는 관리자 직접 변경에서만 생기고 시트 자동 반영을 지원하지 않아, 수동 확인이 유일한 길이다.
+    if (!['PAUSE', 'WITHDRAW', 'RESUME'].includes(command.kind)) throw new Error("휴원·퇴원·복귀 변경만 시트 수동 확인을 할 수 있습니다.");
+    if (!command.parentConfirmed || !command.effectiveDate) throw new Error("확정된 적용일이 없는 기존 요청은 시트 수동 확인을 할 수 없습니다.");
+    if (command.effectiveDate > kstTodayYmd()) throw new Error(`적용일(${command.effectiveDate}) 이전에는 시트 수동 확인을 할 수 없습니다.`);
+
+    const attempts = await tx.$queryRawUnsafe<Array<{ target: string; status: string; error: string | null; processing: boolean }>>(
+      `SELECT target, status, error,
+              ("processingToken" IS NOT NULL AND "processingStartedAt" >= now() - interval '10 minutes') AS processing
+         FROM "OperationsSyncAttempt" WHERE "commandId"=$1 FOR UPDATE`, commandId,
+    );
+    const website = attempts.find((item) => item.target === "WEBSITE");
+    const sheet = attempts.find((item) => item.target === "SHEET");
+    // 사이트가 먼저 반영된 자동 적용 건만 대상이다. 사이트 반영 충돌 등 다른 이유의 보류는 여기서 풀지 않는다.
+    if (website?.status !== "SUCCEEDED") throw new Error("사이트 반영이 끝난 건만 시트 수동 확인을 할 수 있습니다.");
+    if (!sheet) throw new Error("시트 반영 기록을 찾을 수 없습니다.");
+    if (sheet.status === "SUCCEEDED" && command.status !== "HELD") return { changed: false };
+    if (sheet.processing) throw new Error("시트 자동 반영이 진행 중입니다. 잠시 후 상태를 다시 확인해 주세요.");
+    // 보류(HELD)는 원인이 시트 쪽일 때만 푼다(시트 충돌·복귀 어댑터 미지원). 정책 보류는 사람 확인 신호를 지우지 않는다.
+    if (command.status === "HELD") {
+      const decision = sheetHoldReleaseDecision({
+        kind: command.kind, studentId: command.studentId, enrollmentChangeRequestId: command.enrollmentChangeRequestId,
+        holdReason: command.holdReason, sheetStatus: sheet.status, sheetError: sheet.error,
+      });
+      if (!decision.ok) throw new Error(decision.reason);
+    }
+
+    // 수동 확인 = 사람이 시트를 직접 고쳤다는 증거. verifiedAt 을 채워야 SYNCED 집계 조건을 만족한다.
+    await tx.$executeRawUnsafe(
+      `UPDATE "OperationsSyncAttempt"
+          SET status='SUCCEEDED', "verifiedAt"=COALESCE("verifiedAt", now()), error=NULL,
+              "externalReference"=$2, "processingToken"=NULL, "processingStartedAt"=NULL, "updatedAt"=now()
+        WHERE "commandId"=$1 AND target='SHEET'`,
+      commandId, `MANUAL:${admin.appUserId}`,
+    );
+    // 위 판정을 통과한(시트 때문에 보류된) 명령만 보류를 풀어 랠리즈 확인이 가능하게 한다(사유는 감사기록에 보존).
+    if (command.status === "HELD") {
+      await tx.$executeRawUnsafe(
+        `UPDATE "OperationsCommand" SET status='PENDING', "holdReason"=NULL, "updatedAt"=now() WHERE id=$1`, commandId,
+      );
+    }
+    await tx.$executeRawUnsafe(
+      `INSERT INTO "OperationsAuditLog" (id,"requestId",action,"actorType","actorUserId","detailsJson")
+       VALUES ($1,$2,'SYNC_TARGET_MANUALLY_CONFIRMED','ADMIN',$3,$4::jsonb)`,
+      crypto.randomUUID(), command.requestId, admin.appUserId,
+      JSON.stringify({
+        commandId, target: "SHEET", manual: true, note: "수동 확인: 관리자가 구글 시트를 직접 수정",
+        previousSheetStatus: sheet.status, previousSheetError: sheet.error?.slice(0, 1000) ?? null,
+        previousCommandStatus: command.status, previousHoldReason: command.holdReason,
+      }),
+    );
+    return { changed: true };
+  });
+  await refreshOperationsStatuses(commandId);
+  revalidatePath("/admin/enrollment-changes");
+  return { ok: true as const, skipped: !result.changed };
 }
 
 async function refreshOperationsStatuses(commandId: string) {

@@ -50,6 +50,12 @@ import {
 import { monthlyBillingDueDate } from "@/lib/billing-due-date";
 import { isMonthlyInvoiceNotificationEligible } from "@/lib/billing/notification-policy";
 import {
+    BILLING_PARENT_SEND_LOCKED_MESSAGE,
+    isBillingParentSendEnabled,
+    rallyzMirrorExclusionSql,
+    summarizeUnpaidByParent,
+} from "@/lib/billing/parentSendGuard";
+import {
     APPLICATION_CONTACT_ACTIONS,
     ensureApplicationContactLogInfrastructure,
     type ApplicationContactAction,
@@ -1216,14 +1222,15 @@ export async function updateEnrollmentStatus(
                 status, enrollmentId,
             );
             const kind = status === "PAUSED" ? "PAUSE" : status === "WITHDRAWN" ? "WITHDRAW" : "RESUME";
-            await tx.$executeRawUnsafe(
+            // 이력 id 를 돌려받아 운영 원장에 연결한다(「수강 변경 신청」 화면의 랠리즈 확인 배지용).
+            const [history] = await tx.$queryRawUnsafe<Array<{ id: string }>>(
                 `INSERT INTO "EnrollmentChangeRequest" (
                     id, "studentId", "enrollmentId", "fromClassId", kind, "effectiveFrom", reason,
                     status, "requestedByUserId", "decidedByUserId", "decidedAt", "appliedAt", "createdAt", "updatedAt"
                 ) VALUES (
                     gen_random_uuid()::text, $1, $2, $3, $4, $5::date, $6,
                     'APPLIED', $7, $7, NOW(), NOW(), NOW(), NOW()
-                )`,
+                ) RETURNING id`,
                 before.studentId,
                 enrollmentId,
                 before.classId,
@@ -1244,6 +1251,7 @@ export async function updateEnrollmentStatus(
                 className: before.className,
                 previousStatus: before.previousStatus,
                 nextStatus: status as "ACTIVE" | "PAUSED" | "WITHDRAWN",
+                enrollmentChangeRequestId: history?.id,
             });
             if (event) await enqueueWebsiteOperationsEventInTransaction(tx, event);
         });
@@ -1585,7 +1593,8 @@ export async function createPayment(data: {
             return invoiceRows[0];
         });
 
-        if (data.notifyParent) {
+        // 학부모 청구 안내는 랠리즈 전담(B안) — 사이트 발송 잠금이 풀린 경우에만 알린다.
+        if (data.notifyParent && isBillingParentSendEnabled()) {
             const amountStr = data.amount.toLocaleString("ko-KR");
             await notifyParentsOfStudents(
                 [data.studentId],
@@ -3681,6 +3690,11 @@ export async function refreshPaymentLedger(year: number, month: number) {
 
 export async function sendInvoiceLinksForMonth(year: number, month: number, forceResend?: boolean) {
     await requireAdmin();
+    // 학부모 청구 안내는 랠리즈 전담 — 잠금이면 DB 를 건드리기 전에 바로 돌려보낸다.
+    // (throw 대신 결과로 돌려줘야 운영 빌드에서도 안내 문구가 가려지지 않는다)
+    if (!isBillingParentSendEnabled()) {
+        return { sent: 0, ok: false, locked: true, message: BILLING_PARENT_SEND_LOCKED_MESSAGE };
+    }
     await ensurePaymentInfrastructure();
     await ensureInvoicesForMonth(year, month);
 
@@ -3713,6 +3727,8 @@ export async function sendInvoiceLinksForMonth(year: number, month: number, forc
             WHERE i.status NOT IN ('PAID', 'CANCELED')
               AND p.amount > 0
               AND i."parentId" IS NOT NULL
+              -- 랠리즈 청구서의 장부용 사본은 학부모에게 다시 보내지 않는다
+              AND ${rallyzMirrorExclusionSql("p")}
               AND (
                 (p.year = $1 AND p.month = $2)
                 OR (p."dueDate" >= $3::timestamp AND p."dueDate" < $4::timestamp)
@@ -3810,17 +3826,25 @@ export async function sendInvoiceLinksForMonth(year: number, month: number, forc
 
 export async function sendUnpaidReminders() {
     await requireAdmin();
+    // 학부모 청구 안내는 랠리즈 전담 — 잠금이면 미납 상태 갱신·발송 전에 바로 돌려보낸다.
+    // (throw 대신 결과로 돌려줘야 운영 빌드에서도 안내 문구가 가려지지 않는다)
+    if (!isBillingParentSendEnabled()) {
+        return { sent: 0, failed: 0, smsSent: 0, errors: [] as string[], ok: false, locked: true, message: BILLING_PARENT_SEND_LOCKED_MESSAGE };
+    }
     await ensurePaymentColumns();
     await ensurePaymentInfrastructure();
     await markOverduePayments();
 
     try {
-        // 미납 결제 건 조회
-        const condition = `WHERE p.status IN ('PENDING', 'OVERDUE') AND p."notifiedAt" IS NULL`;
+        // 미납 결제 건 조회 — 랠리즈 청구서의 장부용 사본은 랠리즈가 이미 안내하므로 뺀다
+        const condition = `WHERE p.status IN ('PENDING', 'OVERDUE') AND p."notifiedAt" IS NULL
+              AND ${rallyzMirrorExclusionSql("p")}`;
 
         const unpaid = await prisma.$queryRawUnsafe<any[]>(
-            `SELECT p.id, p."studentId", p.amount, p.description, p."dueDate"
+            `SELECT p.id, p."studentId", p.amount, p.description, p."dueDate", s."parentId"
              FROM "Payment" p
+             -- 학부모 묶음용 parentId 만 붙인다. 병합 필터를 ON 절에 걸어 결제 행(문자 대상)은 숨기지 않는다
+             LEFT JOIN "Student" s ON s.id = p."studentId" AND ${notMergedStudent("s")}
              ${condition}`
         );
 
@@ -3828,18 +3852,24 @@ export async function sendUnpaidReminders() {
             return { sent: 0, message: "발송할 미납 건이 없습니다." };
         }
 
-        // 학생별로 그룹핑하여 학부모에게 알림 발송
-        const studentIds = [...new Set(unpaid.map((u: any) => u.studentId ?? u.studentid))];
-        const totalAmount = unpaid.reduce((s: number, u: any) => s + Number(u.amount), 0);
-        const amountStr = totalAmount.toLocaleString("ko-KR");
-
-        await notifyParentsOfStudents(
-            studentIds,
-            "PAYMENT",
-            "미납 수납 안내",
-            `미납 ${unpaid.length}건 (총 ${amountStr}원)이 있습니다. 확인 부탁드립니다.`,
-            "/mypage",
+        // 학부모별로 묶어 "그 학부모 자녀의 미납만" 건수·금액을 앱 알림으로 보낸다.
+        // (예전엔 학원 전체 합계를 모든 학부모에게 똑같이 보냈다)
+        const parentSummaries = summarizeUnpaidByParent(
+            unpaid.map((u: any) => ({
+                parentId: u.parentId ?? u.parentid ?? null,
+                studentId: u.studentId ?? u.studentid,
+                amount: u.amount,
+            })),
         );
+        for (const summary of parentSummaries) {
+            await notifyParentsOfStudents(
+                summary.studentIds,
+                "PAYMENT",
+                "미납 수납 안내",
+                `미납 ${summary.count}건 (총 ${summary.total.toLocaleString("ko-KR")}원)이 있습니다. 확인 부탁드립니다.`,
+                "/mypage",
+            );
+        }
 
         // 한 학생의 미납 건을 문자 한 통으로 묶되, 성공한 문자에 포함된 결제만 발송 완료로 기록한다.
         const studentUnpaid: Record<string, { count: number; total: number; paymentIds: string[] }> = {};

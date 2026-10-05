@@ -113,7 +113,9 @@ test("배지: 시트·랠리즈가 둘 다 확인돼야만 '반영 완료'", () 
 });
 
 test("목록이 연결 원장의 시트·랠리즈 상태를 읽고 '확인 필요' 탭·건수를 낸다", () => {
-  assert.match(adminLib, /LEFT JOIN "OperationsCommand" oc ON oc\."idempotencyKey" = 'enrollment-change:' \|\| r\.id/);
+  // 연결 원장은 LATERAL LIMIT 1 로 붙인다(키 연결 + 직접 변경의 afterJson 연결 둘 다 인정).
+  assert.match(adminLib, /LEFT JOIN LATERAL \(SELECT c\.id, c\.status, c\."holdReason" FROM "OperationsCommand" c/);
+  assert.match(adminLib, /c\."idempotencyKey" = 'enrollment-change:' \|\| r\.id/);
   assert.match(adminLib, /a\.target = 'RALLYZ'/);
   assert.match(adminLib, /\$1 = 'NEEDS_CHECK' AND r\.status = 'APPLIED'/);
   assert.match(adminLib, /export async function countEnrollmentChangesNeedingCheck/);
@@ -124,9 +126,13 @@ test("목록이 연결 원장의 시트·랠리즈 상태를 읽고 '확인 필�
 });
 
 test("확인 버튼은 기존 서버 액션을 쓰고, 누르기 전 확인창을 띄운다", () => {
-  assert.match(client, /from "@\/app\/actions\/operations-sync"/);
-  assert.match(client, /recordOperationsExternalCheck\(row\.syncCommandId!, "RALLYZ", true\)/);
-  assert.match(client, /applyOperationsSheet\(row\.syncCommandId!\)/);
+  // 2026-10-06 변경: 클라이언트는 운영 동기화 함수를 직접 부르지 않고 결과 객체 래퍼만 부른다
+  // (throw 메시지가 운영 빌드에서 가려지기 때문). 래퍼 안에서 기존 서버 액션을 그대로 호출한다.
+  assert.doesNotMatch(client, /from "@\/app\/actions\/operations-sync"/);
+  assert.match(client, /confirmEnrollmentChangeRallyz\(row\.syncCommandId!\)/);
+  assert.match(client, /applyEnrollmentChangeSheet\(row\.syncCommandId!\)/);
+  assert.match(decideAction, /recordOperationsExternalCheck\(commandId, "RALLYZ", true\)/);
+  assert.match(decideAction, /applyOperationsSheet\(commandId\)/);
   assert.match(client, />\s*랠리즈 반영 확인\s*</);
   // 두 버튼 함수 모두 confirm 을 먼저 통과해야 한다
   const sheetFn = client.slice(client.indexOf("function applySheet"), client.indexOf("function confirmRallyz"));

@@ -2,11 +2,19 @@
 
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
-import { decideEnrollmentChange, issueEnrollmentChangeInvoice } from "@/app/actions/enrollment-changes";
-// 시트·랠리즈 확인은 기존 운영 동기화 서버 액션을 그대로 쓴다(관리자 권한 검사·SYNCED 집계 포함).
-import { applyOperationsSheet, recordOperationsExternalCheck } from "@/app/actions/operations-sync";
+// 시트·랠리즈 확인은 결과 객체를 돌려주는 래퍼만 부른다.
+// (운영 동기화 함수를 직접 부르면 실패 이유가 운영 빌드에서 영어 일반 문구로 가려진다.)
+import {
+  applyEnrollmentChangeSheet,
+  confirmEnrollmentChangeRallyz,
+  confirmEnrollmentChangeSheetManually,
+  decideEnrollmentChange,
+  issueEnrollmentChangeInvoice,
+  type EnrollmentSyncActionResult,
+} from "@/app/actions/enrollment-changes";
 import { CHANGE_STATUS_LABEL, syncCheckBadge } from "@/lib/enrollment/changeRequestRules";
 import type { AdminChangeRequestRow } from "@/lib/enrollment/admin-change-request";
+import { sheetHoldDisplayReason } from "@/lib/enrollment/sheetManualCheckRules";
 
 const FILTERS = [
   { value: "PENDING", label: "검토 중" },
@@ -53,24 +61,37 @@ export default function EnrollmentChangesClient({
   function applySheet(row: AdminChangeRequestRow) {
     if (!row.syncCommandId) return;
     if (!window.confirm(`${row.studentName} · ${row.fromClassName ?? "-"} · ${row.kindLabel}\n구글 시트에 ${row.effectiveFrom.slice(0, 7)} ${row.kindLabel}을(를) 반영할까요?`)) return;
-    runSyncAction(() => applyOperationsSheet(row.syncCommandId!));
+    runSyncAction(() => applyEnrollmentChangeSheet(row.syncCommandId!));
+  }
+
+  // 시트 행 없음·학생 식별 불가·공통 상태 충돌처럼 자동 반영이 끝내 안 되는 건의 탈출구.
+  // 원장이 구글 시트를 직접 고친 뒤 누르면 시트 확인 완료로 기록되고(감사기록 남음) 랠리즈 확인으로 넘어간다.
+  function confirmSheetManually(row: AdminChangeRequestRow) {
+    if (!row.syncCommandId) return;
+    if (!window.confirm(`${row.studentName} · ${row.fromClassName ?? "-"} · ${row.kindLabel}
+구글 시트를 직접 고쳤습니까?
+확인을 누르면 시트 반영 완료(수동 확인)로 기록됩니다.`)) return;
+    runSyncAction(() => confirmEnrollmentChangeSheetManually(row.syncCommandId!));
   }
 
   // 랠리즈는 자동으로 바꾸지 않는다. 원장이 랠리즈에서 직접 처리한 뒤 "처리했다"를 기록한다.
   function confirmRallyz(row: AdminChangeRequestRow) {
     if (!row.syncCommandId) return;
     if (!window.confirm(`${row.studentName} · ${row.fromClassName ?? "-"} · ${row.kindLabel}\n랠리즈에서 ${row.kindLabel} 처리를 직접 마쳤나요?\n확인을 누르면 랠리즈 반영 완료로 기록됩니다.`)) return;
-    runSyncAction(() => recordOperationsExternalCheck(row.syncCommandId!, "RALLYZ", true));
+    runSyncAction(() => confirmEnrollmentChangeRallyz(row.syncCommandId!));
   }
 
-  function runSyncAction(action: () => Promise<unknown>) {
+  function runSyncAction(action: () => Promise<EnrollmentSyncActionResult>) {
     setError("");
     startTransition(async () => {
       try {
-        await action();
+        const result = await action();
+        // 서버가 돌려준 한국어 실패 이유를 그대로 보여 준다(보류로 바뀌었을 수 있어 목록도 새로 읽는다).
+        if (!result.ok) setError(result.message);
         router.refresh();
-      } catch (err) {
-        setError(err instanceof Error && err.message ? err.message : "반영 확인을 저장하지 못했습니다. 새로고침 후 다시 시도해 주세요.");
+      } catch {
+        // 네트워크 끊김 등 결과 자체를 못 받은 경우만 여기로 온다.
+        setError("반영 확인을 저장하지 못했습니다. 새로고침 후 다시 시도해 주세요.");
         router.refresh();
       }
     });
@@ -157,36 +178,55 @@ export default function EnrollmentChangesClient({
                 {row.appliedAt && <span className="text-xs font-bold text-green-700">사이트 반영 {row.appliedAt}</span>}
               </div>
 
-              {/* 자동 적용 후 남은 확인 단계: 시트 반영 → 랠리즈 반영 확인(서버도 이 순서를 요구한다). */}
+              {/* 자동 적용 후 남은 확인 단계: 시트 반영(자동 또는 직접 수정 확인) → 랠리즈 반영 확인(서버도 이 순서를 요구한다). */}
               {row.status === "APPLIED" && row.syncCommandId && syncCheckBadge(row.sheetStatus, row.rallyzStatus)?.needsCheck && (
-                row.syncCommandStatus === "HELD" ? (
-                  <p className="mt-2 rounded-xl bg-amber-50 p-2 text-xs font-bold text-amber-800 dark:bg-amber-950/30 dark:text-amber-200">
-                    시트·랠리즈 자동 확인 보류: {row.syncHoldReason ?? "관리자 확인 필요"} — 시트·랠리즈를 직접 확인해 주세요.
-                  </p>
-                ) : (
-                  <div className="mt-3 grid grid-cols-2 gap-2">
+                <div className="mt-3 space-y-2">
+                  {/* 보류 사유는 계속 보여 준다. 시트를 직접 고친 뒤 '시트 직접 수정 완료'로 이어갈 수 있다. */}
+                  {row.syncCommandStatus === "HELD" && (
+                    <p className="rounded-xl bg-amber-50 p-2 text-xs font-bold text-amber-800 dark:bg-amber-950/30 dark:text-amber-200">
+                      {/* 영문 종류 코드가 섞인 저장 문구는 화면에서만 한국어로 다듬는다. */}
+                      시트 자동 반영 보류: {sheetHoldDisplayReason(row.kind, row.syncHoldReason)} — 구글 시트를 직접 고친 뒤 '시트 직접 수정 완료'를 눌러 주세요.
+                    </p>
+                  )}
+                  <div className="grid grid-cols-2 gap-2">
+                    {/* 복귀(RESUME)는 시트 자동 반영을 지원하지 않는다 → 버튼을 숨기고 수동 확인만 쓴다. */}
+                    {row.kind !== "RESUME" && (
+                      <button
+                        type="button"
+                        disabled={pending || row.sheetStatus === "SUCCEEDED" || row.syncCommandStatus === "HELD"}
+                        onClick={() => applySheet(row)}
+                        className="min-h-11 rounded-xl border border-gray-300 text-sm font-bold text-gray-700 disabled:opacity-50 dark:border-gray-700 dark:text-gray-200"
+                      >
+                        {row.sheetStatus === "SUCCEEDED" ? "시트 반영됨" : "시트에 반영"}
+                      </button>
+                    )}
                     <button
                       type="button"
-                      disabled={pending || row.sheetStatus === "SUCCEEDED"}
-                      onClick={() => applySheet(row)}
-                      className="min-h-11 rounded-xl border border-gray-300 text-sm font-bold text-gray-700 disabled:opacity-50 dark:border-gray-700 dark:text-gray-200"
-                    >
-                      {row.sheetStatus === "SUCCEEDED" ? "시트 반영됨" : "시트에 반영"}
-                    </button>
-                    <button
-                      type="button"
-                      disabled={pending || row.sheetStatus !== "SUCCEEDED" || row.rallyzStatus === "SUCCEEDED"}
+                      disabled={pending || row.sheetStatus !== "SUCCEEDED" || row.rallyzStatus === "SUCCEEDED" || row.syncCommandStatus === "HELD"}
                       onClick={() => confirmRallyz(row)}
                       title={row.sheetStatus !== "SUCCEEDED" ? "시트 반영을 먼저 해 주세요" : undefined}
-                      className="min-h-11 rounded-xl bg-brand-navy-900 text-sm font-black text-white disabled:opacity-50 dark:bg-brand-neon-lime dark:text-brand-navy-900"
+                      className={`${row.kind === "RESUME" ? "col-span-2 " : ""}min-h-11 rounded-xl bg-brand-navy-900 text-sm font-black text-white disabled:opacity-50 dark:bg-brand-neon-lime dark:text-brand-navy-900`}
                     >
                       랠리즈 반영 확인
                     </button>
+                    {/* 자동 시트 반영이 실패·보류된 건의 탈출구(항상 보조로 노출). 시트가 끝났으면 숨긴다. */}
+                    {(row.sheetStatus !== "SUCCEEDED" || row.syncCommandStatus === "HELD") && (
+                      <button
+                        type="button"
+                        disabled={pending}
+                        onClick={() => confirmSheetManually(row)}
+                        className="col-span-2 min-h-11 rounded-xl border border-dashed border-gray-300 text-sm font-bold text-gray-600 disabled:opacity-50 dark:border-gray-700 dark:text-gray-300"
+                      >
+                        시트 직접 수정 완료
+                      </button>
+                    )}
                     {row.sheetStatus !== "SUCCEEDED" && (
-                      <p className="col-span-2 text-xs text-gray-500">시트 반영을 먼저 하면 '랠리즈 반영 확인'을 누를 수 있습니다.</p>
+                      <p className="col-span-2 text-xs text-gray-500">{row.kind === "RESUME"
+                        ? "복귀는 시트 자동 반영을 지원하지 않습니다 — 시트를 직접 고친 뒤 '시트 직접 수정 완료'를 눌러 주세요."
+                        : "시트 반영을 먼저 하면 '랠리즈 반영 확인'을 누를 수 있습니다. 자동 반영이 안 되면 시트를 직접 고친 뒤 '시트 직접 수정 완료'를 눌러 주세요."}</p>
                     )}
                   </div>
-                )
+                </div>
               )}
 
               {/* 적용일 처리에서 사람 확인으로 보류된 건(반 변경·이미 바뀐 상태 등). 사이트는 바뀌지 않았다. */}

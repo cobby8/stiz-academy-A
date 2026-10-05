@@ -8,8 +8,8 @@ const source = fs.readFileSync(path.resolve("src/lib/uniformOrders.ts"), "utf8")
   .replace(/import[^;]+;\s*/g, "")
   .replace(/export /g, "")
   .replace(/type UniformOrderStatus[\s\S]*?;\n\n/, "")
-  .replace(/type UniformOrderRow[\s\S]*?;\n\n/, "")
-  .replace(/export async function readUniformOrderSheet[\s\S]*/, "");
+  .replace(/type UniformOrderRow[\s\S]*?;\n\n/, "");
+// (2026-10-06) 시트 직접 읽기 함수 readUniformOrderSheet 를 지워서(호출처 0), 그 함수를 잘라내던 replace 도 뺐다.
 const js = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText;
 const moduleBox = { exports: {} };
 new Function("module", "exports", `${js}; module.exports = { parseUniformOrderRows };`)(moduleBox, moduleBox.exports);

@@ -6,7 +6,7 @@
 | architecture.md | 9 | 2026-08-08 |
 | errors.md | 8 | 2026-08-09 |
 | conventions.md | 29 | 2026-10-02 |
-| decisions.md | 19 | 2026-08-09 |
+| decisions.md | 20 | 2026-10-06 |
 | lessons.md | 6 | 2026-10-02 |
 
 ## ⚠️ 재발 다발 함정 (작업 전 반드시 확인)
@@ -19,8 +19,8 @@
 - **apiSuccess snake_case 자동변환** · **IDOR** · **`prisma db push` 금지** → errors / decisions
 
 ## 최근 추가된 지식 (최근 5건)
-1. [convention] CLI·웹앱이 같이 쓰는 계산은 `src/lib/**` 에 `.mjs` 한 벌 — 사본 0을 테스트로 고정
-2. [convention] prisma 를 쓰는 서비스도 "가짜 prisma"를 끼워 실제로 실행해 검증(쓰기 1회·INSERT 대상 단정)
-3. [convention] 날짜·시간은 `@/lib/datetime/kst` 한 곳에서만 — 금지 패턴 4종을 가드 테스트로 강제
-4. [convention] 관리자 화면 신설 시 사이드바 등록을 테스트로 못박는다(화면만 남고 길이 사라진 사고 2회)
-5. [error] start_url 끝 슬래시 하나로 PWA 가 시작하자마자 영역을 벗어난다 — start_url 은 리다이렉트까지 열어보고 확인
+1. [decision] 청구 안내=랠리즈 전담(사이트 발송 기본 잠금)·시트 원장 은퇴(SHEET SKIPPED)·장부 원천=랠리즈 (2026-10-06)
+2. [convention] CLI·웹앱이 같이 쓰는 계산은 `src/lib/**` 에 `.mjs` 한 벌 — 사본 0을 테스트로 고정
+3. [convention] prisma 를 쓰는 서비스도 "가짜 prisma"를 끼워 실제로 실행해 검증(쓰기 1회·INSERT 대상 단정)
+4. [convention] 날짜·시간은 `@/lib/datetime/kst` 한 곳에서만 — 금지 패턴 4종을 가드 테스트로 강제
+5. [convention] 관리자 화면 신설 시 사이드바 등록을 테스트로 못박는다(화면만 남고 길이 사라진 사고 2회)

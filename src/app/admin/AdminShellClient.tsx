@@ -84,10 +84,13 @@ export default function AdminShellClient({
     children,
     initialUserName,
     initialUserEmail,
+    sheetRetired = false,
 }: {
     children: React.ReactNode;
     initialUserName: string;
     initialUserEmail: string;
+    // 구글 시트 원장 은퇴 여부 — 백업 버튼 묶음의 「시트 동기화」 표시 여부로만 쓴다
+    sheetRetired?: boolean;
 }) {
     const pathname = usePathname() || "/admin";
     const userName = initialUserName;
@@ -263,7 +266,7 @@ export default function AdminShellClient({
                                         </button>
                                         {systemToolsOpen && (
                                             <div id="admin-system-tools" className="mt-1">
-                                                <LazyBackupButtons />
+                                                <LazyBackupButtons sheetRetired={sheetRetired} />
                                             </div>
                                         )}
                                     </div>

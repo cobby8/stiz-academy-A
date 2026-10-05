@@ -2,7 +2,8 @@
 
 import { useRef, useState } from "react";
 
-export default function AdminBackupButtons() {
+// sheetRetired: 구글 시트 원장 은퇴(2026-10~) 면 「시트 동기화」 버튼을 숨긴다(설정 백업·복원 버튼은 그대로).
+export default function AdminBackupButtons({ sheetRetired = false }: { sheetRetired?: boolean } = {}) {
     const [busy, setBusy] = useState(false);
     const [msg, setMsg] = useState<string | null>(null);
     const [ok, setOk] = useState(true);
@@ -119,6 +120,7 @@ export default function AdminBackupButtons() {
 
     return (
         <div className="space-y-1 px-4 py-2">
+            {!sheetRetired && (
             <button
                 type="button"
                 onClick={handleSyncSchedule}
@@ -130,6 +132,7 @@ export default function AdminBackupButtons() {
                 <span className="text-xl">🔄</span>
                 <span>시트 동기화</span>
             </button>
+            )}
             <a
                 href="/api/admin/backup"
                 className="flex w-full items-center gap-3 rounded-lg px-4 py-3 text-gray-300 transition-colors hover:bg-white/10 hover:text-white"

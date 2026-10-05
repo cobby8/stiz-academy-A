@@ -62,6 +62,7 @@ import { resolveCanonicalTrialSchedule } from "@/lib/trial-schedule-server";
 import { confirmTrialFeeWithAudit, type TrialFeeConfirmationResult } from "@/lib/trial-fee-confirmation";
 import { recordApplicationContactAtomically } from "@/lib/application-contact-transaction";
 import { sessionDateForKorea } from "@/lib/seasonal/session-bridge";
+import { syncCreditForRegularSession, syncCreditForSeasonalSeat } from "@/lib/makeup/credit-service";
 import { linkMatchingCoachProfileToUser } from "@/lib/staff-coach-link";
 import { buildEnrollmentOperationsEvent } from "@/lib/operations-events/admin-hooks";
 import { enqueueWebsiteOperationsEventInTransaction } from "@/lib/operations-events";
@@ -1325,6 +1326,42 @@ async function getAdminSeasonalRosterStudentIds(sessionDateId: string) {
     return new Set(rows.map((row) => row.studentId));
 }
 
+// 관리자 방학특강 출결 → 그 학생의 좌석(SpecialProgramEnrollmentDate)을 찾아 보강권을 맞춘다.
+// 코치 화면은 좌석 id 로 저장하므로, 여기서도 같은 좌석을 찾아야 sourceKey(SEASONAL:{좌석id})가 같아진다.
+// 좌석 범위는 명단 조회(getAdminSeasonalRosterStudentIds)와 같다 — 같은 시각의 같은 강좌 또는 연결 반 형제 강좌.
+// 코치 경로(staff-sessions.ts)처럼 승인(APPROVED)된 신청 항목의 좌석만 인정한다 — 취소·반려된 신청의 좌석으로 발급되지 않게.
+// 좌석이 없으면(명단 밖·취소된 좌석) 아무것도 하지 않는다.
+async function syncAdminSeasonalMakeupCredit(sessionDateId: string, studentId: string, status: string) {
+    const seats = await prisma.$queryRawUnsafe<{ id: string }[]>(
+        `SELECT e.id
+           FROM "SpecialProgramSessionDate" anchor_sd
+           JOIN "SpecialProgramOffering" anchor_o ON anchor_o.id = anchor_sd."offeringId"
+           JOIN "SpecialProgramSessionDate" sd
+             ON sd."startsAt" = anchor_sd."startsAt" AND sd."endsAt" = anchor_sd."endsAt"
+           JOIN "SpecialProgramOffering" o
+             ON o.id = sd."offeringId"
+            AND (
+              o.id = anchor_o.id
+              OR (
+                anchor_o."linkedClassId" IS NOT NULL
+                AND o."linkedClassId" = anchor_o."linkedClassId"
+                AND o."seasonId" = anchor_o."seasonId"
+              )
+            )
+           JOIN "SpecialProgramApplicationItem" i ON i."offeringId" = o.id AND i.status = 'APPROVED'
+           JOIN "SpecialProgramEnrollmentDate" e ON e."sessionDateId" = sd.id AND e."applicationItemId" = i.id
+          WHERE anchor_sd.id = $1
+            AND e."studentId" = $2
+            AND e.status = 'SCHEDULED'
+          ORDER BY (sd.id = anchor_sd.id) DESC, e.id
+          LIMIT 1`,
+        sessionDateId, studentId,
+    );
+    if (!seats[0]) return;
+    // 한 학생·한 회차에 한 장 — 좌석이 여럿이어도 첫 좌석 하나로만 처리한다.
+    await syncCreditForSeasonalSeat({ enrollmentDateId: seats[0].id, studentId, status });
+}
+
 export async function saveAttendance(classId: string, date: string, records: { studentId: string; status: string }[], options?: { sessionDateId?: string | null }) {
     const admin = await requireAdmin();
     const sessionDateId = options?.sessionDateId?.trim() || null;
@@ -1363,6 +1400,17 @@ export async function saveAttendance(classId: string, date: string, records: { s
                        "updatedAt" = NOW()`,
                     sessionId, rec.studentId, rec.status, admin.appUserId,
                 );
+            }
+            // 보강권 — 결석이면 발급, 출석·지각으로 정정되면 회수(코치 화면과 같은 규칙·같은 키).
+            // ★ 출결은 이미 저장됐다. 보강권이 실패해도 출결 저장을 실패로 만들지 않는다.
+            for (const rec of allowedRecords) {
+                try {
+                    await syncAdminSeasonalMakeupCredit(sessionDateId, rec.studentId, rec.status);
+                } catch (error) {
+                    console.error("[saveAttendance] 방학특강 보강권 처리 실패(출결은 저장됨)", {
+                        sessionDateId, studentId: rec.studentId, error,
+                    });
+                }
             }
             const studentIds = allowedRecords.map(r => r.studentId);
             const dateStr = new Date(date).toLocaleDateString("ko-KR", { month: "long", day: "numeric" });
@@ -1409,6 +1457,17 @@ export async function saveAttendance(classId: string, date: string, records: { s
                  ON CONFLICT ("sessionId", "studentId") DO UPDATE SET status = $3, "updatedAt" = NOW()`,
                 sessionId, rec.studentId, rec.status
             );
+        }
+        // 보강권 — 결석이면 발급, 출석·지각으로 정정되면 회수(코치 화면과 같은 함수).
+        // ★ 출결은 이미 저장됐다. 보강권이 실패해도 출결 저장을 실패로 만들지 않는다.
+        for (const rec of records) {
+            try {
+                await syncCreditForRegularSession({ sessionId, studentId: rec.studentId, status: rec.status });
+            } catch (error) {
+                console.error("[saveAttendance] 보강권 처리 실패(출결은 저장됨)", {
+                    sessionId, studentId: rec.studentId, error,
+                });
+            }
         }
         // 출결 완료 알림 → 학부모에게 전송
         const studentIds = records.map(r => r.studentId);

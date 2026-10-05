@@ -69,7 +69,6 @@ const R1_ALLOW = [
   "src/app/actions/public.ts",
   "src/app/admin/annual/AnnualAdminClient.tsx",
   "src/app/admin/apply/ApplyAdminModals.tsx",
-  "src/app/admin/attendance/AttendanceClient.tsx",
   "src/app/admin/classes/[id]/ClassDetailClient.tsx",
   "src/app/admin/classes/[id]/SessionLogModal.tsx",
   "src/app/admin/finance/FinanceClient.tsx",
@@ -129,7 +128,6 @@ test("규칙 3 — 서버 코드가 서버 시간대에 기대지 않는다", ()
 const R4 = /function\s+(?:kstYmd|seoulYmd|todayStr|kstDow|seoulDow|toKstDate)\s*\(/;
 const R4_ALLOW = [
   "src/lib/datetime/kst.ts", // 여기가 원본이다
-  "src/app/admin/attendance/AttendanceClient.tsx",
   "src/app/admin/classes/[id]/SessionLogModal.tsx",
   "src/lib/makeup/credit-service.ts",
   "src/lib/makeup/parent-makeup.ts",

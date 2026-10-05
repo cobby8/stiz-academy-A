@@ -21,6 +21,21 @@ function ymdToUtc(ymd: string): Date {
   return new Date(`${ymd}T00:00:00+09:00`);
 }
 
+// ── 발급 시작일 판정(외부 의존 없는 순수 블록 — 테스트가 이 구간만 잘라 실행한다) ──
+/**
+ * 이 날짜(KST 결석일) 이후의 결석부터만 보강권을 발급한다.
+ * 이유: 정규 결석 보강권이 버그로 한 장도 발급되지 않다가 2026-10-05 에 고쳐졌다.
+ *       원장 결정("앞으로만")에 따라, 그 전 결석은 출결을 다시 저장하거나 랠리즈 동기화를
+ *       다시 돌려도 소급 발급하지 않는다. 회수(출석·지각으로 정정)는 날짜와 상관없이 기존대로 한다.
+ */
+export const MAKEUP_CREDIT_ISSUE_FROM_YMD = "2026-10-05";
+
+/** 결석일(YYYY-MM-DD)이 발급 시작일 이상인가. 같은 형식 문자열은 글자 비교가 곧 날짜 비교다. */
+export function isMakeupCreditIssuableYmd(absenceYmd: string): boolean {
+  return /^\d{4}-\d{2}-\d{2}$/.test(absenceYmd) && absenceYmd >= MAKEUP_CREDIT_ISSUE_FROM_YMD;
+}
+// ── 발급 시작일 판정 끝 ──
+
 export type IssueResult = { issued: boolean; creditId?: string; reason?: string };
 
 /**
@@ -86,7 +101,7 @@ export async function revokeMakeupCredit(input: {
 /**
  * 출결 상태에 따라 보강권을 맞춰 준다. 출결 저장 직후에 호출한다.
  *
- * ABSENT → 발급 / 그 외(PRESENT·LATE) → 회수.
+ * ABSENT → 발급(결석일이 MAKEUP_CREDIT_ISSUE_FROM_YMD 이상일 때만) / 그 외(PRESENT·LATE) → 회수.
  * 지각(LATE)은 결석이 아니므로 보강권을 주지 않는다(약관: "결석으로 수업의 결손").
  */
 export async function syncMakeupCreditForAttendance(input: {
@@ -100,6 +115,8 @@ export async function syncMakeupCreditForAttendance(input: {
   originSessionId?: string | null;
 }): Promise<{ action: "issued" | "revoked" | "none" }> {
   if (input.status === "ABSENT") {
+    // 발급 시작일 전 결석은 발급하지 않는다(정규·특강 좌석 모두 이 함수를 거친다).
+    if (!isMakeupCreditIssuableYmd(input.absenceYmd)) return { action: "none" };
     const r = await issueMakeupCredit(input);
     return { action: r.issued ? "issued" : "none" };
   }
@@ -178,14 +195,19 @@ export async function syncCreditForRegularSession(input: {
   studentId: string;
   status: string;
 }): Promise<{ action: string }> {
-  const rows = await prisma.$queryRawUnsafe<{ classId: string; startsAt: Date | string }[]>(
-    `SELECT "classId", "startsAt" FROM "Session" WHERE id = $1 LIMIT 1`,
+  // ⚠️ "Session" 에는 "startsAt" 컬럼이 없다(2026-10-05 운영 DB 확인) — 예전 코드는 이 SELECT 가
+  //    매번 터져 정규 결석 보강권이 한 장도 발급되지 않았다.
+  //    "date" 는 무(無)tz timestamp 에 KST 달력 날짜 자정을 그대로 담는다. 그래서 시간대 변환
+  //    (AT TIME ZONE) 없이 그 날짜 글자를 그대로 꺼내면 결석일이 된다. 변환을 걸면 하루 밀린다.
+  const rows = await prisma.$queryRawUnsafe<{ classId: string; absenceYmd: string | null }[]>(
+    `SELECT "classId", to_char("date", 'YYYY-MM-DD') AS "absenceYmd" FROM "Session" WHERE id = $1 LIMIT 1`,
     input.sessionId,
   );
   const row = rows[0];
-  if (!row) return { action: "none" };
+  if (!row || !row.absenceYmd) return { action: "none" };
 
-  const absenceYmd = kstYmd(row.startsAt instanceof Date ? row.startsAt : new Date(row.startsAt));
+  // 결석일(YYYY-MM-DD) — 발급 키·absenceDate·만료일이 모두 이 한 값에서 나온다.
+  const absenceYmd = row.absenceYmd;
   return syncMakeupCreditForAttendance({
     studentId: input.studentId,
     status: input.status,

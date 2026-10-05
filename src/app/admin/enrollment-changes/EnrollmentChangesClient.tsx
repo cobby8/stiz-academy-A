@@ -3,11 +3,15 @@
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { decideEnrollmentChange, issueEnrollmentChangeInvoice } from "@/app/actions/enrollment-changes";
-import { CHANGE_STATUS_LABEL } from "@/lib/enrollment/changeRequestRules";
+// 시트·랠리즈 확인은 기존 운영 동기화 서버 액션을 그대로 쓴다(관리자 권한 검사·SYNCED 집계 포함).
+import { applyOperationsSheet, recordOperationsExternalCheck } from "@/app/actions/operations-sync";
+import { CHANGE_STATUS_LABEL, syncCheckBadge } from "@/lib/enrollment/changeRequestRules";
 import type { AdminChangeRequestRow } from "@/lib/enrollment/admin-change-request";
 
 const FILTERS = [
   { value: "PENDING", label: "검토 중" },
+  // 사이트에는 자동 반영됐지만 시트·랠리즈 확인이 남은 건
+  { value: "NEEDS_CHECK", label: "확인 필요" },
   { value: "APPROVED", label: "승인" },
   { value: "REJECTED", label: "거절" },
   { value: "ALL", label: "전체" },
@@ -16,9 +20,11 @@ const FILTERS = [
 export default function EnrollmentChangesClient({
   rows,
   status,
+  needsCheckCount = 0,
 }: {
   rows: AdminChangeRequestRow[];
   status: string;
+  needsCheckCount?: number;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -43,6 +49,33 @@ export default function EnrollmentChangesClient({
     });
   }
 
+  // 구글 시트에 휴원·퇴원을 반영한다. 시트를 실제로 고치므로 확인창을 한 번 띄운다.
+  function applySheet(row: AdminChangeRequestRow) {
+    if (!row.syncCommandId) return;
+    if (!window.confirm(`${row.studentName} · ${row.fromClassName ?? "-"} · ${row.kindLabel}\n구글 시트에 ${row.effectiveFrom.slice(0, 7)} ${row.kindLabel}을(를) 반영할까요?`)) return;
+    runSyncAction(() => applyOperationsSheet(row.syncCommandId!));
+  }
+
+  // 랠리즈는 자동으로 바꾸지 않는다. 원장이 랠리즈에서 직접 처리한 뒤 "처리했다"를 기록한다.
+  function confirmRallyz(row: AdminChangeRequestRow) {
+    if (!row.syncCommandId) return;
+    if (!window.confirm(`${row.studentName} · ${row.fromClassName ?? "-"} · ${row.kindLabel}\n랠리즈에서 ${row.kindLabel} 처리를 직접 마쳤나요?\n확인을 누르면 랠리즈 반영 완료로 기록됩니다.`)) return;
+    runSyncAction(() => recordOperationsExternalCheck(row.syncCommandId!, "RALLYZ", true));
+  }
+
+  function runSyncAction(action: () => Promise<unknown>) {
+    setError("");
+    startTransition(async () => {
+      try {
+        await action();
+        router.refresh();
+      } catch (err) {
+        setError(err instanceof Error && err.message ? err.message : "반영 확인을 저장하지 못했습니다. 새로고침 후 다시 시도해 주세요.");
+        router.refresh();
+      }
+    });
+  }
+
   function decide(requestId: string, approve: boolean) {
     setError("");
     startTransition(async () => {
@@ -59,13 +92,24 @@ export default function EnrollmentChangesClient({
     <main className="mx-auto max-w-3xl space-y-4 p-4">
       <div>
         <h1 className="text-xl font-black text-brand-navy-900 dark:text-white">수강 변경 신청</h1>
-        {/* 승인이 곧 반영이 아니라는 점을 먼저 알린다. 안 그러면 "승인했는데 왜 그대로냐"가 된다. */}
+        {/* 원장 결정(2026-10-05): 휴원·퇴원은 사이트만 자동. 랠리즈·시트는 사람이 반영하고 확인을 눌러야 끝난다. */}
         <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-          승인은 변경 접수 승인입니다. 적용일이 되면 시트·랠리즈·사이트 동기화 검토 대기로 등록되며, 세 시스템 확인 전에는 반이 바뀌거나 적용 완료로 표시되지 않습니다. 학부모 알림은 별도 승인 후 발송합니다.
+          적용일이 된 휴원·퇴원은 사이트에 자동 반영됩니다(적용일이 이미 지난 건은 승인 즉시). 랠리즈·시트는 직접 반영한 뒤 '랠리즈 반영 확인'을 눌러 주세요. 반 변경은 적용일에 자동으로 바뀌지 않습니다. 학부모 알림은 별도 승인 후 발송합니다.
         </p>
       </div>
 
-      <div className="flex gap-2">
+      {/* 다른 탭을 보고 있어도 확인이 남은 건을 놓치지 않게 맨 위에 띄운다. */}
+      {needsCheckCount > 0 && status !== "NEEDS_CHECK" && (
+        <button
+          type="button"
+          onClick={() => router.push("/admin/enrollment-changes?status=NEEDS_CHECK")}
+          className="block w-full rounded-xl bg-amber-50 p-3 text-left text-sm font-bold text-amber-800 dark:bg-amber-950/30 dark:text-amber-200"
+        >
+          사이트에만 반영되고 시트·랠리즈 확인이 남은 건이 {needsCheckCount}건 있습니다. 눌러서 확인하세요.
+        </button>
+      )}
+
+      <div className="flex flex-wrap gap-2">
         {FILTERS.map((item) => (
           <button
             key={item.value}
@@ -78,6 +122,7 @@ export default function EnrollmentChangesClient({
             }`}
           >
             {item.label}
+            {item.value === "NEEDS_CHECK" && needsCheckCount > 0 ? ` ${needsCheckCount}` : ""}
           </button>
         ))}
       </div>
@@ -97,9 +142,59 @@ export default function EnrollmentChangesClient({
                 <span className="rounded-lg bg-gray-100 px-2 py-0.5 text-xs font-bold text-gray-700 dark:bg-gray-800 dark:text-gray-200">
                   {row.kindLabel}
                 </span>
-                <span className="text-xs font-bold text-gray-500">{CHANGE_STATUS_LABEL[row.status] ?? row.status}</span>
-                {row.appliedAt && <span className="text-xs font-bold text-green-700">반영됨 {row.appliedAt}</span>}
+                {(() => {
+                  // 자동 적용 건은 원장(시트·랠리즈) 확인 상태가 곧 진짜 상태다. "반영 완료"는 셋 다 끝났을 때만.
+                  const badge = row.status === "APPLIED" ? syncCheckBadge(row.sheetStatus, row.rallyzStatus) : null;
+                  if (badge?.needsCheck) {
+                    return (
+                      <span className="rounded-lg bg-amber-100 px-2 py-0.5 text-xs font-black text-amber-800 dark:bg-amber-950/40 dark:text-amber-200">
+                        {badge.label}
+                      </span>
+                    );
+                  }
+                  return <span className="text-xs font-bold text-gray-500">{badge?.label ?? CHANGE_STATUS_LABEL[row.status] ?? row.status}</span>;
+                })()}
+                {row.appliedAt && <span className="text-xs font-bold text-green-700">사이트 반영 {row.appliedAt}</span>}
               </div>
+
+              {/* 자동 적용 후 남은 확인 단계: 시트 반영 → 랠리즈 반영 확인(서버도 이 순서를 요구한다). */}
+              {row.status === "APPLIED" && row.syncCommandId && syncCheckBadge(row.sheetStatus, row.rallyzStatus)?.needsCheck && (
+                row.syncCommandStatus === "HELD" ? (
+                  <p className="mt-2 rounded-xl bg-amber-50 p-2 text-xs font-bold text-amber-800 dark:bg-amber-950/30 dark:text-amber-200">
+                    시트·랠리즈 자동 확인 보류: {row.syncHoldReason ?? "관리자 확인 필요"} — 시트·랠리즈를 직접 확인해 주세요.
+                  </p>
+                ) : (
+                  <div className="mt-3 grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      disabled={pending || row.sheetStatus === "SUCCEEDED"}
+                      onClick={() => applySheet(row)}
+                      className="min-h-11 rounded-xl border border-gray-300 text-sm font-bold text-gray-700 disabled:opacity-50 dark:border-gray-700 dark:text-gray-200"
+                    >
+                      {row.sheetStatus === "SUCCEEDED" ? "시트 반영됨" : "시트에 반영"}
+                    </button>
+                    <button
+                      type="button"
+                      disabled={pending || row.sheetStatus !== "SUCCEEDED" || row.rallyzStatus === "SUCCEEDED"}
+                      onClick={() => confirmRallyz(row)}
+                      title={row.sheetStatus !== "SUCCEEDED" ? "시트 반영을 먼저 해 주세요" : undefined}
+                      className="min-h-11 rounded-xl bg-brand-navy-900 text-sm font-black text-white disabled:opacity-50 dark:bg-brand-neon-lime dark:text-brand-navy-900"
+                    >
+                      랠리즈 반영 확인
+                    </button>
+                    {row.sheetStatus !== "SUCCEEDED" && (
+                      <p className="col-span-2 text-xs text-gray-500">시트 반영을 먼저 하면 '랠리즈 반영 확인'을 누를 수 있습니다.</p>
+                    )}
+                  </div>
+                )
+              )}
+
+              {/* 적용일 처리에서 사람 확인으로 보류된 건(반 변경·이미 바뀐 상태 등). 사이트는 바뀌지 않았다. */}
+              {row.status === "APPROVED" && row.syncCommandStatus === "HELD" && (
+                <p className="mt-2 rounded-xl bg-gray-50 p-2 text-xs font-bold text-gray-600 dark:bg-gray-800 dark:text-gray-300">
+                  적용일 도래 · 자동 반영 안 함: {row.syncHoldReason ?? "관리자 확인 필요"}
+                </p>
+              )}
 
               <p className="mt-2 text-sm text-gray-700 dark:text-gray-200">
                 {row.fromClassName ?? "-"}
@@ -165,6 +260,9 @@ export default function EnrollmentChangesClient({
                     placeholder="학부모에게 전할 말 (거절 시 함께 전달됩니다)"
                     className="min-h-11 w-full rounded-xl border border-gray-200 px-3 text-sm dark:border-gray-700 dark:bg-gray-800"
                   />
+                  {(row.kind === "PAUSE" || row.kind === "WITHDRAW") && (
+                    <p className="text-xs text-gray-500">승인하면 적용일({row.effectiveFrom})에 사이트에 자동 반영됩니다. 랠리즈·시트는 직접 반영해 주세요.</p>
+                  )}
                   <div className="grid grid-cols-2 gap-2">
                     <button
                       type="button"

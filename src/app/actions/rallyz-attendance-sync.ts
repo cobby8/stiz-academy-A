@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { requireAdmin } from "@/lib/auth-guard";
 import { prisma } from "@/lib/prisma";
+import { syncCreditForRegularSession } from "@/lib/makeup/credit-service";
 import { ensureOperationsSyncInfrastructure } from "@/lib/operationsSyncInfrastructure";
 import { decideAttendanceWrite, parseRallyzAttendanceJson } from "@/lib/rallyzAttendanceSync";
 
@@ -86,8 +87,13 @@ export async function applyRallyzAttendanceSync(runId: string) {
        FROM "RallyzAttendanceSyncItem" WHERE "runId"=$1 AND status='PENDING' ORDER BY "createdAt"`, runId,
   );
   let applied = 0;
+  // 실제로 적용된 출결 — 트랜잭션이 커밋된 뒤 보강권을 맞추기 위해 모은다.
+  const creditTargets: Array<{ sessionId: string; studentId: string; status: string }> = [];
   for (const item of items) {
     if (!item.studentId || !item.classId || !item.siteStatus) continue;
+    // 트랜잭션 콜백 안에서는 위 null 검사가 타입에 이어지지 않아 값을 미리 붙잡아 둔다(보강권 대상 기록용).
+    const creditStudentId = item.studentId;
+    const creditStatus = item.siteStatus;
     await prisma.$transaction(async (tx) => {
       const sessionKey = `${item.classId}:${item.sourceDate}`;
       const sessions = await tx.$queryRawUnsafe<Array<{ id: string }>>(
@@ -115,7 +121,17 @@ export async function applyRallyzAttendanceSync(runId: string) {
       );
       await tx.$executeRawUnsafe(`UPDATE "RallyzAttendanceSyncItem" SET status='APPLIED',"sessionId"=$2,"attendanceId"=$3,"updatedAt"=now() WHERE id=$1`, item.id, sessions[0].id, saved[0].id);
       applied += 1;
+      creditTargets.push({ sessionId: sessions[0].id, studentId: creditStudentId, status: creditStatus });
     });
+  }
+  // 보강권 — 결석이면 발급, 출석·지각으로 정정되면 회수(관리자·코치 화면과 같은 함수).
+  // ★ 출결은 이미 저장됐다. 보강권이 실패해도 적용 결과를 되돌리지 않는다.
+  for (const target of creditTargets) {
+    try {
+      await syncCreditForRegularSession(target);
+    } catch (error) {
+      console.error("[applyRallyzAttendanceSync] 보강권 처리 실패(출결은 저장됨)", { ...target, error });
+    }
   }
   await prisma.$executeRawUnsafe(
     `UPDATE "RallyzAttendanceSyncRun" SET status=CASE WHEN EXISTS(SELECT 1 FROM "RallyzAttendanceSyncItem" WHERE "runId"=$1 AND status='HELD') THEN 'PARTIAL' ELSE 'APPLIED' END,"appliedByUserId"=$2,"appliedAt"=now(),"updatedAt"=now() WHERE id=$1`, runId, admin.appUserId,

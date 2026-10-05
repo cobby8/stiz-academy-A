@@ -99,7 +99,10 @@ test("취소는 아직 결정 안 된 건만 가능하다", () => {
 test("승인은 예약이고 적용일에 삼중 동기화 대기로 이관한다", () => {
   assert.match(adminLib, /"effectiveFrom" <= \(now\(\) AT TIME ZONE 'Asia\/Seoul'\)::date/);
   assert.match(adminLib, /"appliedAt" IS NULL/);
+  // 원장 결정(2026-10-05): 휴원·퇴원 자동 적용 시에만 appliedAt 을 찍는다 — 반드시 APPLIED 전환과 함께, 조건부로.
+  // (예전엔 "appliedAt 을 절대 먼저 찍지 않는다"였다. 사이트 적용 = 관리자 즉시 변경과 같은 의미로 바뀜)
   assert.doesNotMatch(adminLib, /SET "appliedAt" = now\(\)/);
+  assert.match(adminLib, /SET status = 'APPLIED', "appliedAt" = now\(\)/);
   assert.match(adminLib, /\["SHEET", "RALLYZ", "WEBSITE"\]/);
 });
 
@@ -115,13 +118,17 @@ test("한 건이 실패해도 나머지는 반영한다", () => {
 
 test("반 변경이 학생·반 유일 제약과 부딪히지 않는다", () => {
   // 그 반에 예전 등록 이력이 있으면 classId 를 바꾸는 UPDATE 가 충돌한다.
-  assert.doesNotMatch(adminLib, /UPDATE "Enrollment"/);
+  // 원장 결정(2026-10-05): 휴원·퇴원은 status 만 조건부로 바꾼다. 반(classId)을 옮기는 UPDATE 는 여전히 없다.
+  assert.doesNotMatch(adminLib, /UPDATE "Enrollment" SET[^`]*"classId"/);
+  assert.match(adminLib, /UPDATE "Enrollment" SET status = \$2, "updatedAt" = now\(\) WHERE id = \$1 AND status = \$3/);
   assert.match(adminLib, /operationsCommand\.findUnique\(\{ where: \{ idempotencyKey: key \}/);
 });
 
 test("크론이 매일 돌고 아무나 부를 수 없다", () => {
   assert.match(cron, /CRON_SECRET/);
   assert.match(cron, /applyDueEnrollmentChanges/);
+  // 응답에 실제 적용 건수와 보류 건수를 함께 낸다(운영 확인용)
+  assert.match(cron, /ok: true, applied, held/);
   const job = vercel.crons.find((item) => item.path === "/api/cron/enrollment-changes");
   assert.ok(job, "vercel.json 에 크론이 등록돼야 합니다.");
   assert.equal(job.schedule, "10 15 * * *"); // KST 00:10

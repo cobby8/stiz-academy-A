@@ -363,6 +363,7 @@ export default function FinanceClient({
     initialSummary,
     initialPaymentProvider,
     currentAdminRole,
+    billingParentSendEnabled = false,
 }: {
     initialPayments?: Payment[];
     initialYear?: number;
@@ -370,7 +371,11 @@ export default function FinanceClient({
     initialSummary?: Summary;
     initialPaymentProvider?: PaymentProviderStatus;
     currentAdminRole: AdminFinanceRole;
+    // 학부모 청구 안내 사이트 발송 허용 여부(기본 잠금 — 청구 안내는 랠리즈 전담)
+    billingParentSendEnabled?: boolean;
 }) {
+    // 잠금이면 「링크 발송」「미납 알림」 버튼을 막고 "랠리즈에서 발송" 으로 안내한다
+    const parentSendLocked = !billingParentSendEnabled;
     const now = new Date();
     const fallbackYear = now.getFullYear();
     const fallbackMonth = now.getMonth() + 1;
@@ -742,8 +747,8 @@ export default function FinanceClient({
             const updatedPreview = await previewMonthlyInvoices(year, month);
             setInvoicePreview(updatedPreview);
             setExcludedStudentIds(new Set());
-            // 생성과 외부 발송은 분리하되, 승인된 청구는 알림 발송까지 마쳐야 완료임을 안내한다.
-            setFinanceNotice(`${result.message}. 0원·보류 건을 제외한 청구서는 링크 발송이 필수입니다.`);
+            // 학부모 청구 안내는 랠리즈 전담 — 사이트 청구는 장부용임을 안내한다.
+            setFinanceNotice(`${result.message}. 청구서는 랠리즈에서 생성·발송합니다. 사이트 청구는 장부용입니다.`);
         } catch (err: unknown) {
             setInvoiceError(getErrorMessage(err, "청구서 생성 실패"));
         } finally {
@@ -755,7 +760,7 @@ export default function FinanceClient({
         const confirmMessage =
             `${year}년 ${month}월 청구서를 자동으로 확인하고 정리할까요?\n` +
             "새 청구서는 생성하고, 이미 생성된 청구서는 그대로 유지합니다.\n" +
-            "학부모 알림은 안전을 위해 별도 승인 후 발송하며, 0원·보류 건 외에는 반드시 발송해야 합니다.";
+            "청구서는 랠리즈에서 생성·발송합니다. 사이트 청구는 장부용이며 학부모에게 알림을 보내지 않습니다.";
 
         if (!confirm(confirmMessage)) return;
 
@@ -786,7 +791,7 @@ export default function FinanceClient({
             const attentionCount = updatedPreview.items.filter(needsInvoiceAttention).length;
             setInvoicePreview(updatedPreview);
             setInvoiceFilter(attentionCount > 0 ? "ATTENTION" : "ALL");
-            setFinanceNotice(`${creationMessage}. 청구서 ${ledger.invoices}건과 연체 ${ledger.overdue}건을 정리했습니다. 0원·보류 건을 제외한 발송 대상은 반드시 링크 발송을 완료하세요.`);
+            setFinanceNotice(`${creationMessage}. 청구서 ${ledger.invoices}건과 연체 ${ledger.overdue}건을 정리했습니다. 청구서는 랠리즈에서 생성·발송합니다. 사이트 청구는 장부용입니다.`);
         } catch (err: unknown) {
             setInvoiceError(getErrorMessage(err, "청구서 자동 생성/정리 실패"));
         } finally {
@@ -1213,16 +1218,16 @@ export default function FinanceClient({
                                     },
                                     {
                                         key: "send-links",
-                                        label: "링크 발송 (필수)",
+                                        label: parentSendLocked ? "링크 발송 · 랠리즈에서 발송" : "링크 발송",
                                         icon: "send",
-                                        disabled: busy || billingRunLoading || invoiceGeneratedCount === 0 || invoiceUnsentCount === 0,
+                                        disabled: parentSendLocked || busy || billingRunLoading || invoiceGeneratedCount === 0 || invoiceUnsentCount === 0,
                                         onSelect: handleSendInvoiceLinks,
                                     },
                                     {
                                         key: "send-reminders",
-                                        label: "미납 알림",
+                                        label: parentSendLocked ? "미납 알림 · 랠리즈에서 발송" : "미납 알림",
                                         icon: "notifications_active",
-                                        disabled: busy || billingRunLoading || invoiceOpenCount === 0,
+                                        disabled: parentSendLocked || busy || billingRunLoading || invoiceOpenCount === 0,
                                         onSelect: handleSendReminders,
                                     },
                                     {
@@ -1235,6 +1240,12 @@ export default function FinanceClient({
                                 ]}
                             />
                         </div>
+                        {/* 잠금 안내: 학부모 청구 안내(링크·미납 알림)는 랠리즈에서 보낸다 */}
+                        {parentSendLocked && (
+                            <span className="text-xs font-bold text-gray-500 dark:text-gray-400">
+                                학부모 청구 안내는 랠리즈에서 발송
+                            </span>
+                        )}
                         <button
                             type="button"
                             onClick={() => {
@@ -1797,11 +1808,14 @@ export default function FinanceClient({
                                 type="checkbox"
                                 checked={notifyParent}
                                 onChange={(e) => setNotifyParent(e.target.checked)}
-                                disabled={status !== "PENDING" || !selectedStudent?.hasParent}
+                                disabled={parentSendLocked || status !== "PENDING" || !selectedStudent?.hasParent}
                                 className="rounded border-gray-300"
                             />
                             생성 후 학부모 수납 안내 알림 보내기
                         </label>
+                        {parentSendLocked && (
+                            <p className="text-xs text-gray-500 dark:text-gray-400">학부모 청구 안내는 랠리즈에서 보냅니다(사이트 발송 잠금).</p>
+                        )}
                         {studentId && !selectedStudent?.hasParent && (
                             <p className="text-xs text-amber-700 dark:text-amber-300">연결된 학부모가 없어 알림은 선택할 수 없습니다.</p>
                         )}

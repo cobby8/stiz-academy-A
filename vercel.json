@@ -59,6 +59,10 @@
       "schedule": "5 15 * * *"
     },
     {
+      "path": "/api/cron/seasonal-enrollments",
+      "schedule": "20 15 * * *"
+    },
+    {
       "path": "/api/cron/makeup-credits",
       "schedule": "30 15 * * *"
     },

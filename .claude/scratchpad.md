@@ -1,11 +1,11 @@
 # 작업 스크래치패드
 
 ## 현재 작업
-- **상태(2026-08-09)**: PWA 4앱 설치 문제 해결 완료(실기기 검증). 앱 아이콘 개편 배포. UI 전수 점검은 "남은 일" 목록만 대기.
-- **미푸시 커밋 0개** — 전부 푸시됨.
+- **상태(2026-10-05)**: Phase 2-A 자동화 배포(보강권 버그·특강 자동 퇴원·휴원/퇴원 예약 자동 적용). 랠리즈 10월 청구 정리·오래된 미납 94건 납부 처리 완료.
+- **미푸시 커밋 0개** — main 29080efa 배포.
 - **현재 담당**: pm
-- **마지막 세션**: 2026-08-09
-- **테스트 기준선 갱신**: **973건 중 실패 9건**(아래 40번 줄의 858은 옛 수치)
+- **마지막 세션**: 2026-10-05
+- **테스트 기준선 갱신(2026-10-05)**: **1813건 중 실패 1건**(`.claude/worktrees/` 옛 사본 때문 — pos 매칭 로직 단일성 테스트, 배포 무관)
 
 ## UI 전수 점검 — 남은 일 (다음 세션 이어서)
 조사 보고서 6종은 세션 임시 폴더에 있어 **사라질 수 있음**. 핵심만 여기 옮겨 둔다.
@@ -63,87 +63,11 @@
 
 ---
 
-## 구현 기록 (developer) — 셔틀 관리 3단계 정리 (2026-10-02)
-
-📝 옛 노선 편성 화면 삭제 · 시트 가져오기 API 410 차단 · 시트 전용 함수/파서 제거 · 시트 관련 주석·문구를 「셔틀 명단」 기준으로. 로직·스키마 변경 없음.
-
-| 파일 | 변경 | 신규/수정 |
-|---|---|---|
-| src/app/admin/shuttle/ShuttleRouteAdminClient.tsx · .test.ts | 삭제(어디서도 import 안 함) | 삭제 |
-| src/app/api/admin/shuttle/regular-import/route.ts | POST → 410 「구글 시트 가져오기는 종료됐습니다…」, DB 접근 없음 | 수정 |
-| src/lib/shuttle/regularImport.ts | importRegularShuttleFromSheet·toCsvExportUrl·reconcile/키 헬퍼 제거(조회·좌표·순서 저장 유지) | 수정 |
-| src/lib/shuttle/regularSheet.ts | CSV 파서 제거, 타입 RegularShuttleStop 만 | 수정 |
-| regular-dispatch/page.tsx·RegularDispatchClient.tsx(안내 문구 1)·regularDriverRoute(Logic)·unifiedDriverRun·RegularDriverClient·shuttleRoster(Logic)·shuttle-dispatch·parent-shuttle-exception·StudentDetailClient·shuttle/page.tsx | 주석·문구만 「셔틀 명단」 기준으로 | 수정 |
-| tests 9개(coordinate-links·location-picker-admin-ux·shuttle-class-based-candidates·shuttle-driver-assignment·shuttle-preferred-vs-confirmed-time·shuttle-ride-status·tmap-route-optimization·regular-shuttle-data-safety·regular-shuttle-month-diff) | 옛 화면 단정 제거, 410 차단·명단 삭제 범위 단정으로 교체 | 수정 |
-
-💡 tester: tsc 0 · 단위 121 중 실패 1(contracts legacy text-only, 기준선) · tests 1756 중 실패 1(POS 매칭 한 벌, 기준선). 화면 렌더 금지(운영 DB).
-⚠️ reviewer: 관리자 화면에서 DriverLocationPanel·DriverRequestPanel(기사 실시간 위치·기사 요청 처리) 진입점이 사라진 상태 — 파일은 남김, PM 판단 대기.
-
-## 구현 기록 (developer) — 「셔틀 명단 = 기사님 화면」 (2026-10-02)
-
-📝 셔틀 명단에 「기사님 화면(운행 순서)」 보기 + 정차 단위 순서·시각 저장, 명단 점검 경고, 저장 노선 운행 표시, 정규 배차 저장 경고. 스키마 변경 없음.
-
-| 파일 | 변경 | 신규/수정 |
-|---|---|---|
-| src/lib/shuttle/regularDriverRouteLogic.ts | `selectDriverDayRows`(요일 학생행 고르기·정렬) 추가 — 기사 화면·관리자 보기 공용 | 수정 |
-| src/lib/shuttle/regularDriverRoute.ts | 같은 필터를 `selectDriverDayRows` 호출로 교체(동작 동일) | 수정 |
-| src/lib/shuttle/regularRosterEditLogic.ts | reorder 검증·슬롯 재배정·이후 달 대응 행 반영 순수 함수 | 수정 |
-| src/lib/shuttle/regularRosterCheckLogic.ts (+test) | 명단 점검 5종(중복·등원 늦음·하원 이른·수업시간 없음·같은 정류장 다른 시각) | 신규 |
-| src/lib/shuttle/regularRosterEdit.ts | `reorderRosterStops`(lock·audit REGULAR_ROSTER_REORDER) · `getRegularRouteStatus`(조회 전용) | 수정 |
-| src/app/api/admin/shuttle/regular-roster/route.ts | PATCH action:"reorder", GET ?routeStatus=1 | 수정 |
-| src/app/admin/shuttle/regular/DriverOrderView.tsx | 기사님 화면 보기(buildFallbackClasses 재사용, ↑↓·time·칸별 저장·저장 안 됨) | 신규 |
-| src/app/admin/shuttle/regular/RegularShuttleClient.tsx | 보기 전환·점검 접이식·저장 노선 표시·추가 안내·이탈 확인 | 수정 |
-| regular-dispatch/RegularDispatchClient.tsx · components/seasonal/RouteSection.tsx | 경고 배너 · 정규 모드 첫 저장(저장본 없음) confirm | 수정 |
-| tests/regular-roster-driver-view.test.mjs · regular-shuttle-auto-month.test.mjs | 가드·왕복 테스트 신규 / 편집 4종→5종 | 신규/수정 |
-
-💡 tester: tsc 0 · 단위 133 중 실패 1(contracts legacy, 기준선) · tests 1760 중 실패 1(매칭 한 벌, 기준선). 화면 렌더 금지(운영 DB).
-⚠️ reviewer: 슬롯 재배정 시 겹친 번호를 +1 로 벌림(다른 칸 번호와 동률 가능, 칸 내부 순서엔 무해) · 순서 편집 classTime 은 글자 그대로 비교(기사 화면 섹션 키와 동일).
-
-(10-02 「셔틀 명단 = 기사님 화면」 리뷰는 작업 로그로 요약 — 권장 4건 중 '비정형 시각 저장 막힘'은 아래 R-A2 와 같은 뿌리)
-
-## 구현 기록 (developer) — 셔틀 명단 학생 추가: 등록 수업·운행표 대조·중간 삽입 (2026-10-03)
-
-📝 학생을 고르면 등록 수업(ACTIVE)·상세 위치를 불러와 수업 칸을 미리 고르고, 칸마다 현재 운행 순서(기사님 화면과 같은 함수)를 보여 주며 합류(같은 이름·300m)/추가 거리 최소 자리를 추천, 원장이 정차 사이·합류를 골라 중간에 넣는다. 스키마 변경 없음.
-
-| 파일 | 변경 | 신규/수정 |
-|---|---|---|
-| src/lib/shuttle/regularRosterEditLogic.ts | slots(요일별 수업시간)·placements 검증, buildAddRows 칸 단위+기존 수업시간 글자 맞춤, planRosterInsert·mapPlacementsToMonth | 수정 |
-| src/lib/shuttle/regularRosterPlacementLogic.ts | 등록 수업→칸, findRouteCell(=buildFallbackClasses), suggestPlacement·estimateInsertTime·classTimeWarning·resolveCellPlacement | 신규 |
-| src/lib/shuttle/regularRosterEdit.ts | addRosterStudent 삽입 단계 실행(요일 sortOrder≥기준 +1), 이후 달 대응 행 기준·없으면 맨 뒤(endPlacedMonths), getRosterStudentContext | 수정 |
-| src/app/api/admin/shuttle/regular-roster/route.ts | GET ?context=1&studentId= | 수정 |
-| src/app/admin/shuttle/regular/AddRiderRoutePanel.tsx | 운행표 대조·넣을 자리 패널 | 신규 |
-| src/app/admin/shuttle/regular/RegularShuttleClient.tsx | 추가 모달: 수업 칩·직접 추가, 이미 타는 셔틀, 정류장 후보, 패널, 칸별 시각 | 수정 |
-| *.test.ts / tests/regular-roster-add-placement.test.mjs | 실행 테스트 20 + 소스 단정 3 | 신규 |
-
-💡 tester 참고: 운영 DB라 화면 실행 금지 — `node --test src/lib/shuttle/regularRosterPlacementLogic.test.ts`(삽입 후 buildFallbackClasses 재그리기·다른 칸/PIVOT 상대 순서 불변). 주의 입력: 같은 정류장이 흩어진 칸(A,B,A), 등·하원 동시 중간 삽입, 공백만 다른 수업시간, 이후 달 대응 행 없음.
-⚠️ reviewer 참고: 삽입 기준은 afterRowId 대신 「다음 정차의 첫 행 앞(BEFORE)」— 정차 묶음이 첫 행 위치에 보여서 after 기준이면 흩어진 같은 정류장 뒤로 밀린다. 합류는 대상 행 바로 뒤.
-
-#### 수정 이력
-| 회차 | 날짜 | 수정 내용 | 수정 파일 | 사유 |
-|------|------|----------|----------|------|
-| 1차 | 2026-10-03 | BEFORE 전에 칸 안 번호 겹침을 벌림(spread, 큰 번호 행 함께 밀어 상대 순서 보존·칸 밖 겹침 무시), 명단 조회 정렬에 id COLLATE "C" 추가 / JOIN = 칸 맨 뒤 + 대상 정차 값 복사(밀기 없음), 시각 미검증·미전송, 좌표 없으면 학생 좌표 / 정보 실패 안내·직접 추가 수업 병합 / 패널 버튼 min-h-9 | regularRosterEditLogic.ts, regularRosterEdit.ts, regularImport.ts, RegularShuttleClient.tsx, AddRiderRoutePanel.tsx, 테스트 2 | reviewer R-A1~A6 |
-| 2차 | 2026-10-03 | 등록 수업에 휴원(PAUSED) 포함·상태 전달(퇴원 제외), 휴원 칩은 미체크+「휴원」 배지·안내 문구 분리, 「이미 타는 셔틀」·정류장 후보를 이름+전화 끝4자리(rosterStudentKeyResolver)로 확장, 학부모 전화 보호자 보강 | regularRosterPlacementLogic.ts, regularRosterEdit.ts, RegularShuttleClient.tsx, 테스트 2 | PM 운영 실측: 휴원생 수업 누락 |
-| 3차 | 2026-10-03 | 등록 수업→명단 칸 변환을 시작 시각 기준(그 요일 최다 글자>다른 요일>등록 시각), 칩에 「→ 셔틀 ○ 칸」 대응 표시 | regularRosterPlacementLogic.ts, RegularShuttleClient.tsx, 테스트 | PM 운영 실측: 16:00~16:55 vs 16:00~17:00 불일치로 운행표 0곳 |
-| 4차 | 2026-10-03 | 추천 학생 위치 출처 우선순위(지도>명단 정류장 이름>학생 상세>이미 타는 정류장) resolveStudentPoint, 빈 정류장칸 이미 타는 정류장으로 미리 채움, 추천 문구에 출처 표시 | regularRosterPlacementLogic.ts, RegularShuttleClient.tsx, AddRiderRoutePanel.tsx, 테스트 | 원장 승인: 학생 좌표 8명뿐이라 추천 전부 맨 뒤 |
-
-### 리뷰 결과 (reviewer) — 학생 추가: 운행표 대조·중간 삽입 (2026-10-03)
-
-📊 종합 판정: 수정 필요 (필수 1 · 권장 5) — 데이터 손실·보안 문제 없음, 둘 다 «잘못된 자리» 또는 «저장 거부»로 끝난다.
-✅ 요일 전체 sortOrder≥기준 +1 → 다른 수업·방향·PIVOT/RETURN 상대 순서 보존(고유 제약 없음 확인). 행 id 불변 → 탑승체크 무영향. 여러 칸 순차 처리 시 planRosterInsert 의 work 가 DB 의 +1 을 그대로 따라가 꼬임 없음(앞 삽입 행도 함께 밀림). A,B,A 흩어진 정류장: BEFORE=다음 정차 첫 행 앞이라 의도대로. JOIN 은 ref.stopName 글자 그대로 복사 → groupSheetStops(글자 그대로 묶음)와 일치. 기준 행 검증(같은 달·칸·학생행, 아니면 거부)·lockForEdit·감사로그(steps·shifted·laterSteps) OK. getRosterStudentContext: requireAdmin·$1 바인딩·병합 학생 제외·ACTIVE·Program.deletedAt, 관리자 전용이라 IDOR 해당 없음. 날짜 금지 패턴 0. buildAddRows 글자 맞춤은 기존 '공백만 다른 수업시간으로 섹션이 갈리던' 문제를 고치는 쪽(placements 없는 옛 요청은 결과 동일). tsc 0 · 관련 테스트 83/83(신규 포함·KST 가드).
-🔴 필수:
-- R-A1 regularRosterEditLogic.ts:452 — 같은 칸 안에 sortOrder 가 겹친 행(가져오기 잔재, reassignSortSlots 주석이 존재를 인정)이 있으면 BEFORE 가 엉뚱한 자리로 감. 재현: A(5)·B(5) 칸에서 'A 와 B 사이'(BEFORE B) → 결과 「새정차 > A > B」(맨 앞). 기사님 화면 쿼리도 ORDER BY sortOrder 뿐이라 동률 순서 자체가 불안정. 수정: 기준 행과 같은 칸에 같은 번호가 있으면 ①거부("「기사님 화면」에서 순서 저장 한 번 후 다시") 또는 ②삽입 전에 그 칸을 화면 순서대로 reassignSortSlots 로 벌린 뒤 계산.
-🟡 권장:
-- R-A2 regularRosterEditLogic.ts:280 + RegularShuttleClient.tsx:316 — 합류여도 클라이언트가 정차 시각 원문을 arriveTime 으로 보내고 서버가 모든 모드에 normalizeArriveTime 을 건다. 기존 행 시각이 'HH:MM' 이 아니면('16:40:00' 등) **추천 기본값(같은 이름=합류)** 저장이 "도착시각은 17:05 처럼" 으로 거부(재현 확인). 서버는 JOIN 이면 arriveTime 을 무시(검증 생략)하거나 클라이언트가 JOIN 일 때 arriveTime 을 빼고 보내면 끝. 운영 데이터 형식은 DB 읽기 권한 거부로 미확인.
-- R-A3 regularRosterEditLogic.ts:452~457 — JOIN 은 sortOrder 를 밀 필요가 없다(정류장 이름이 같으면 어디 있든 처음 위치로 묶이고, 그 칸 맨 뒤에 붙여도 정차 안 이름 순서가 같다). JOIN 을 「END + 대상 정차 값 복사」로 바꾸면 운행 중 데이터 일괄 갱신이 줄고 이후 달 처리도 단순해진다.
-- R-A4 regularRosterEditLogic.ts:457 — JOIN 시 latitude/longitude 를 ref 값으로 덮어써 ref 에 좌표가 없으면 학생이 지정한 좌표까지 null. `ref.latitude ?? row.latitude` 로 보강. 시각도 마지막 행 값이라 화면 표시(첫 non-null)와 다를 수 있음(표시엔 무영향).
-- R-A5 RegularShuttleClient.tsx:584 — context 조회 실패 시에도 "수강 중인 등록 수업이 없습니다" 가 같이 떠서 오해. 또 학생을 고르면(290) 먼저 직접 추가한 수업이 지워짐. 경미.
-- R-A6 AddRiderRoutePanel.tsx:58~120 — 「여기에 새 정차」·「합류」 버튼이 py-1·11.5px 로 휴대폰 터치 영역이 작다(정차 많으면 오조작 위험). min-h-9 정도 권장.
-💬 참고: 같은 요일에 공백만 다른 수업시간 두 벌이 공존하면 패널(findRouteCell)은 첫 섹션, 서버 END 는 '가장 많은 글자' 섹션을 써 표시와 결과가 갈릴 수 있음(BEFORE/JOIN 은 ref.classTime 을 따라 안전). 이후 달 대응 행 없음 → END+fellBack·endPlacedMonths 표시 정상(재현 확인).
-
 ## 작업 로그 (최근 10건)
 
 | 날짜 | 작업 내용 | 상태 |
 |------|----------|------|
+| 2026-10-05 | **Phase 2-A 자동화(PM 총괄·개발3·검수3)** — ① 보강권: `Session."startsAt"` 없는 칸 조회로 발급 0이던 버그 수정 + 관리자 출석·랠리즈 출결에도 연결, 2026-10-05 이후 결석만 발급, 출석 화면 기본날짜 todayKst ② 특강 자동 퇴원 크론(KST 00:20, Seasonal 반만) ③ 승인된 휴원·퇴원 적용일 자동 반영(KST 00:10) + 수강변경 화면 「확인 필요」 탭·「시트에 반영」→「랠리즈 반영 확인」. 커밋 203f6885·6754f5f4·1b0cd12a, 병합 29080efa. 후속: 서버액션 오류문구 가려짐(래퍼), 시트 불가 건 수동확인 경로 | 완료 |
 | 2026-10-04 | **랠리즈↔앱 등록 수업 대조·정리(PM, 운영 DB)** — 원장 지시대로 20명 등록 정정(변경이력 25·효력일), 청구 취소 4·박하준 9월 수7 재청구(미발송), 김루빈 테스트 삭제, 셔틀 명단 8행 빼기(이종현 금·김정환 월·김지오 금·김시현), 올리버 병합(merge-2026-10-04-1791044359376). 백업 _bak_20261004_*. 남음: 이종현 수17 셔틀 추가(원장), 올리버 7월 연체 110,000 중복 여부 | 완료 |
 | 2026-10-04 | **결석 병합 상태 승계** — 결석 UNIQUE(반·날짜)가 상태를 안 봐 대표 취소+흡수 신고면 살아있는 결석이 흡수 쪽에 남던 문제. 병합 때 대표 행이 더 살아있는 흡수 쪽 상태·사유·메모·신고자·처리자 승계(컬럼별 병합 로그, updatedAt 유지) 후 결석 목록 3곳(원장 목록·기사 명단·누락알림 복구)에 병합 필터 재적용. 리뷰: 최근 14일 대표 행이 취소→신고 승계 시 원장 알림 1회 중복 가능(허용). 운영 흡수 학생 결석 잔여 0건 확인 | 완료 |
 | 2026-10-03 | **보호자 여러 명 등록(developer)** — 학생 상세 「보호자」 카드(추가·수정·삭제·주 보호자 지정, 계정 전화 읽기 전용) · `actions/guardians.ts`(requireAdmin·학생id+보호자id IDOR·트랜잭션) · 순수로직 `lib/guardians/guardianLogic.ts`(전화 숫자만 저장). tsc 0·신규 13/13·전체 1775/1776(기준선 1) | 검수 대기 |
@@ -153,4 +77,3 @@
 | 2026-10-02 | **셔틀 명단 = 기사님 화면 리뷰(reviewer)** — 통과. 기사 화면 회귀 0(필터·정렬 동일), reorder 칸 밖 순서 무영향. 권장 4(비정형 시각 저장 막힘·이후 달 감사 before·점검 trim 키·배너 고정 문구) | 통과 |
 | 2026-10-02 | **셔틀 명단 = 기사님 화면(developer)** — 기사님 화면 보기(같은 순수 함수)·정차 순서·시각 저장(reorder)·명단 점검·저장 노선 표시·정규 배차 저장 경고. tsc 0·기준선 실패 2건만. 미커밋 | 검수 대기 |
 | 2026-10-02 | **셔틀 관리 3단계 정리(developer)** — 옛 노선 편성 화면 삭제, 시트 가져오기 API 410, 시트 가져오기 함수·CSV 파서 제거, 시트 주석·문구 정리, 테스트 9개 갱신. tsc 0·기준선 실패 2건만. 미커밋 | 검수 대기 |
-| 2026-10-02 | **셔틀 명단 월 자동 생성(developer·reviewer)** — 이번 달·다음 달 자동 보장(크론 KST 00:05·화면 진입), 저장 노선 복사, 편집 4종 적용 범위. 리뷰 높음1·권장3 수정(따라잡기 생성 시 탑승체크·기사요청 id 이전, 전화 없는 동명이인 미묶음, 지난 달 기본 THIS_MONTH) | 커밋 146e0cee |

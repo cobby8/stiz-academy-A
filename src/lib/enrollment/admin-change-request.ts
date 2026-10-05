@@ -3,6 +3,7 @@ import { createHash } from "node:crypto";
 import { CHANGE_KIND_LABEL, type ChangeKind } from "@/lib/enrollment/changeRequestRules";
 import { computeClassChangeProration, describeProration, type ProrationResult } from "@/lib/enrollment/proration";
 import { getMonthlyClassDates, loadAnnualPlanEvents } from "@/lib/enrollment/monthlyClassDates";
+import { DEFAULT_HOLD_REASON, planDueEnrollmentChange } from "@/lib/enrollment/due-change-plan";
 
 // ── 원장의 수강 변경 승인/거절 + 적용일이 된 건 반영 ────────────────────────
 //
@@ -30,6 +31,13 @@ export type AdminChangeRequestRow = {
   /** 이미 발행한 차액 청구서가 있으면 그 id. 두 번 발행을 막는다. */
   invoicedPaymentId: string | null;
   invoicePreviewKey: string;
+  /** 적용일 처리에서 만든 운영 원장(`enrollment-change:<id>`). 없으면 null. */
+  syncCommandId: string | null;
+  syncCommandStatus: string | null;
+  syncHoldReason: string | null;
+  /** 시트·랠리즈 반영 상태(PENDING/SUCCEEDED/FAILED). 자동 적용 건의 "확인 필요" 배지에 쓴다. */
+  sheetStatus: string | null;
+  rallyzStatus: string | null;
 };
 
 export async function getEnrollmentChangeRequests(status = "PENDING"): Promise<AdminChangeRequestRow[]> {
@@ -46,14 +54,20 @@ export async function getEnrollmentChangeRequests(status = "PENDING"): Promise<A
             to_char(r."appliedAt" AT TIME ZONE 'Asia/Seoul','YYYY-MM-DD HH24:MI') AS "appliedAt",
             CASE WHEN tc.id IS NULL THEN false ELSE
               (SELECT count(*) FROM "Enrollment" x WHERE x."classId" = tc.id AND x.status = 'ACTIVE') >= tc.capacity
-            END AS "toClassFull"
+            END AS "toClassFull",
+            oc.id AS "syncCommandId", oc.status AS "syncCommandStatus", oc."holdReason" AS "syncHoldReason",
+            (SELECT a.status FROM "OperationsSyncAttempt" a WHERE a."commandId" = oc.id AND a.target = 'SHEET' LIMIT 1) AS "sheetStatus",
+            (SELECT a.status FROM "OperationsSyncAttempt" a WHERE a."commandId" = oc.id AND a.target = 'RALLYZ' LIMIT 1) AS "rallyzStatus"
        FROM "EnrollmentChangeRequest" r
        JOIN "Student" s ON s.id = r."studentId"
        LEFT JOIN "Class" fc ON fc.id = r."fromClassId"
        LEFT JOIN "Class" tc ON tc.id = r."toClassId"
        LEFT JOIN "Program" fp ON fp.id = fc."programId"
        LEFT JOIN "Program" tp ON tp.id = tc."programId"
-      WHERE ($1 = 'ALL' OR r.status = $1)
+       -- 적용일 처리에서 만든 운영 원장(같은 키). 자동 적용 건의 시트·랠리즈 확인 상태를 보여 주려고 붙인다.
+       LEFT JOIN "OperationsCommand" oc ON oc."idempotencyKey" = 'enrollment-change:' || r.id
+      WHERE ($1 = 'ALL' OR r.status = $1
+             OR ($1 = 'NEEDS_CHECK' AND r.status = 'APPLIED' AND ${NEEDS_CHECK_SQL}))
       ORDER BY r."createdAt" DESC
       LIMIT 200`,
     status,
@@ -81,7 +95,29 @@ export async function getEnrollmentChangeRequests(status = "PENDING"): Promise<A
     invoicedPaymentId: row.invoicedPaymentId ?? null,
     invoicePreviewKey: invoicePreviewKey(row, buildProration(row, planEvents)),
     proration: buildProration(row, planEvents),
+    syncCommandId: row.syncCommandId ?? null,
+    syncCommandStatus: row.syncCommandStatus ?? null,
+    syncHoldReason: row.syncHoldReason ?? null,
+    sheetStatus: row.sheetStatus ?? null,
+    rallyzStatus: row.rallyzStatus ?? null,
   }));
+}
+
+/**
+ * 사이트에는 자동 적용됐지만 시트·랠리즈 확인이 안 끝난 건(별칭 r = 신청).
+ * 보류(HELD)된 명령은 사람이 다른 경로로 정리해야 하므로 여기서도 "확인 필요"로 센다.
+ */
+const NEEDS_CHECK_SQL = `EXISTS (SELECT 1 FROM "OperationsCommand" c
+    JOIN "OperationsSyncAttempt" a ON a."commandId" = c.id
+   WHERE c."idempotencyKey" = 'enrollment-change:' || r.id
+     AND a.target IN ('SHEET','RALLYZ') AND a.status <> 'SUCCEEDED')`;
+
+/** 확인 필요 건수 — 탭 이름과 상단 경고에 쓴다. 기본 탭이 "검토 중"이어도 놓치지 않게. */
+export async function countEnrollmentChangesNeedingCheck(): Promise<number> {
+  const rows = await prisma.$queryRawUnsafe<Array<{ n: number }>>(
+    `SELECT count(*)::int AS n FROM "EnrollmentChangeRequest" r WHERE r.status = 'APPLIED' AND ${NEEDS_CHECK_SQL}`,
+  );
+  return Number(rows[0]?.n ?? 0);
 }
 
 function invoicePreviewKey(row: any, proration: unknown) {
@@ -142,16 +178,31 @@ export async function decideEnrollmentChangeRequest(input: {
   });
   if (!rows[0]) return { ok: false as const, message: "이미 처리된 신청입니다." };
 
-  // 적용일이 이미 지났으면(예: 늦게 승인) 바로 반영한다.
-  if (input.approve) await applyDueEnrollmentChanges();
-  return { ok: true as const, appliedNow: false, notificationStatus: "HELD" as const };
+  // 적용일이 이미 지났으면(예: 늦게 승인) 바로 반영한다. 크론과 겹쳐도 신청 행 잠금으로 한 번만 적용된다.
+  const summary = input.approve ? await applyDueEnrollmentChangesWithSummary() : null;
+  return {
+    ok: true as const,
+    appliedNow: Boolean(summary?.appliedIds.includes(input.requestId)),
+    // 이번 처리에서 사이트에 적용된 전체 건수(밀린 다른 신청 포함). 캐시를 비울지 판단하는 데 쓴다.
+    appliedCount: summary?.applied ?? 0,
+    notificationStatus: "HELD" as const,
+  };
 }
 
 /**
- * 적용일이 된 건은 3개 시스템 검증 대기 원장으로 옮긴다.
- * 사이트만 변경하거나 appliedAt을 먼저 찍지 않는다.
+ * 적용일이 된 승인 건을 처리한다(매일 크론 + 늦게 승인한 직후).
+ *
+ * 원장 결정(2026-10-05, 선택지 A):
+ * - 휴원(PAUSE)·퇴원(WITHDRAW): 사이트 수강 상태를 바로 바꾸고, 운영 원장에는
+ *   홈페이지=완료 / 시트·랠리즈=확인 필요(PENDING)로 남긴다. 관리자 즉시 변경(updateEnrollmentStatus)과 같은 모델이다.
+ * - 반 변경(CLASS_CHANGE)·예상 밖 상태: 지금처럼 3개 시스템 검증 대기(HELD) 원장만 만든다.
+ *
+ * 이중 적용 방지: 신청 행 FOR UPDATE 잠금 → 조건 재확인 → idempotencyKey(`enrollment-change:<id>`) 유일 제약.
+ * 승인 직후 호출과 크론이 동시에 돌아도, 늦은 쪽은 잠금이 풀린 뒤 "이미 처리됨"으로 빠진다.
  */
-export async function applyDueEnrollmentChanges(): Promise<number> {
+export type DueEnrollmentChangeSummary = { applied: number; held: number; appliedIds: string[] };
+
+export async function applyDueEnrollmentChangesWithSummary(): Promise<DueEnrollmentChangeSummary> {
   const due = await prisma.$queryRawUnsafe<{ id: string }[]>(
     `SELECT id FROM "EnrollmentChangeRequest" r WHERE status = 'APPROVED'
       AND "appliedAt" IS NULL AND "effectiveFrom" <= (now() AT TIME ZONE 'Asia/Seoul')::date
@@ -159,35 +210,63 @@ export async function applyDueEnrollmentChanges(): Promise<number> {
         WHERE c."idempotencyKey" = 'enrollment-change:' || r.id)
       ORDER BY "effectiveFrom" LIMIT 200`,
   );
+  const summary: DueEnrollmentChangeSummary = { applied: 0, held: 0, appliedIds: [] };
   for (const candidate of due) {
     try {
-    await prisma.$transaction(async (tx) => {
+    const outcome = await prisma.$transaction(async (tx) => {
+      // 신청 행을 잠그고 조건을 다시 본다. 다른 실행이 먼저 적용했으면 status 가 APPLIED 라 여기서 빠진다.
       const rows = await tx.$queryRawUnsafe<any[]>(
         `SELECT *, to_char("effectiveFrom", 'YYYY-MM-DD') AS "effectiveDate"
          FROM "EnrollmentChangeRequest" WHERE id = $1 AND status = 'APPROVED'
          AND "appliedAt" IS NULL FOR UPDATE`, candidate.id);
       const row = rows[0];
-      if (!row) return;
+      if (!row) return "SKIPPED" as const;
       const key = `enrollment-change:${row.id}`;
-      if (await tx.operationsCommand.findUnique({ where: { idempotencyKey: key } })) return;
-      const enrollment = await tx.enrollment.findUnique({ where: { id: row.enrollmentId } });
+      if (await tx.operationsCommand.findUnique({ where: { idempotencyKey: key } })) return "SKIPPED" as const;
+      // 수강 행도 잠근다. 관리자가 같은 순간 상태를 바꿔도 아래 조건부 UPDATE 와 엇갈리지 않는다.
+      const enrollmentRows = await tx.$queryRawUnsafe<Array<{ id: string; studentId: string; classId: string; status: string; className: string }>>(
+        `SELECT e.id, e."studentId", e."classId", e.status, c.name AS "className"
+           FROM "Enrollment" e JOIN "Class" c ON c.id = e."classId"
+          WHERE e.id = $1 FOR UPDATE OF e`, row.enrollmentId);
+      const enrollment = enrollmentRows[0] ?? null;
       const student = await tx.student.findUnique({ where: { id: row.studentId }, select: { parentId: true, name: true } });
       // 본인 자녀로 제출한 동일 요청만 학부모 확인 근거로 인정한다.
       const parentConfirmed = Boolean(student?.parentId && student.parentId === row.requestedByUserId);
-      let reason = "시트·Rallyz 반영 및 세 시스템 재조회 승인 대기";
-      if (!enrollment || enrollment.studentId !== row.studentId ||
-          enrollment.classId !== row.fromClassId || enrollment.status !== "ACTIVE") {
-        reason = "신청 이후 현재 수강 상태가 변경됨: 관리자 재확인 필요";
-      } else if (row.kind === "CLASS_CHANGE") {
+      let classChangeProblem: string | null = null;
+      if (row.kind === "CLASS_CHANGE" && enrollment) {
         const target = row.toClassId ? await tx.class.findUnique({
           where: { id: row.toClassId }, include: { program: true, _count: { select: { enrollments: { where: { status: "ACTIVE" } } } } },
         }) : null;
-        if (!target || target.program.deletedAt || target.id === row.fromClassId) reason = "희망 반이 유효하지 않음";
-        else if (target._count.enrollments >= target.capacity) reason = "희망 반 정원 초과: 관리자 재확인 필요";
-      } else if (!["PAUSE", "WITHDRAW"].includes(row.kind)) reason = "지원되지 않는 수강 변경";
-      if (!parentConfirmed) reason = "신청 보호자와 현재 학생 연결 재확인 필요";
+        if (!target || target.program.deletedAt || target.id === row.fromClassId) classChangeProblem = "희망 반이 유효하지 않음";
+        else if (target._count.enrollments >= target.capacity) classChangeProblem = "희망 반 정원 초과: 관리자 재확인 필요";
+      }
+      // 적용/보류 판정은 순수 함수 한 곳에서 한다(테스트가 실제로 실행해 확인).
+      const plan = planDueEnrollmentChange({
+        kind: row.kind, studentId: row.studentId, fromClassId: row.fromClassId,
+        enrollment, parentConfirmed, classChangeProblem,
+      });
       const actor = row.decidedByUserId;
       if (!actor) throw new Error("수강 변경 승인자 누락");
+
+      if (plan.action === "APPLY" && enrollment) {
+        // 기대 상태일 때만 바꾼다(조건부 UPDATE). 0건이면 그 사이 누가 바꾼 것이므로 거래 전체를 되돌린다.
+        const changed = await tx.$executeRawUnsafe(
+          `UPDATE "Enrollment" SET status = $2, "updatedAt" = now() WHERE id = $1 AND status = $3`,
+          enrollment.id, plan.nextStatus, plan.expectedStatus);
+        if (changed !== 1) throw new Error("ENROLLMENT_STATUS_CONFLICT");
+        // 관리자 즉시 변경과 같은 의미: 사이트 반영 완료 = APPLIED + appliedAt.
+        const marked = await tx.$executeRawUnsafe(
+          `UPDATE "EnrollmentChangeRequest" SET status = 'APPLIED', "appliedAt" = now(), "updatedAt" = now()
+            WHERE id = $1 AND status = 'APPROVED' AND "appliedAt" IS NULL`, row.id);
+        if (marked !== 1) throw new Error("CHANGE_REQUEST_CONFLICT");
+        await insertAutoAppliedLedger(tx, {
+          key, row, actor, studentName: student?.name ?? null, enrollment, nextStatus: plan.nextStatus,
+        });
+        return "APPLIED" as const;
+      }
+
+      // 반 변경·예상 밖 상태는 사이트를 건드리지 않고 HELD 원장만 남긴다(기존 동작 그대로).
+      const reason = plan.action === "HOLD" ? plan.reason : DEFAULT_HOLD_REASON;
       await tx.operationsRequest.create({ data: {
         sourceText: `수강 변경 신청 ${row.id}`, targetMonth: row.effectiveDate.slice(0, 7),
         status: "HELD", requestedByUserId: actor,
@@ -204,14 +283,88 @@ export async function applyDueEnrollmentChanges(): Promise<number> {
         auditLogs: { create: { action: "ENROLLMENT_CHANGE_SYNC_HELD", actorType: "ADMIN", actorUserId: actor,
           detailsJson: { enrollmentChangeRequestId: row.id, reason } } },
       }});
+      return "HELD" as const;
     });
+    if (outcome === "APPLIED") {
+      summary.applied += 1;
+      summary.appliedIds.push(candidate.id);
+    } else if (outcome === "HELD") summary.held += 1;
     } catch {
-      // 원장은 원래 신청에서 재시도할 수 있다. 개인정보나 원문 오류는 로그에 남기지 않는다.
-      console.error("[applyDueEnrollmentChanges] 운영 원장 등록 실패", candidate.id);
+      // 한 건이 실패해도 나머지는 계속한다. 실패한 건은 그대로 APPROVED 라 다음 크론에서 다시 시도된다.
+      // 개인정보나 원문 오류는 로그에 남기지 않는다.
+      console.error("[applyDueEnrollmentChanges] 적용 또는 운영 원장 등록 실패", candidate.id);
     }
   }
-  // 대기 원장 작성은 실제 반영 건수에 포함하지 않는다.
-  return 0;
+  return summary;
+}
+
+/** 실제로 사이트에 적용한 건수를 돌려준다(보류 원장 작성은 세지 않는다). */
+export async function applyDueEnrollmentChanges(): Promise<number> {
+  return (await applyDueEnrollmentChangesWithSummary()).applied;
+}
+
+type RawTx = {
+  $executeRawUnsafe(query: string, ...values: unknown[]): Promise<number>;
+};
+
+/**
+ * 자동 적용한 휴원·퇴원을 운영 원장에 남긴다.
+ * 홈페이지 = 이미 완료(SUCCEEDED), 시트·랠리즈 = 확인 필요(PENDING).
+ * 요청 APPROVED · 명령 PENDING 이라 기존 서버 액션(applyOperationsSheet → recordOperationsExternalCheck)이 그대로 동작한다.
+ * 관리자는 「수강 변경 신청」 화면의 "확인 필요" 탭에서 행마다 시트 반영·랠리즈 반영 확인 버튼으로 이어간다.
+ * (옛 운영 동기화 화면 /admin/operations-sync 는 폐기돼 /admin 으로 돌려보낸다.)
+ * (공용 enqueueWebsiteOperationsEventInTransaction 은 키가 해시라 `enrollment-change:<id>` 를 유지할 수 없어 쓰지 않는다.)
+ */
+async function insertAutoAppliedLedger(tx: RawTx, input: {
+  key: string;
+  row: any;
+  actor: string;
+  studentName: string | null;
+  enrollment: { id: string; classId: string; status: string; className: string };
+  nextStatus: "PAUSED" | "WITHDRAWN";
+}) {
+  const { key, row, actor, enrollment } = input;
+  const requestId = crypto.randomUUID();
+  const commandId = crypto.randomUUID();
+  const month = String(row.effectiveDate).slice(0, 7);
+  const sourceText = `수강 변경 신청 ${row.id}`;
+  // 시트 반영(applyOperationsSheet)이 읽는 키: fromClassId · effectiveDate · parentConfirmed
+  const base = { enrollmentChangeRequestId: row.id, fromClassId: row.fromClassId, toClassId: row.toClassId,
+    parentConfirmed: true, effectiveDate: row.effectiveDate };
+  await tx.$executeRawUnsafe(
+    `INSERT INTO "OperationsRequest"
+      (id,"sourceText","targetMonth",status,"requestedByUserId","approvedByUserId","approvedAt","submittedAt")
+     VALUES ($1,$2,$3,'APPROVED',$4,$4,now(),now())`,
+    requestId, sourceText, month, actor,
+  );
+  // idempotencyKey 는 `enrollment-change:<id>` 그대로. 유일 제약이 마지막 이중 적용 방어선이다.
+  await tx.$executeRawUnsafe(
+    `INSERT INTO "OperationsCommand"
+      (id,"requestId","idempotencyKey","sourceText","studentId","studentName",kind,"effectiveMonth",confidence,status,
+       "holdReason","beforeJson","afterJson","billingStatus","notificationStatus")
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'HIGH','PENDING',NULL,$9::jsonb,$10::jsonb,'HELD','HELD')`,
+    commandId, requestId, key, sourceText, row.studentId, input.studentName, row.kind, month,
+    JSON.stringify({ ...base, enrollmentId: enrollment.id, classId: enrollment.classId, status: enrollment.status,
+      enrollments: [{ id: enrollment.id, status: enrollment.status, className: enrollment.className }] }),
+    JSON.stringify({ ...base, autoAppliedWebsite: true,
+      enrollments: [{ id: enrollment.id, status: input.nextStatus, className: enrollment.className }] }),
+  );
+  for (const target of ["SHEET", "RALLYZ", "WEBSITE"]) {
+    const websiteDone = target === "WEBSITE";
+    await tx.$executeRawUnsafe(
+      `INSERT INTO "OperationsSyncAttempt" (id,"commandId",target,status,attempts,"verifiedAt")
+       VALUES ($1,$2,$3,$4,$5,$6)`,
+      crypto.randomUUID(), commandId, target,
+      websiteDone ? "SUCCEEDED" : "PENDING", websiteDone ? 1 : 0, websiteDone ? new Date() : null,
+    );
+  }
+  await tx.$executeRawUnsafe(
+    `INSERT INTO "OperationsAuditLog" (id,"requestId",action,"actorType","actorUserId","detailsJson")
+     VALUES ($1,$2,'ENROLLMENT_CHANGE_AUTO_APPLIED','SYSTEM',$3,$4::jsonb)`,
+    crypto.randomUUID(), requestId, actor,
+    JSON.stringify({ enrollmentChangeRequestId: row.id, commandId, enrollmentId: enrollment.id,
+      from: enrollment.status, to: input.nextStatus, sheet: "PENDING", rallyz: "PENDING", notificationsSent: false }),
+  );
 }
 
 /**

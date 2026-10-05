@@ -1,5 +1,5 @@
-import { google } from "googleapis";
-import { parseGoogleServiceAccount } from "@/lib/googleServiceAccount";
+// 유니폼 신청 화면은 DB 를 읽는다. 구글 시트 직접 읽기(readUniformOrderSheet)는 호출처가 없어 2026-10-06 삭제했다(Phase 2 시트 종료).
+// 아래 파서는 과거 시트 자료를 옮길 때 쓰던 것으로, 테스트가 분류 규칙을 고정하고 있어 남겨 둔다.
 
 export const UNIFORM_SPREADSHEET_ID = "1g0mv8yjiX1b7kU9Hxbu2snoMBqrql4ECwRywMe5hFk0";
 export const UNIFORM_SHEET_NAME = "설문지 응답 시트1";
@@ -80,25 +80,4 @@ export function parseUniformOrderRows(values: unknown[][]): UniformOrderRow[] {
       issues,
     };
   });
-}
-
-export async function readUniformOrderSheet() {
-  const raw = process.env.GOOGLE_SERVICE_ACCOUNT_KEY;
-  if (!raw) throw new Error("GOOGLE_SERVICE_ACCOUNT_KEY가 없어 유니폼 신청서를 읽을 수 없습니다.");
-
-  const credentials = parseGoogleServiceAccount(raw);
-  const auth = new google.auth.JWT({
-    email: credentials.client_email,
-    key: credentials.private_key,
-    scopes: ["https://www.googleapis.com/auth/spreadsheets.readonly"],
-  });
-  const sheets = google.sheets({ version: "v4", auth });
-  const spreadsheetId = process.env.STIZ_UNIFORM_SPREADSHEET_ID || UNIFORM_SPREADSHEET_ID;
-  const response = await sheets.spreadsheets.values.get({
-    spreadsheetId,
-    range: `'${UNIFORM_SHEET_NAME}'!A1:O1000`,
-    valueRenderOption: "FORMATTED_VALUE",
-  });
-
-  return parseUniformOrderRows(response.data.values || []);
 }

@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { requireAdmin } from "@/lib/auth-guard";
 import { classifyAdminLayoutAuthFailure } from "@/lib/adminLayoutAuth";
 import AdminShellClient from "./AdminShellClient";
+import { isSheetSyncRetired } from "@/lib/operations-sync/sheetRetirement";
 
 export const dynamic = "force-dynamic";
 
@@ -28,6 +29,8 @@ export default async function AdminLayout({
         <AdminShellClient
             initialUserName={adminUser.appUserName || adminUser.user_metadata?.name || "관리자"}
             initialUserEmail={adminUser.email || ""}
+            // 시트 원장 은퇴(2026-10~) 면 시스템 도구의 「시트 동기화」 버튼을 숨긴다("0" 이면 옛 화면)
+            sheetRetired={isSheetSyncRetired(process.env)}
         >
             {children}
         </AdminShellClient>

@@ -1007,11 +1007,15 @@ export default function StudentManagementClient({
     classes: initialClasses,
     sheetImportSummary: initialSheetImportSummary,
     partial: initialPartial = false,
+    sheetRetired = false,
 }: {
     students?: Student[];
     classes?: ClassItem[];
     sheetImportSummary?: SheetImportSummary;
     partial?: boolean;
+    // 구글 시트 원장 은퇴 여부 — true 면 시트 정합성 점검·재연결 버튼(점검 도구)을 숨긴다.
+    // 과거 시트 이력(월 상태·월별 이력·이관 요약 숫자) 표시는 그대로 둔다.
+    sheetRetired?: boolean;
 }) {
     const hasInitialData = Boolean(initialStudents || initialClasses);
     const [students, setStudents] = useState<Student[]>(initialStudents ?? []);
@@ -1680,6 +1684,8 @@ export default function StudentManagementClient({
                                     : new Date(sheetImportSummary.createdAt).toLocaleString("ko-KR")}
                             </p>
                         </div>
+                        {/* 시트 원장 은퇴면 「점검 도구」 열기 버튼 자체를 숨긴다(점검·재연결 API 는 그대로 둠) */}
+                        {!sheetRetired && (
                         <button
                             type="button"
                             onClick={() => setShowImportTools((current) => !current)}
@@ -1687,6 +1693,7 @@ export default function StudentManagementClient({
                         >
                             {showImportTools ? "점검 도구 닫기" : "점검 도구"}
                         </button>
+                        )}
                     </div>
 
                     <div className="mt-3 grid grid-cols-2 gap-2 text-center text-xs sm:grid-cols-4 lg:grid-cols-8">
@@ -1714,7 +1721,7 @@ export default function StudentManagementClient({
                         </p>
                     )}
 
-                    {showImportTools && (
+                    {!sheetRetired && showImportTools && (
                         <div className="mt-3 space-y-3 border-t border-gray-100 pt-3 dark:border-gray-800">
                             <div className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-3 text-xs text-gray-800 dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100">
                                 <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">

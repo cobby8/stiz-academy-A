@@ -364,6 +364,7 @@ export default function FinanceClient({
     initialPaymentProvider,
     currentAdminRole,
     billingParentSendEnabled = false,
+    sheetRetired = false,
 }: {
     initialPayments?: Payment[];
     initialYear?: number;
@@ -373,6 +374,8 @@ export default function FinanceClient({
     currentAdminRole: AdminFinanceRole;
     // 학부모 청구 안내 사이트 발송 허용 여부(기본 잠금 — 청구 안내는 랠리즈 전담)
     billingParentSendEnabled?: boolean;
+    // 구글 시트 원장 은퇴 여부 — true 면 「시트 원장 기준 수납 점검」 버튼·패널을 숨긴다(API 는 그대로 둠)
+    sheetRetired?: boolean;
 }) {
     // 잠금이면 「링크 발송」「미납 알림」 버튼을 막고 "랠리즈에서 발송" 으로 안내한다
     const parentSendLocked = !billingParentSendEnabled;
@@ -1180,6 +1183,8 @@ export default function FinanceClient({
                     </span>
 
                     <div className="ml-auto flex flex-wrap items-center gap-2">
+                        {/* 시트 원장 은퇴(2026-10~) 면 대조할 시트 자료가 없으므로 「시트 점검」 버튼을 숨긴다 */}
+                        {!sheetRetired && (
                         <button
                             type="button"
                             onClick={loadSheetPreview}
@@ -1189,6 +1194,7 @@ export default function FinanceClient({
                             <span className="material-symbols-outlined text-[17px]">fact_check</span>
                             {sheetPreviewLoading ? "점검 중" : "시트 점검"}
                         </button>
+                        )}
                         <div className="inline-flex h-9 items-center gap-2 rounded-full bg-gray-100 pl-3 pr-1 text-xs font-black text-gray-700 dark:bg-gray-800 dark:text-gray-100">
                             청구 작업
                             <AdminQuickActionMenu
@@ -1540,7 +1546,8 @@ export default function FinanceClient({
                 </div>
             )}
 
-            {(sheetError || sheetPreview) && (
+            {/* 시트 원장 기준 수납 점검 패널 — 시트 원장 은퇴면 숨김 */}
+            {!sheetRetired && (sheetError || sheetPreview) && (
                 <div className="mb-6 rounded-xl border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-800">
                     <div className="flex flex-wrap items-start justify-between gap-3">
                         <div>

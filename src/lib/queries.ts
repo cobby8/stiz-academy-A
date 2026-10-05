@@ -8,6 +8,7 @@ import { unstable_cache } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { ensurePaymentInfrastructure } from "@/lib/payment-ledger";
 import { notMergedStudent, notMergedStudentOptional } from "@/lib/studentVisibility";
+import { kstDow } from "@/lib/datetime/kst";
 // 보강 잔여석 계산은 화면·조회·저장 검증이 같은 식을 쓰도록 공용 모듈로 분리해 둔다.
 import { activeMakeupSql, computeRemainingSeats } from "@/lib/makeup/capacity";
 import type { SheetClassSlot } from "@/lib/googleSheetsSchedule";
@@ -268,7 +269,8 @@ function normalizedAttendanceDateKey(date?: string | null) {
 }
 
 function attendanceDayOfWeek(date: string) {
-    return ATTENDANCE_DAY_KEYS[new Date(`${date}T12:00:00+09:00`).getDay()];
+    // 달력 숫자 그대로 요일을 구한다(서버 시간대 무관). 예전 T12:00+getDay() 는 우연히 맞던 방식이라 kst 모듈로 옮김.
+    return ATTENDANCE_DAY_KEYS[kstDow(date)];
 }
 
 type SeasonalAttendanceClassRow = {

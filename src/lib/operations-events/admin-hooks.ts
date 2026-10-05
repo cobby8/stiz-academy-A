@@ -30,6 +30,8 @@ export function buildEnrollmentOperationsEvent(input: {
   previousStatus: EnrollmentStatus | null;
   nextStatus: EnrollmentStatus;
   enrollmentApplicationId?: string;
+  /** 관리자 직접 변경이 남긴 수강 변경 이력(EnrollmentChangeRequest) id. 「수강 변경 신청」 화면이 이 값으로 원장을 찾는다. */
+  enrollmentChangeRequestId?: string;
 }): WebsiteOperationsEvent | null {
   if (input.previousStatus === input.nextStatus) return null;
 
@@ -61,6 +63,8 @@ export function buildEnrollmentOperationsEvent(input: {
       parentConfirmed: true,
       // 신청 출처만 연결하며, 외부 등록 완료를 의미하지 않습니다.
       ...(input.enrollmentApplicationId ? { enrollmentApplicationId: input.enrollmentApplicationId } : {}),
+      // 직접 휴원·퇴원·복귀 이력 연결. 원장 키가 해시라 이 값이 없으면 화면에서 "확인 필요"를 못 띄운다.
+      ...(input.enrollmentChangeRequestId ? { enrollmentChangeRequestId: input.enrollmentChangeRequestId } : {}),
     },
     summary: `${input.studentName} ${input.className} ${transition.label}`,
   };

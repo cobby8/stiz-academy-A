@@ -64,8 +64,11 @@ export async function getEnrollmentChangeRequests(status = "PENDING"): Promise<A
        LEFT JOIN "Class" tc ON tc.id = r."toClassId"
        LEFT JOIN "Program" fp ON fp.id = fc."programId"
        LEFT JOIN "Program" tp ON tp.id = tc."programId"
-       -- 적용일 처리에서 만든 운영 원장(같은 키). 자동 적용 건의 시트·랠리즈 확인 상태를 보여 주려고 붙인다.
-       LEFT JOIN "OperationsCommand" oc ON oc."idempotencyKey" = 'enrollment-change:' || r.id
+       -- 이 신청에 연결된 운영 원장 1건. 시트·랠리즈 확인 상태를 보여 주려고 붙인다.
+       -- LATERAL ... LIMIT 1 이라 원장이 여러 건이어도 신청 행이 늘어나지 않는다.
+       LEFT JOIN LATERAL (SELECT c.id, c.status, c."holdReason" FROM "OperationsCommand" c
+                           WHERE ${LINKED_COMMAND_SQL}
+                           ORDER BY c."createdAt" DESC LIMIT 1) oc ON true
       WHERE ($1 = 'ALL' OR r.status = $1
              OR ($1 = 'NEEDS_CHECK' AND r.status = 'APPLIED' AND ${NEEDS_CHECK_SQL}))
       ORDER BY r."createdAt" DESC
@@ -80,7 +83,8 @@ export async function getEnrollmentChangeRequests(status = "PENDING"): Promise<A
     id: row.id,
     studentName: row.studentName,
     kind: row.kind,
-    kindLabel: CHANGE_KIND_LABEL[row.kind as ChangeKind] ?? row.kind,
+    // 복귀(RESUME)는 관리자 직접 변경에서만 생긴다(학부모 신청 종류에는 없음).
+    kindLabel: CHANGE_KIND_LABEL[row.kind as ChangeKind] ?? (row.kind === "RESUME" ? "복귀" : row.kind),
     fromClassName: row.fromClassName ?? null,
     toClassName: row.toClassName ?? null,
     effectiveFrom: row.effectiveFrom,
@@ -104,12 +108,21 @@ export async function getEnrollmentChangeRequests(status = "PENDING"): Promise<A
 }
 
 /**
+ * 신청(별칭 r)에 연결된 운영 원장(별칭 c)을 찾는 조건. 두 경로를 모두 인정한다.
+ * - 적용일 자동 적용·보류: idempotencyKey = `enrollment-change:<신청 id>`
+ * - 관리자 직접 휴원·퇴원·복귀(updateEnrollmentStatus): 키는 해시라 afterJson 의 enrollmentChangeRequestId 로 잇는다.
+ *   (2026-10-06 이후 건만 연결된다. 과거 직접 변경 건은 소급하지 않는다.)
+ */
+const LINKED_COMMAND_SQL = `(c."idempotencyKey" = 'enrollment-change:' || r.id
+      OR c."afterJson"->>'enrollmentChangeRequestId' = r.id)`;
+
+/**
  * 사이트에는 자동 적용됐지만 시트·랠리즈 확인이 안 끝난 건(별칭 r = 신청).
  * 보류(HELD)된 명령은 사람이 다른 경로로 정리해야 하므로 여기서도 "확인 필요"로 센다.
  */
 const NEEDS_CHECK_SQL = `EXISTS (SELECT 1 FROM "OperationsCommand" c
     JOIN "OperationsSyncAttempt" a ON a."commandId" = c.id
-   WHERE c."idempotencyKey" = 'enrollment-change:' || r.id
+   WHERE ${LINKED_COMMAND_SQL}
      AND a.target IN ('SHEET','RALLYZ') AND a.status <> 'SUCCEEDED')`;
 
 /** 확인 필요 건수 — 탭 이름과 상단 경고에 쓴다. 기본 탭이 "검토 중"이어도 놓치지 않게. */

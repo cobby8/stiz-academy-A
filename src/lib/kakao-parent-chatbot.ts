@@ -6,9 +6,11 @@ import {
   type KakaoReconfirmationClassSnapshot,
 } from "@/lib/kakao-parent-reconfirmation";
 import {
+  buildKakaoSkillResponse,
   classifyParentUtterance,
   type ParentRequestKind,
 } from "@/lib/kakao-chatbot-contract";
+import { notifyAdminsOfKakaoIntake } from "@/lib/kakao-intake-admin-alert";
 
 export { classifyParentUtterance, getKakaoUserKey } from "@/lib/kakao-chatbot-contract";
 export type { KakaoSkillPayload, ParentRequestKind } from "@/lib/kakao-chatbot-contract";
@@ -191,16 +193,12 @@ const KIND_LABEL: Record<ParentRequestKind, string> = {
 };
 
 export function kakaoText(text: string, quickReplies: string[] = [], webLink?: { label: string; url: string }) {
-  const buttons = webLink ? [{ action: "webLink", label: webLink.label, webLinkUrl: webLink.url }] : undefined;
-  return {
-    version: "2.0",
-    template: {
-      outputs: buttons
-        ? [{ basicCard: { description: text, buttons } }]
-        : [{ simpleText: { text } }],
-      quickReplies: quickReplies.map((label) => ({ action: "message", label, messageText: label })),
-    },
-  };
+  // 버튼이 있으면 textCard 로 나간다(thumbnail 없는 basicCard 는 오픈빌더가 미발송 처리한다).
+  return buildKakaoSkillResponse({
+    text,
+    quickReplies,
+    buttons: webLink ? [{ action: "webLink", label: webLink.label, webLinkUrl: webLink.url }] : [],
+  });
 }
 
 export async function resolveIdentity(botId: string, userKey: string): Promise<IdentityRow | null> {
@@ -212,9 +210,58 @@ export async function resolveIdentity(botId: string, userKey: string): Promise<I
   return rows[0] ?? null;
 }
 
+// 남은 시간이 이보다 짧으면 같은 링크를 다시 보여주지 않고 새로 만든다(열자마자 만료되는 걸 막는다).
+const LINK_REUSE_MIN_REMAINING_MS = 3 * 60_000;
+
+/**
+ * 인증 링크 토큰을 (봇·사용자키 해시·만료 시각)에서 서버 비밀키로 만들어 낸다.
+ * 토큰 원문은 DB 에 저장하지 않는다(해시만 저장). 대신 같은 재료로 다시 계산할 수 있어서,
+ * 학부모가 '인증'을 다시 눌러도 아직 유효한 같은 링크를 다시 보여줄 수 있다.
+ * 비밀키(KAKAO_CHATBOT_IDENTITY_SECRET)가 없으면 만들 수 없으므로 밖에서 추측할 수 없다.
+ */
+function connectLinkToken(botId: string, userKeyHash: string, expiresMs: number): string {
+  return createHmac("sha256", secret()).update(`kakao-connect-link:v1:${botId}:${userKeyHash}:${expiresMs}`).digest("base64url");
+}
+
+function connectLinkUrl(token: string, siteOrigin: string): string {
+  return new URL(`/mypage/kakao-connect?token=${encodeURIComponent(token)}`, siteOrigin).toString();
+}
+
+/** 카카오 연결 화면이 링크를 먼저 확인할 때 쓴다(읽기만 함). */
+export async function isKakaoConnectTokenUsable(token: string): Promise<boolean> {
+  if (!/^[A-Za-z0-9_-]{20,200}$/.test(token)) return false;
+  const rows = await prisma.$queryRawUnsafe<Array<{ one: number }>>(
+    `SELECT 1 AS one FROM "KakaoParentIdentity"
+      WHERE "linkTokenHash"=$1 AND "linkExpiresAt">now() AND status<>'REVOKED' LIMIT 1`,
+    tokenDigest(token),
+  );
+  return rows.length > 0;
+}
+
 export async function issueLink(botId: string, userKey: string, siteOrigin: string) {
-  const token = randomBytes(32).toString("base64url");
+  const userKeyHash = digest(userKey);
+  // 1) 아직 유효한 링크가 있으면 새로 덮어쓰지 않고 같은 링크를 다시 보여준다.
+  //    linkExpiresAt 은 timestamptz 라 밀리초 값이 그대로 돌아온다(시간대 변환 없음).
+  const live = (await prisma.$queryRawUnsafe<Array<{ linkTokenHash: string; expiresMs: string }>>(
+    `SELECT "linkTokenHash", (EXTRACT(EPOCH FROM "linkExpiresAt") * 1000)::bigint::text AS "expiresMs"
+       FROM "KakaoParentIdentity"
+      WHERE "botId"=$1 AND "userKeyHash"=$2 AND "linkTokenHash" IS NOT NULL AND "linkExpiresAt">now()
+      LIMIT 1`,
+    botId, userKeyHash,
+  ))[0];
+  if (live) {
+    const expiresMs = Number(live.expiresMs);
+    const remaining = expiresMs - Date.now();
+    const sameToken = connectLinkToken(botId, userKeyHash, expiresMs);
+    // 해시가 맞을 때만 재사용한다(이 방식 이전에 무작위로 만든 링크는 다시 계산할 수 없다).
+    if (remaining >= LINK_REUSE_MIN_REMAINING_MS && tokenDigest(sameToken) === live.linkTokenHash) {
+      return { url: connectLinkUrl(sameToken, siteOrigin), reused: true, replacedPrevious: false, minutesLeft: Math.floor(remaining / 60_000) };
+    }
+  }
+
+  // 2) 없거나 곧 만료되면 새 링크를 만든다. 이때 이전 링크는 무효가 되므로 안내 문구에 알린다.
   const expiresAt = new Date(Date.now() + LINK_TTL_MS);
+  const token = connectLinkToken(botId, userKeyHash, expiresAt.getTime());
   const rows = await prisma.$queryRawUnsafe<IdentityRow[]>(
     `INSERT INTO "KakaoParentIdentity"
        ("botId","userKeyHash","linkTokenHash","linkExpiresAt","lastSeenAt","updatedAt")
@@ -223,9 +270,15 @@ export async function issueLink(botId: string, userKey: string, siteOrigin: stri
        "linkTokenHash"=EXCLUDED."linkTokenHash", "linkExpiresAt"=EXCLUDED."linkExpiresAt",
        "lastSeenAt"=now(), "updatedAt"=now()
      RETURNING id,"parentUserId",status`,
-    botId, digest(userKey), tokenDigest(token), expiresAt,
+    botId, userKeyHash, tokenDigest(token), expiresAt,
   );
-  return { identity: rows[0], url: new URL(`/mypage/kakao-connect?token=${encodeURIComponent(token)}`, siteOrigin).toString() };
+  return {
+    identity: rows[0],
+    url: connectLinkUrl(token, siteOrigin),
+    reused: false,
+    replacedPrevious: Boolean(live),
+    minutesLeft: Math.floor(LINK_TTL_MS / 60_000),
+  };
 }
 
 export async function bindIdentity(token: string, parentUserId: string) {
@@ -309,6 +362,14 @@ export async function handleLinkedMessage(identity: IdentityRow, utterance: stri
         WHERE id=$1 AND "studentId" IS NOT NULL AND status IN ('DRAFT','NEEDS_DETAILS')`, draft.id,
     ));
     if (changed === 0) return kakaoText("이미 접수된 요청이에요.");
+    // 학부모가 '접수'를 확정한 순간 = 원장님이 볼 새 접수가 생긴 순간. 관리자 앱 알림센터로 알린다
+    // (원장 결정: 메일 아님). 알림이 실패해도 학부모 답장은 그대로 나간다.
+    await notifyAdminsOfKakaoIntake({
+      intakeId: draft.id,
+      kindLabel: KIND_LABEL[draft.kind],
+      studentName: children.find((item) => item.id === draft.studentId)?.name ?? null,
+      sourceText: draft.sourceText,
+    }).catch(() => undefined);
     return kakaoText(`${KIND_LABEL[draft.kind]} 요청을 접수했어요. 원장님이 확인한 뒤 필요한 경우 카카오톡이나 전화로 연락드릴게요.`);
   }
   if (!draft && CONFIRM_WORDS.test(text)) {

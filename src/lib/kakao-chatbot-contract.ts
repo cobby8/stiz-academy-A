@@ -55,3 +55,58 @@ export function classifyParentUtterance(source: string): ParentRequestKind {
   if (/상담|문의|궁금/.test(text)) return "CONSULTATION";
   return "UNKNOWN";
 }
+
+// ── 스킬 응답 말풍선 규격 ─────────────────────────────────────────────
+// 오픈빌더는 basicCard 에 thumbnail 이 없으면 "말풍선 가이드 위반(2461)"으로 미발송 처리한다
+// (2026-10-07 운영 스킬 오류 내역에서 확인). 그래서 버튼이 있는 안내는 thumbnail 이 필요 없는
+// textCard 로만 보낸다. 규격: title·description 중 하나 이상, buttons 최대 3개, 버튼 라벨 14자,
+// description 400자. 바로가기(quickReplies)는 최대 10개, 라벨 14자.
+export const KAKAO_TEXT_CARD_DESCRIPTION_MAX = 400;
+export const KAKAO_BUTTON_LABEL_MAX = 14;
+export const KAKAO_MAX_CARD_BUTTONS = 3;
+export const KAKAO_MAX_QUICK_REPLIES = 10;
+
+export type KakaoCardButton =
+  | { action: "webLink"; label: string; webLinkUrl: string }
+  | { action: "message"; label: string; messageText: string };
+
+/** 글자 수 제한을 넘으면 말줄임표로 자른다(넘긴 채 보내면 말풍선 자체가 거절된다). */
+function clip(value: string, max: number): string {
+  const chars = [...value];
+  return chars.length <= max ? value : `${chars.slice(0, max - 1).join("")}…`;
+}
+
+/**
+ * 카카오 스킬 응답(version 2.0)을 만든다.
+ * - 버튼이 없으면 simpleText(1000자)
+ * - 버튼이 있으면 textCard(thumbnail 불필요). basicCard 는 쓰지 않는다.
+ */
+export function buildKakaoSkillResponse(input: {
+  text: string;
+  title?: string;
+  buttons?: KakaoCardButton[];
+  quickReplies?: string[];
+}) {
+  const buttons = (input.buttons ?? [])
+    .slice(0, KAKAO_MAX_CARD_BUTTONS)
+    .map((button) => ({ ...button, label: clip(button.label, KAKAO_BUTTON_LABEL_MAX) }));
+  const outputs = buttons.length > 0
+    ? [{
+      textCard: {
+        ...(input.title ? { title: clip(input.title, 50) } : {}),
+        description: clip(input.text, KAKAO_TEXT_CARD_DESCRIPTION_MAX),
+        buttons,
+      },
+    }]
+    : [{ simpleText: { text: clip(input.text, 1000) } }];
+  return {
+    version: "2.0",
+    template: {
+      outputs,
+      // messageText 는 자르지 않는다 — 버튼을 누르면 이 문장이 그대로 발화로 돌아와 매칭된다.
+      quickReplies: (input.quickReplies ?? [])
+        .slice(0, KAKAO_MAX_QUICK_REPLIES)
+        .map((label) => ({ action: "message", label: clip(label, KAKAO_BUTTON_LABEL_MAX), messageText: label })),
+    },
+  };
+}

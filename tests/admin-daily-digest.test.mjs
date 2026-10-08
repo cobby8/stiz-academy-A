@@ -79,6 +79,28 @@ test("미납이 없으면 수강 변경 확인 화면으로 연결한다", () =>
   assert.equal(onlyPending.linkUrl, "/admin/enrollment-changes");
 });
 
+test("카카오 접수 대기는 건수가 있을 때만 넣고, 다른 할 일이 없으면 카카오 접수함으로 연결한다", () => {
+  const only = buildAdminDailyDigest({ todayYmd: "2026-10-08", unpaid: [], needsCheckCount: 0, pendingChangeCount: 0, kakaoPendingCount: 3 });
+  assert.equal(only.title, "오늘 확인할 일: 카카오 접수 대기 3건");
+  assert.equal(only.message, "[카카오 접수 대기] 3건");
+  assert.equal(only.linkUrl, "/admin/kakao-requests");
+  // 0건이면 줄을 만들지 않고, 그것만 있으면 알림 자체가 없다
+  assert.equal(buildAdminDailyDigest({ todayYmd: "2026-10-08", unpaid: [], needsCheckCount: 0, pendingChangeCount: 0, kakaoPendingCount: 0 }), null);
+  const mixed = buildAdminDailyDigest({ todayYmd: "2026-10-08", unpaid: [], needsCheckCount: 0, pendingChangeCount: 2, kakaoPendingCount: 0 });
+  assert.doesNotMatch(mixed.message, /카카오/);
+  // 더 급한 할 일이 있으면 링크는 그쪽(변경 승인 대기)
+  const both = buildAdminDailyDigest({ todayYmd: "2026-10-08", unpaid: [], needsCheckCount: 0, pendingChangeCount: 1, kakaoPendingCount: 2 });
+  assert.equal(both.title, "오늘 확인할 일: 변경 승인 대기 1건 · 카카오 접수 대기 2건");
+  assert.equal(both.linkUrl, "/admin/enrollment-changes");
+  // 예전 호출(카카오 값 없음)도 그대로 동작
+  assert.equal(buildAdminDailyDigest({ todayYmd: "2026-10-08", unpaid: [], needsCheckCount: 0, pendingChangeCount: 0 }), null);
+});
+
+test("카카오 접수 대기는 원장 확인이 필요한 상태만 센다", () => {
+  assert.match(service, /FROM "KakaoParentIntake" WHERE status IN \('SUBMITTED', 'HELD', 'FAILED'\)/);
+  assert.match(service, /kakaoPendingCount \}\)/);
+});
+
 test("받는 사람은 원장·부원장 계정뿐 — 학부모·코치 대상 조회가 없다", () => {
   assert.match(service, /role IN \('ADMIN', 'VICE_ADMIN'\)/);
   assert.doesNotMatch(service, /PARENT|parentPhone|"Coach"|sendParentSms/);

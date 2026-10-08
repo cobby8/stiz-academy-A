@@ -41,6 +41,12 @@ const nextConfig: NextConfig = {
         destination: "/parent-app",
       },
       {
+        // 카카오채널 인증 링크 주소는 그대로 두고, 화면은 마이페이지 레이아웃 밖(/kakao-connect)에서 그린다.
+        // 마이페이지 레이아웃은 로그인 안 된 사람을 먼저 튕겨 내서 상황별 안내를 보여줄 수 없기 때문이다.
+        source: "/mypage/kakao-connect",
+        destination: "/kakao-connect",
+      },
+      {
         // 설치 앱 주소는 /staff 범위에 유지하면서 공용 로그인 화면을 재사용한다.
         source: "/staff/login",
         destination: "/login?mode=staff",

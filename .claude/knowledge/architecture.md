@@ -2,6 +2,12 @@
 <!-- 담당: planner-architect, developer | 최대 30항목 -->
 <!-- 프로젝트의 폴더 구조, 파일 역할, 핵심 패턴을 기록 -->
 
+### 2026-10-08 카카오 학부모 인증·기존 빈 계정 활성화 흐름
+- **분류**: architecture
+- **발견자**: developer
+- **내용**: ① 카카오 연결 화면은 `src/app/kakao-connect/page.tsx`(마이페이지 레이아웃 밖)에서 그리고 주소 `/mypage/kakao-connect` 는 next.config rewrite + 미들웨어 예외(`isMyPageKakaoConnect`)로 유지한다 — `/mypage/layout.tsx` 가 `requireVerifiedParent` 실패 시 먼저 튕겨 내서 상황별 안내를 못 보여 줬다. 판정은 `getVerifiedParentState()`(auth-guard, 상태 반환) → `requireVerifiedParent` 는 그 결과로 throw. ② 회원가입은 빈 계정(PARENT+합성 이메일+authUserId 없음) 번호를 신규처럼 문자 발송하고, **OTP 통과 뒤** `resolveVerifiedSignupPhone` 이 NEW/REGISTERED/여러 개(학원 문의)/간편로그인 연결/비밀번호 활성화로 나눈다. 비밀번호 활성화는 `issueVerifiedSelfParentClaim`(VERIFIED·30분·proof 10분, 특강 72시간 링크는 안 건드림) + httpOnly 증표 쿠키 → `/account/activate` 가 ACCOUNT 단계부터. ③ 카카오 인증 링크 토큰 = HMAC(비밀키, 봇·사용자키해시·만료ms) — 원문 비저장인 채로 유효 링크를 다시 보여 줄 수 있다. ④ 스킬 응답은 `buildKakaoSkillResponse`(textCard)만 — thumbnail 없는 basicCard 는 오픈빌더가 미발송(2461), 가드 `tests/kakao-skill-response-format.test.mjs`.
+- **참조횟수**: 0
+
 ### 2026-03-22 시간표 데이터 파이프라인
 - **분류**: architecture
 - **발견자**: planner-architect

@@ -16,6 +16,7 @@ export type AdminDigestInput = {
   unpaid: UnpaidMonthRow[];
   needsCheckCount: number; // 수강 변경: 사이트엔 반영됐지만 시트·랠리즈 확인이 남은 건
   pendingChangeCount: number; // 수강 변경: 승인 대기
+  kakaoPendingCount?: number; // 카카오 접수: 원장 확인 대기(접수·보류·실패)
 };
 
 export type AdminDigest = { title: string; message: string; linkUrl: string };
@@ -85,16 +86,24 @@ export function buildAdminDailyDigest(input: AdminDigestInput): AdminDigest | nu
     titleParts.push(`변경 승인 대기 ${input.pendingChangeCount}건`);
     lines.push(`[수강 변경 승인 대기] ${input.pendingChangeCount}건`);
   }
+  // 카카오 접수 대기 — 0건이면 줄을 만들지 않는다
+  const kakaoPendingCount = Number(input.kakaoPendingCount ?? 0);
+  if (kakaoPendingCount > 0) {
+    titleParts.push(`카카오 접수 대기 ${kakaoPendingCount}건`);
+    lines.push(`[카카오 접수 대기] ${kakaoPendingCount}건`);
+  }
 
   // 확인할 일이 없으면 알림 자체를 만들지 않는다
   if (titleParts.length === 0) return null;
 
-  // 링크는 하나만 달 수 있으므로 가장 급한 화면으로: 미납 → 확인 필요 → 승인 대기
+  // 링크는 하나만 달 수 있으므로 가장 급한 화면으로: 미납 → 확인 필요 → 승인 대기 → 카카오 접수
   const linkUrl = totalCount > 0
     ? "/admin/finance"
     : input.needsCheckCount > 0
       ? "/admin/enrollment-changes?status=NEEDS_CHECK"
-      : "/admin/enrollment-changes";
+      : input.pendingChangeCount > 0
+        ? "/admin/enrollment-changes"
+        : "/admin/kakao-requests";
 
   return {
     title: `오늘 확인할 일: ${titleParts.join(" · ")}`,

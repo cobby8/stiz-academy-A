@@ -9,7 +9,7 @@ import {
   type KakaoSkillPayload,
 } from "@/lib/kakao-parent-chatbot";
 import { getKakaoRequestId } from "@/lib/kakao-chatbot-contract";
-import { kakaoGuestEntry } from "@/lib/kakao-guest-entry";
+import { kakaoConnectLinkReply, kakaoGuestEntry } from "@/lib/kakao-guest-entry";
 
 export const dynamic = "force-dynamic";
 
@@ -41,12 +41,9 @@ export async function POST(request: NextRequest) {
       const guestResponse = kakaoGuestEntry(utterance, origin);
       if (guestResponse) return NextResponse.json(guestResponse);
       // 명시적으로 기존 수강생 인증을 선택할 때만 일회용 인증 레코드를 만든다.
+      // 아직 유효한 링크가 있으면 같은 링크를 다시 보여주고, 새로 만들면 이전 링크 무효를 알린다.
       const link = await issueLink(botId, userKey, origin);
-      return NextResponse.json(kakaoText(
-        "처음 한 번만 학부모 인증을 해주세요. 인증이 끝나면 다음부터는 자녀를 자동으로 알아볼게요.",
-        [],
-        { label: "학부모 인증하기", url: link.url },
-      ));
+      return NextResponse.json(kakaoConnectLinkReply(link));
     }
     const requestId = getKakaoRequestId(payload, request.headers.get("x-kakao-request-id"));
     return NextResponse.json(await handleLinkedMessage(identity, utterance, requestId));

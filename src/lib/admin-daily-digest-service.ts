@@ -55,14 +55,27 @@ async function countPendingChangeRequests(): Promise<number> {
   return Number(rows[0]?.n ?? 0);
 }
 
+/**
+ * 카카오 접수 중 원장 확인을 기다리는 건수.
+ * SUBMITTED(학부모가 접수 확정) · HELD(자동 반영 못 해 검토 필요) · FAILED(처리 실패)만 센다.
+ * NEEDS_DETAILS 는 학부모 쪽 답을 기다리는 중이라 원장 할 일이 아니다.
+ */
+async function countPendingKakaoIntakes(): Promise<number> {
+  const rows = await prisma.$queryRawUnsafe<Array<{ n: number }>>(
+    `SELECT count(*)::int AS n FROM "KakaoParentIntake" WHERE status IN ('SUBMITTED', 'HELD', 'FAILED')`,
+  );
+  return Number(rows[0]?.n ?? 0);
+}
+
 export async function runAdminDailyDigest(): Promise<AdminDailyDigestResult> {
-  const [unpaid, needsCheckCount, pendingChangeCount] = await Promise.all([
+  const [unpaid, needsCheckCount, pendingChangeCount, kakaoPendingCount] = await Promise.all([
     loadUnpaidByMonth(),
     countEnrollmentChangesNeedingCheck(), // 수강 변경 쪽 함수는 호출만 한다(수정 금지 영역)
     countPendingChangeRequests(),
+    countPendingKakaoIntakes(),
   ]);
 
-  const digest = buildAdminDailyDigest({ todayYmd: todayKst(), unpaid, needsCheckCount, pendingChangeCount });
+  const digest = buildAdminDailyDigest({ todayYmd: todayKst(), unpaid, needsCheckCount, pendingChangeCount, kakaoPendingCount });
   // 확인할 일이 하나도 없으면 아무것도 보내지 않는다
   if (!digest) return { sent: 0, skippedDuplicate: 0, empty: true };
 

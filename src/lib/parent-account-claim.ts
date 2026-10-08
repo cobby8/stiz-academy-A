@@ -5,17 +5,14 @@ import { prisma } from "@/lib/prisma";
 import { sendAuthenticationSms } from "@/lib/message-dispatch";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { resolveRedirectForRole } from "@/lib/auth-routes";
+import { isSyntheticParentEmail } from "@/lib/parent-synthetic-email";
 
 const CLAIM_TTL_HOURS = 72;
 const OTP_TTL_MINUTES = 5;
 const MAX_OTP_ATTEMPTS = 5;
 const PROCESSING_LEASE_MINUTES = 5;
-const SYNTHETIC_PARENT_EMAIL = /^(?:parent_[0-9]+@stiz\.local|[0-9]+@import\.local)$/i;
-
-/** 가져오기로 만들어진 빈 보호자 계정의 합성 이메일인지(회원가입 쪽도 이 한 곳의 규칙을 쓴다). */
-export function isSyntheticParentEmail(email: string | null | undefined) {
-  return SYNTHETIC_PARENT_EMAIL.test(email || "");
-}
+// 빈 보호자 계정 판정 규칙은 parent-synthetic-email.ts 한 곳에만 둔다(여기서는 다시 내보내기만).
+export { isSyntheticParentEmail };
 
 type ClaimRow = {
   id: string;
@@ -166,7 +163,7 @@ export async function issueParentAccountClaim(input: {
   );
   const parent = parents[0];
   // 간편로그인으로 이미 연결된 계정은 이메일이 합성 주소로 남아 있어도 활성화가 필요 없다.
-  if (!parent || !SYNTHETIC_PARENT_EMAIL.test(parent.email) || parent.authUserId) return { activationUrl: null, activationRequired: false };
+  if (!parent || !isSyntheticParentEmail(parent.email) || parent.authUserId) return { activationUrl: null, activationRequired: false };
 
   const phone = normalizePhone(parent.phone || "");
   if (phone.length < 10 || phone.length > 11) throw new Error("보호자 연락처를 확인해 주세요.");
@@ -236,6 +233,9 @@ export async function readParentAccountClaim(rawToken: string) {
 
 const SELF_CLAIM_TTL_MINUTES = 30;
 
+/** issueVerifiedSelfParentClaim 이 학부모에게 그대로 보여 줘도 되는 안내 문구만 담는 오류 */
+export class SelfClaimUserError extends Error {}
+
 /**
  * 학부모가 회원가입 화면에서 직접 시작한 기존 계정 활성화.
  *
@@ -257,15 +257,15 @@ export async function issueVerifiedSelfParentClaim(
     input.parentId,
   );
   const parent = parents[0];
-  if (!parent || !SYNTHETIC_PARENT_EMAIL.test(parent.email) || parent.authUserId) throw new Error("활성화할 수 있는 보호자 계정이 아닙니다.");
+  if (!parent || !isSyntheticParentEmail(parent.email) || parent.authUserId) throw new SelfClaimUserError("활성화할 수 있는 보호자 계정이 아닙니다.");
   // 인증한 번호와 계정 번호가 정확히 같아야 한다
-  if (normalizePhone(parent.phone || "") !== verifiedPhone) throw new Error("인증한 휴대폰 번호와 보호자 정보가 일치하지 않습니다.");
+  if (normalizePhone(parent.phone || "") !== verifiedPhone) throw new SelfClaimUserError("인증한 휴대폰 번호와 보호자 정보가 일치하지 않습니다.");
   const duplicates = await tx.$queryRawUnsafe<Array<{ count: number }>>(
     `SELECT COUNT(*)::int AS count FROM "User"
       WHERE role = 'PARENT' AND regexp_replace(COALESCE(phone, ''), '[^0-9]', '', 'g') = $1`,
     verifiedPhone,
   );
-  if (Number(duplicates[0]?.count) !== 1) throw new Error("같은 연락처의 보호자 계정이 여러 개여서 관리자 확인이 필요합니다.");
+  if (Number(duplicates[0]?.count) !== 1) throw new SelfClaimUserError("같은 연락처의 보호자 계정이 여러 개여서 관리자 확인이 필요합니다.");
 
   await tx.$executeRawUnsafe(`SELECT pg_advisory_xact_lock(hashtextextended($1, 0))`, parent.id);
   const rawToken = randomBytes(32).toString("base64url");

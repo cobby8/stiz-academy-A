@@ -45,7 +45,11 @@ async function load(db) {
       if (/SELECT EXISTS\\(/.test(sql)) return [{ found: Boolean(db().oauthCollision) }];
       return [];
     }
-    async function execute(sql, ...args) { calls().push({ kind: "execute", sql, args }); return 1; }
+    async function execute(sql, ...args) {
+      calls().push({ kind: "execute", sql, args });
+      if (db().failClaimInsert && /INSERT INTO "ParentAccountClaim"/.test(sql)) throw new Error('duplicate key value violates unique constraint "ParentAccountClaim_tokenHash_key"');
+      return 1;
+    }
     const client = { $queryRawUnsafe: query, $executeRawUnsafe: execute };
     export const prisma = { ...client, $transaction: async (fn) => fn(client) };
   `);
@@ -55,7 +59,9 @@ async function load(db) {
     export async function linkEnrollmentAccount() {}
   `);
   const authRoutes = toDataUrl(await transpile("src/lib/auth-routes.ts"));
+  const syntheticEmail = toDataUrl(await transpile("src/lib/parent-synthetic-email.ts"));
   const swap = (code) => code
+    .split('"@/lib/parent-synthetic-email"').join(`"${syntheticEmail}"`)
     .split('"@/lib/prisma"').join(`"${prismaStub}"`)
     .split('"@/lib/message-dispatch"').join(`"${noop}"`)
     .split('"@/lib/supabase/admin"').join(`"${noop}"`)
@@ -92,6 +98,28 @@ test("빈 보호자 계정 1개 → 문자 인증이 끝난 활성화 링크를 
   assert.equal(insert.args.at(-1), "/mypage/kakao-connect?token=abc", "카카오 연결 화면으로 돌아오는 경로를 유지한다");
   assert.ok(writes().some((c) => /UPDATE "ParentSignupVerification" SET status='CONSUMED'/.test(c.sql)));
   assert.ok(!writes().some((c) => /UPDATE "User"/.test(c.sql)), "비밀번호 활성화는 여기서 User 를 바꾸지 않는다");
+});
+
+test("운영에 실제로 있는 빈 계정 형식(parent_<숫자>_<숫자>@ 등)도 활성화로 넘어간다", async () => {
+  for (const email of ["parent_1759900000000_12@stiz.local", "rallyz-parent-3f2a9c1e-7b4d-4e2a-9c1e-7b4d4e2a9c1e@stiz.local", "010-1234-5678@import.local"]) {
+    const mod = await load({ verification: verifiedRow(), users: [synthetic("p1", { email })] });
+    const result = await mod.resolveVerifiedSignupPhone({ token: TOKEN, proof: PROOF });
+    assert.equal(result.kind, "ACTIVATE_EXISTING", email);
+  }
+  // team_ 계정은 활성화 대상이 아니다 → 로그인 계정이 있는 번호와 똑같이 기존 안내
+  const team = await load({ verification: verifiedRow(), users: [synthetic("p1", { email: "team_abc123@stiz.local" })] });
+  assert.equal((await team.resolveVerifiedSignupPhone({ token: TOKEN, proof: PROOF })).kind, "REGISTERED");
+});
+
+test("내부 오류 원문은 화면에 내보내지 않는다", async () => {
+  // 활성화 레코드 INSERT 단계에서 DB 오류(영문 원문)가 났다고 가정
+  const mod = await load({ verification: verifiedRow(), users: [synthetic("p1")], failClaimInsert: true });
+  const result = await mod.resolveVerifiedSignupPhone({ token: TOKEN, proof: PROOF });
+  assert.deepEqual(result, { error: "처리 중 문제가 생겼어요. 잠시 후 다시 시도해 주세요." });
+
+  // 직접 정해 둔 안내(증표 만료 등)는 그대로 보여 준다
+  const expired = await load({ verification: verifiedRow({ proofExpiresAt: new Date(Date.now() - 1000) }), users: [synthetic("p1")] });
+  assert.deepEqual(await expired.resolveVerifiedSignupPhone({ token: TOKEN, proof: PROOF }), { error: "휴대폰 인증 증표가 없거나 만료되었습니다." });
 });
 
 test("허용되지 않은 redirect 는 학부모 기본 화면으로 바뀐다", async () => {

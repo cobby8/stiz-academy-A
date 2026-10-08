@@ -6,7 +6,8 @@ import { prisma } from "@/lib/prisma";
 import { sendAuthenticationSms } from "@/lib/message-dispatch";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { linkEnrollmentAccount } from "@/lib/enrollment-account-handoff";
-import { issueVerifiedSelfParentClaim, isSyntheticParentEmail } from "@/lib/parent-account-claim";
+import { issueVerifiedSelfParentClaim, SelfClaimUserError } from "@/lib/parent-account-claim";
+import { isSyntheticParentEmail } from "@/lib/parent-synthetic-email";
 import { resolveRedirectForRole } from "@/lib/auth-routes";
 
 const OTP_TTL_MINUTES = 5;
@@ -108,9 +109,9 @@ export async function resolveVerifiedSignupPhone(input: {
   try {
     return await prisma.$transaction(async (tx): Promise<VerifiedSignupPhoneResult> => {
       const row = await find(input.token, tx, true);
-      if (!row || row.status !== "VERIFIED" || row.expiresAt <= new Date()) throw new Error("휴대폰 인증을 먼저 완료해 주세요.");
+      if (!row || row.status !== "VERIFIED" || row.expiresAt <= new Date()) throw new SignupHandoffError("휴대폰 인증을 먼저 완료해 주세요.");
       if (!row.proofHash || !row.proofExpiresAt || row.proofExpiresAt <= new Date()
-          || !equalHex(row.proofHash, keyed(`proof:${hash(input.token)}:${input.proof}`))) throw new Error("휴대폰 인증 증표가 없거나 만료되었습니다.");
+          || !equalHex(row.proofHash, keyed(`proof:${hash(input.token)}:${input.proof}`))) throw new SignupHandoffError("휴대폰 인증 증표가 없거나 만료되었습니다.");
       // 같은 번호의 가입 시작과 겹치지 않게 같은 잠금을 잡는다
       await tx.$executeRawUnsafe(`SELECT pg_advisory_xact_lock(hashtextextended($1, 0))`, `signup:${row.phoneHash}`);
       const ownership = await classifyPhoneOwnership(tx, row.phone);
@@ -149,7 +150,7 @@ export async function resolveVerifiedSignupPhone(input: {
               WHERE id = $3 AND role = 'PARENT' AND "authUserId" IS NULL AND email = $4`,
             oauth!.id, oauth!.email || "", ownership.parentId, ownership.email,
           );
-          if (updated !== 1) throw new Error("보호자 계정 정보가 바뀌었습니다. 처음부터 다시 시도해 주세요.");
+          if (updated !== 1) throw new SignupHandoffError("보호자 계정 정보가 바뀌었습니다. 처음부터 다시 시도해 주세요.");
           await markConsumed(oauth!.id);
           return { kind: "LINKED_EXISTING", redirectPath: resolveRedirectForRole("PARENT", input.redirectPath) };
         }
@@ -165,9 +166,15 @@ export async function resolveVerifiedSignupPhone(input: {
       return { kind: "ACTIVATE_EXISTING", activationUrl: claim.activationUrl, claimToken: claim.token, claimProof: claim.proof };
     });
   } catch (error) {
-    return { error: error instanceof Error ? error.message : "휴대폰 인증 결과를 확인하지 못했습니다." };
+    // 직접 정해 둔 안내만 그대로 보여 주고, DB·내부 오류 원문은 화면에 내보내지 않는다.
+    if (error instanceof SignupHandoffError || error instanceof SelfClaimUserError) return { error: error.message };
+    console.error("[resolveVerifiedSignupPhone] failed:", error instanceof Error ? error.message.slice(0, 200) : "UNKNOWN");
+    return { error: "처리 중 문제가 생겼어요. 잠시 후 다시 시도해 주세요." };
   }
 }
+
+/** resolveVerifiedSignupPhone 이 학부모에게 그대로 보여 줘도 되는 안내 문구만 담는 오류 */
+class SignupHandoffError extends Error {}
 
 async function rejectExisting(tx: Prisma.TransactionClient, username: string, phone: string) {
   const rows = await tx.$queryRawUnsafe<Array<{ usernameTaken: boolean; phoneTaken: boolean }>>(

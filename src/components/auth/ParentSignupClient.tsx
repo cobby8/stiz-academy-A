@@ -94,7 +94,8 @@ export default function ParentSignupClient() {
       });
       // 학원에 이미 등록된 보호자: 간편로그인 계정이 바로 연결됐으면 원래 가려던 화면으로 간다.
       if (data.existingParent === "LINKED") {
-        window.location.assign(data.redirectPath || next);
+        // 서버가 검증한 경로만 쓴다(주소창의 next 를 그대로 믿지 않는다)
+        window.location.assign(data.redirectPath || "/mypage");
         return;
       }
       // 학원에 이미 등록된 보호자: 문자 인증은 끝났으니 이메일·비밀번호만 정하는 활성화 화면으로 안내한다.

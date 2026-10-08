@@ -15,7 +15,12 @@ import { InAppBrowserEscapeCard } from "@/components/pwa/InstallHelp";
 
 export const dynamic = "force-dynamic";
 // 주소에 일회용 연결 토큰이 있으므로 다른 사이트로 주소가 새지 않게 한다.
-export const metadata: Metadata = { title: "카카오 학부모 인증", referrer: "no-referrer" };
+// 일회용 링크 화면이라 검색에 잡히지 않게 한다.
+export const metadata: Metadata = {
+  title: "카카오 학부모 인증",
+  referrer: "no-referrer",
+  robots: { index: false, follow: false },
+};
 
 const CHANNEL_CHAT_URL = "https://pf.kakao.com/_HhaQG/chat";
 

@@ -5,7 +5,9 @@ import { GEMINI_CHAT_MODEL, getGeminiClient } from "@/lib/gemini-client";
 import {
   POLICY_DOCUMENT_MAX,
   buildFallbackPolicyDocument,
+  isPolicyQuotaAvailable,
   type KakaoReply,
+  type PolicyQuotaCounts,
   type PolicyFlowDeps,
   type PolicyGenerate,
   type PolicyQaLogInput,
@@ -96,6 +98,35 @@ export async function recordPolicyQaLog(log: PolicyQaLogInput): Promise<void> {
   }
 }
 
+/**
+ * 비용 남용 한도에서 쓸 수를 센다(기준 = KakaoPolicyQaLog).
+ * - 같은 사용자: 최근 1분 / 최근 24시간
+ * - 전체: KST 오늘 0시부터. "createdAt" 은 timestamptz 라 시간대 변환은 한 번만 건다 —
+ *   now() 를 KST 벽시계로 바꿔 0시로 자른 뒤, 그 KST 0시를 다시 timestamptz 로 되돌려 컬럼과 그대로 비교한다
+ *   (컬럼 쪽은 변환하지 않아 인덱스를 탄다).
+ */
+export const POLICY_QUOTA_SQL = `
+  SELECT
+    count(*) FILTER (WHERE "userKeyHash" = $1 AND "createdAt" > now() - interval '1 minute')::int AS "userLastMinute",
+    count(*) FILTER (WHERE "userKeyHash" = $1 AND "createdAt" > now() - interval '24 hours')::int AS "userLast24h",
+    count(*) FILTER (WHERE "createdAt" >= (date_trunc('day', now() AT TIME ZONE 'Asia/Seoul') AT TIME ZONE 'Asia/Seoul'))::int AS "globalKstToday"
+  FROM "KakaoPolicyQaLog"
+  WHERE "createdAt" >= LEAST(now() - interval '24 hours', date_trunc('day', now() AT TIME ZONE 'Asia/Seoul') AT TIME ZONE 'Asia/Seoul')`;
+
+/** 한도 안이면 true. 셀 수 없으면(테이블 없음·오류) false — 정책 답변을 건너뛰고 기존 흐름으로 간다. */
+export async function checkPolicyQuota(userKeyHash: string): Promise<boolean> {
+  try {
+    const rows = await prisma.$queryRawUnsafe<PolicyQuotaCounts[]>(POLICY_QUOTA_SQL, userKeyHash);
+    const row = rows[0];
+    return Boolean(row) && isPolicyQuotaAvailable({
+      userLastMinute: Number(row.userLastMinute), userLast24h: Number(row.userLast24h), globalKstToday: Number(row.globalKstToday),
+    });
+  } catch (error) {
+    console.error("[kakao policy qa] quota check failed:", error instanceof Error ? error.message : "UNKNOWN");
+    return false;
+  }
+}
+
 /** 카카오 callbackUrl 로 최종 응답을 보낸다(10초 제한). 성공 여부만 돌려준다. */
 export async function postKakaoCallback(url: string, body: KakaoReply): Promise<boolean> {
   try {
@@ -103,6 +134,8 @@ export async function postKakaoCallback(url: string, body: KakaoReply): Promise<
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
+      // 다른 주소로 넘겨도(리다이렉트) 따라가지 않는다 — 허용한 카카오 주소에만 보낸다
+      redirect: "manual",
       signal: AbortSignal.timeout(10_000),
     });
     return response.ok;
@@ -116,6 +149,7 @@ export async function postKakaoCallback(url: string, body: KakaoReply): Promise<
 export function realPolicyFlowDeps(schedule: PolicyFlowDeps["schedule"]): PolicyFlowDeps {
   return {
     loadRuntime: loadActivePolicyRuntime,
+    checkQuota: checkPolicyQuota,
     generate: geminiPolicyGenerate(),
     record: recordPolicyQaLog,
     postCallback: postKakaoCallback,

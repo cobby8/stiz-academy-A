@@ -59,6 +59,10 @@ CREATE TABLE IF NOT EXISTS "KakaoPolicyQaLog" (
   CONSTRAINT "KakaoPolicyQaLog_mode_check" CHECK ("mode" IN ('SYNC', 'CALLBACK'))
 );
 CREATE INDEX IF NOT EXISTS "KakaoPolicyQaLog_createdAt_idx" ON "KakaoPolicyQaLog" ("createdAt" DESC);
+-- 비용 남용 한도(같은 사용자 1분 5회·24시간 30회)를 셀 때 쓴다
+CREATE INDEX IF NOT EXISTS "KakaoPolicyQaLog_userKeyHash_createdAt_idx" ON "KakaoPolicyQaLog" ("userKeyHash", "createdAt" DESC);
+-- 전체 하루 상한(KST 하루 1,500건)·180일 정리를 셀 때 쓴다(오름차순 범위 조회)
+CREATE INDEX IF NOT EXISTS "KakaoPolicyQaLog_createdAt_asc_idx" ON "KakaoPolicyQaLog" ("createdAt");
 
 -- 서버에서만 접근한다. 브라우저의 공개 키(anon)·로그인 사용자 키로는 열지 않는다.
 ALTER TABLE "KakaoPolicyDocumentVersion" ENABLE ROW LEVEL SECURITY;

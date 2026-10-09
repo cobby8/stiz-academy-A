@@ -1,4 +1,4 @@
-import { buildKakaoSkillResponse, type ParentRequestKind } from "@/lib/kakao-chatbot-contract";
+import { buildKakaoSkillResponse, classifyParentUtterance, type KakaoQuickReply, type ParentRequestKind } from "@/lib/kakao-chatbot-contract";
 
 // ── 카카오 채널 정책 답변 엔진(순수 모듈) ─────────────────────────────
 // DB·Next·Gemini SDK 를 직접 부르지 않는다. 생성 함수(generate)를 밖에서 넣어 주기 때문에
@@ -10,12 +10,31 @@ export const POLICY_ESCALATE_MARK = "[ESCALATE]";
 export const POLICY_ANSWER_MAX = 400;
 /** 동기 경로(콜백 없음) 시간 제한 — 카카오는 5초 안에 응답을 받아야 한다 */
 export const POLICY_SYNC_TIMEOUT_MS = 3_500;
-/** 콜백 경로 시간 제한 — 카카오 콜백은 1분 안에 보내야 한다 */
-export const POLICY_CALLBACK_TIMEOUT_MS = 50_000;
+/** 동기 경로: 요청 시작부터 이 시각까지만 기다린다(DB 조회 시간을 빼고 남은 만큼만 Gemini 를 기다린다) */
+export const POLICY_SYNC_DEADLINE_MS = 4_300;
+/** 남은 시간이 이보다 짧으면 Gemini 를 부르지 않고 바로 대체 응답 */
+export const POLICY_SYNC_MIN_BUDGET_MS = 800;
+/** 콜백 경로 시간 제한 — 카카오 콜백은 1분 안에 보내야 한다(전송 시간 여유를 두고 40초) */
+export const POLICY_CALLBACK_TIMEOUT_MS = 40_000;
 /** 프롬프트에 넣는 정책 문서 최대 길이(DB CHECK 와 같다) */
 export const POLICY_DOCUMENT_MAX = 30_000;
-/** 정책 답변 아래에 붙는 바로가기 */
+/** 정책 답변 아래에 붙는 바로가기(연결 안 된 사용자용) */
 export const POLICY_QUICK_REPLIES = ["원장님께 문의", "메뉴"] as const;
+/** 바로가기 문장 머리. 누르면 원래 질문이 함께 돌아와 접수 원문에 남는다(연결된 학부모만). */
+export const POLICY_ASK_PREFIX = "원장님께 문의: ";
+export const POLICY_INTAKE_PREFIX = "원장님께 접수: ";
+/** 바로가기에 싣는 원래 질문 길이 */
+const SHORTCUT_QUESTION_MAX = 60;
+
+/** 비용 남용 제한 — 넘으면 정책 답변을 건너뛰고 기존 흐름으로 보낸다. 세는 기준은 KakaoPolicyQaLog. */
+export const POLICY_RATE_LIMITS = { perUserPerMinute: 5, perUserPerDay: 30, globalPerKstDay: 1_500 } as const;
+export type PolicyQuotaCounts = { userLastMinute: number; userLast24h: number; globalKstToday: number };
+/** 아직 한도 안인지(같은 수에 도달하면 이미 다 쓴 것이다) */
+export function isPolicyQuotaAvailable(counts: PolicyQuotaCounts): boolean {
+  return counts.userLastMinute < POLICY_RATE_LIMITS.perUserPerMinute
+    && counts.userLast24h < POLICY_RATE_LIMITS.perUserPerDay
+    && counts.globalKstToday < POLICY_RATE_LIMITS.globalPerKstDay;
+}
 
 export type PolicyOutcome = "ANSWERED" | "ESCALATE" | "TIMEOUT" | "ERROR";
 export type PolicyQaResult = { outcome: PolicyOutcome; answer: string | null; latencyMs: number };
@@ -29,32 +48,63 @@ const MENU_WORDS = /^(메뉴|처음|시작|원장님께 문의|상담 안내|체
 // "가요"·"되요"는 넣지 않는다("내일 가요"·"결석 되요"처럼 질문이 아닌 말이 걸린다 — 물음표가 붙으면 위에서 잡힌다).
 const QUESTION_ENDING = /(\?|？|나요|인가요|까요|니까|습니까|는지요?|은지요?|죠|지요|어때요)\s*[.!~ㅠㅜ]*$/;
 // 의문사·궁금함 표현이 들어간 말("가격 궁금해요", "몇 시에 끝나요")
-const QUESTION_WORD = /(얼마|언제|어떻게|어디|몇\s*(시|번|회|명|살|분|개|월|일|학년)|무슨|무엇|뭐(가|예요|에요|죠|야|지)|왜|어느|궁금|알려\s*주|가능한가|가능해요|가능할까|되나|있나|없나|하나요)/;
+// "알려주"는 부탁형(알려주세요·알려주실 수·알려주시겠어요·알려주나요)만 본다 — "알려주신 시간에 갈게요"는 질문이 아니다.
+const QUESTION_WORD = /(얼마|언제|어떻게|어디|몇\s*(시|번|회|명|살|분|개|월|일|학년)|무슨|무엇|뭐(가|예요|에요|죠|야|지)|왜|어느|궁금|알려\s*주(세요|실\s*수|시겠|실래요|나요)|가능한가|가능해요|가능할까|되나|있나|없나|하나요)/;
 
 /** "질문으로 보이는 발화"인지. 업무 요청("다음 주 조퇴할게요")은 false 다. */
 export function isPolicyQuestion(utterance: string): boolean {
   const text = utterance.replace(/\s+/g, " ").trim();
   if (text.length < 4 || text.length > 300) return false;
   if (MENU_WORDS.test(text)) return false;
+  // 정책 답변 아래 바로가기가 보낸 말은 다시 정책 답변으로 보내지 않는다(원장님께 넘기려고 누른 것)
+  if (text.startsWith(POLICY_ASK_PREFIX.trim()) || text.startsWith(POLICY_INTAKE_PREFIX.trim())) return false;
   return QUESTION_ENDING.test(text) || QUESTION_WORD.test(text);
 }
 
-// 연결된 학부모의 말 중 정책 답변을 먼저 시도할 종류.
+// 연결된 학부모의 말 중 정책 답변을 먼저 시도할 종류 — "규정을 묻는 말"이 대부분인 종류만 둔다.
 // 화면 링크로 바로 보내는 업무(결석·보강·당일 셔틀·입금·영수증·반 변경·휴원·퇴원)는 이 단계에 오기 전에 이미 처리된다.
-// 사람을 찾는 말(HUMAN)·연락처 변경(CONTACT_CHANGE)은 질문이어도 접수로 보낸다.
+// 조퇴·셔틀 신청/변경·수업 추가·복귀는 "~해도 될까요?"처럼 물어도 실제로는 요청이라 기존 접수로 보낸다(검수 KP-1).
+// 사람을 찾는 말(HUMAN)·연락처 변경(CONTACT_CHANGE)도 질문이어도 접수로 보낸다.
 export const LINKED_POLICY_KINDS: ReadonlySet<ParentRequestKind> = new Set<ParentRequestKind>([
-  "UNKNOWN", "CONSULTATION", "EARLY_LEAVE", "SHUTTLE_START_STOP", "SHUTTLE_CHANGE", "SHUTTLE_FEE",
-  "BILLING_CORRECTION", "REFUND", "CLASS_ADD", "RESUME",
+  "UNKNOWN", "CONSULTATION", "SHUTTLE_FEE", "BILLING_CORRECTION", "REFUND",
 ]);
+/** 규정을 답한 뒤에도 실제 처리(청구 정정·환불)가 필요할 수 있는 종류 — 답 아래에 「원장님께 접수할까요?」를 붙인다 */
+export const POLICY_INTAKE_OFFER_KINDS: ReadonlySet<ParentRequestKind> = new Set<ParentRequestKind>(["BILLING_CORRECTION", "REFUND"]);
 
 /** 연결된 학부모: 기존 접수 흐름 대신 정책 답변을 먼저 시도할지(작성 중인 접수가 있으면 항상 false) */
 export function isLinkedPolicyCandidate(kind: ParentRequestKind, text: string, hasDraft: boolean): boolean {
   return !hasDraft && LINKED_POLICY_KINDS.has(kind) && isPolicyQuestion(text);
 }
 
-/** 연결 안 된 사용자: 기본 안내 카드 대신 정책 답변을 시도할지(인증 의도는 밖에서 먼저 걸러진다) */
-export function isGuestPolicyCandidate(text: string, authIntent: boolean): boolean {
-  return !authIntent && isPolicyQuestion(text);
+/**
+ * 연결 안 된 사용자: 기본 안내 카드 대신 정책 답변을 시도할지.
+ * 인증 의도는 인증 링크가, 신규 신호(체험·신규·수강 신청·상담 등)는 기존 안내 카드가 먼저다.
+ */
+export function isGuestPolicyCandidate(text: string, authIntent: boolean, newEnrollmentHint = false): boolean {
+  return !authIntent && !newEnrollmentHint && isPolicyQuestion(text);
+}
+
+function shortQuestion(question: string): string {
+  return [...question.replace(/\s+/g, " ").trim()].slice(0, SHORTCUT_QUESTION_MAX).join("");
+}
+
+/**
+ * 「원장님께 접수할까요?」 바로가기가 보낸 말이면 원래 질문과 접수 종류를 돌려준다.
+ * 종류는 원래 질문으로 다시 분류하되, 접수 제안 대상(청구·환불)이 아니면 「기타 상담」으로 받는다.
+ */
+export function parsePolicyIntakeShortcut(text: string): { question: string; kind: ParentRequestKind } | null {
+  const normalized = text.replace(/\s+/g, " ").trim();
+  if (!normalized.startsWith(POLICY_INTAKE_PREFIX.trim())) return null;
+  const question = normalized.slice(POLICY_INTAKE_PREFIX.trim().length).trim();
+  if (!question) return null;
+  const kind = classifyParentUtterance(question);
+  return { question, kind: POLICY_INTAKE_OFFER_KINDS.has(kind) ? kind : "CONSULTATION" };
+}
+
+/** 동기 경로에서 Gemini 를 기다릴 시간. null 이면 남은 시간이 모자라 바로 대체 응답으로 간다. */
+export function syncPolicyBudgetMs(elapsedMs: number): number | null {
+  const budget = Math.min(POLICY_SYNC_TIMEOUT_MS, POLICY_SYNC_DEADLINE_MS - Math.max(0, elapsedMs));
+  return budget < POLICY_SYNC_MIN_BUDGET_MS ? null : budget;
 }
 
 // ── 2) 정책 문서 ──────────────────────────────────────────────────
@@ -193,16 +243,29 @@ export async function answerPolicyQuestion(input: {
 }
 
 // ── 6) 카카오 응답 모양 ───────────────────────────────────────────
-/** 정책 답변 말풍선. 버튼 없이 simpleText + 바로가기 「원장님께 문의」「메뉴」. */
-export function policyAnswerResponse(answer: string) {
-  return buildKakaoSkillResponse({ text: clip(answer, POLICY_ANSWER_MAX), quickReplies: [...POLICY_QUICK_REPLIES] });
+/**
+ * 정책 답변 말풍선(버튼 없는 simpleText).
+ * - 연결 안 된 사용자: 바로가기 「원장님께 문의」「메뉴」
+ * - 연결된 학부모: 「원장님께 문의」를 누르면 원래 질문이 함께 돌아와 접수 원문에 남는다.
+ *   청구·환불처럼 실제 처리가 필요할 수 있으면 「원장님께 접수할까요?」를 맨 앞에 둔다(누르면 기존 접수 흐름).
+ */
+export function policyAnswerResponse(answer: string, linked?: { question: string; kind: ParentRequestKind } | null) {
+  if (!linked) return buildKakaoSkillResponse({ text: clip(answer, POLICY_ANSWER_MAX), quickReplies: [...POLICY_QUICK_REPLIES] });
+  const question = shortQuestion(linked.question);
+  const quickReplies: KakaoQuickReply[] = [
+    ...(POLICY_INTAKE_OFFER_KINDS.has(linked.kind) ? [{ label: "원장님께 접수할까요?", messageText: `${POLICY_INTAKE_PREFIX}${question}` }] : []),
+    { label: "원장님께 문의", messageText: `${POLICY_ASK_PREFIX}${question}` },
+    "메뉴",
+  ];
+  return buildKakaoSkillResponse({ text: clip(answer, POLICY_ANSWER_MAX), quickReplies });
 }
 
-/** 연결 안 된 사용자가 답을 못 받았을 때(문서에 없음·시간초과·오류): 기존 상담 안내 버튼을 준다. */
+/** 연결 안 된 사용자가 답을 못 받았을 때(문서에 없음·시간초과·오류·한도 초과 아님): 기존 상담 안내 버튼을 준다. */
+export const GUEST_ESCALATE_TEXT = "원장님 확인이 필요한 내용이에요. 아래 상담 안내의 전화 문의를 이용해 주세요.";
 export function guestPolicyEscalateResponse(origin: string) {
   const base = origin.replace(/\/+$/, "");
   return buildKakaoSkillResponse({
-    text: "원장님 확인 후 안내드릴게요. 급하시면 상담 안내를 이용해 주세요.",
+    text: GUEST_ESCALATE_TEXT,
     buttons: [{ action: "webLink", label: "상담·신청 안내", webLinkUrl: `${base}/apply` }],
     quickReplies: ["기존 수강생 인증", "메뉴"],
   });
@@ -231,35 +294,53 @@ export type PolicyQaLogInput = {
 export type PolicyFlowDeps = {
   /** 켜져 있으면 정책 문서, 꺼져 있으면(또는 DB 미준비) null */
   loadRuntime: () => Promise<{ document: string } | null>;
+  /** 한도 안이면 true. 넘었거나 셀 수 없으면 false(→ 정책 답변을 건너뛰고 기존 흐름) */
+  checkQuota: (userKeyHash: string) => Promise<boolean>;
   /** Gemini 키가 없으면 null(= 꺼짐과 같다) */
   generate: PolicyGenerate | null;
   record: (log: PolicyQaLogInput) => Promise<void>;
   postCallback: (url: string, body: KakaoReply) => Promise<boolean>;
   /** 응답을 보낸 뒤에 돌릴 일(Next.js after) */
   schedule: (task: () => Promise<void>) => void;
+  now?: () => number;
 };
 
 /** 콜백 경로에서 접수 전환까지 실패했을 때 마지막으로 보내는 말 */
 const CALLBACK_LAST_RESORT = "지금은 답변 연결이 원활하지 않아요. 잠시 후 다시 말씀해 주세요.";
 
 /**
- * 정책 답변 흐름. 꺼져 있으면 null 을 돌려주고 아무것도 하지 않는다(부르는 쪽이 기존 동작을 그대로 탄다).
- * - callbackUrl 이 있으면: 즉시 useCallback 응답 → 백그라운드에서 답(50초) → callbackUrl 로 POST
- * - 없으면: 3.5초 안에 답, 못 하면 escalate()
+ * 정책 답변 흐름. 꺼져 있거나 한도를 넘었으면 null 을 돌려주고 아무것도 하지 않는다(부르는 쪽이 기존 동작을 그대로 탄다).
+ * - callbackUrl 이 있으면: 즉시 useCallback 응답 → 백그라운드에서 답(40초) → callbackUrl 로 POST
+ * - 없으면: 요청 시작부터 4.3초까지 남은 시간(최대 3.5초)만 기다린다. 0.8초도 안 남았으면 바로 escalate()
  * - ANSWERED 가 아니면(ESCALATE·TIMEOUT·ERROR) 모두 escalate() 결과를 보낸다.
  */
 export async function runPolicyFlow(
-  input: { question: string; linked: boolean; userKeyHash: string; callbackUrl: unknown; escalate: () => Promise<KakaoReply> },
+  input: {
+    question: string;
+    linked: boolean;
+    userKeyHash: string;
+    callbackUrl: unknown;
+    escalate: () => Promise<KakaoReply>;
+    /** 연결된 학부모의 분류 종류(답 아래 바로가기를 고른다). 게스트는 없음 */
+    kind?: ParentRequestKind | null;
+    /** 요청을 받은 시각(ms). 동기 경로의 남은 시간 계산에 쓴다 */
+    startedAt?: number;
+  },
   deps: PolicyFlowDeps,
 ): Promise<KakaoReply | null> {
   const generate = deps.generate;
   if (!generate) return null;
-  const runtime = await deps.loadRuntime();
-  if (!runtime) return null;
+  const now = deps.now ?? Date.now;
+  const [runtime, withinQuota] = await Promise.all([
+    deps.loadRuntime(),
+    deps.checkQuota(input.userKeyHash).catch(() => false),
+  ]);
+  if (!runtime || !withinQuota) return null;
 
+  const linkedInfo = input.linked && input.kind ? { question: input.question, kind: input.kind } : null;
   const finish = async (timeoutMs: number) => {
-    const result = await answerPolicyQuestion({ question: input.question, policyDocument: runtime.document, generate, timeoutMs });
-    const reply = result.outcome === "ANSWERED" && result.answer ? policyAnswerResponse(result.answer) : await input.escalate();
+    const result = await answerPolicyQuestion({ question: input.question, policyDocument: runtime.document, generate, timeoutMs, now });
+    const reply = result.outcome === "ANSWERED" && result.answer ? policyAnswerResponse(result.answer, linkedInfo) : await input.escalate();
     return { result, reply };
   };
   const log = (result: PolicyQaResult, mode: "SYNC" | "CALLBACK", callbackOk: boolean | null) =>
@@ -291,18 +372,31 @@ export async function runPolicyFlow(
     return kakaoCallbackAck();
   }
 
-  const { result, reply } = await finish(POLICY_SYNC_TIMEOUT_MS);
+  const budget = syncPolicyBudgetMs(input.startedAt === undefined ? 0 : now() - input.startedAt);
+  if (budget === null) {
+    // 앞선 DB 조회로 시간이 거의 다 갔다 — Gemini 를 부르지 않고 바로 대체 응답(카카오 5초 제한 보호)
+    const reply = await input.escalate();
+    deps.schedule(() => log({ outcome: "TIMEOUT", answer: null, latencyMs: 0 }, "SYNC", null));
+    return reply;
+  }
+  const { result, reply } = await finish(budget);
   deps.schedule(() => log(result, "SYNC", null));
   return reply;
 }
 
-/** 카카오가 보내 준 callbackUrl 이 정상 주소인지(카카오 도메인 https 만 허용 — 엉뚱한 곳으로 POST 하지 않는다) */
+/**
+ * 카카오가 보내 준 callbackUrl 이 정상 주소인지.
+ * https + 카카오 도메인 + 기본 포트(비었거나 443)만 허용한다 — 엉뚱한 곳으로 POST 하지 않는다.
+ */
 export function isAllowedKakaoCallbackUrl(value: unknown): value is string {
   if (typeof value !== "string" || value.length > 2000) return false;
   try {
     const url = new URL(value);
-    return url.protocol === "https:" && (url.hostname === "kakao.com" || url.hostname.endsWith(".kakao.com"));
+    if (url.protocol !== "https:" || (url.port !== "" && url.port !== "443")) return false;
+    if (url.username || url.password) return false;
+    return url.hostname === "kakao.com" || url.hostname.endsWith(".kakao.com");
   } catch {
     return false;
   }
 }
+

@@ -2998,4 +2998,6 @@ model KakaoPolicyQaLog {
   createdAt   DateTime @default(now()) @db.Timestamptz(6)
 
   @@index([createdAt(sort: Desc)])
+  @@index([userKeyHash, createdAt(sort: Desc)])
+  @@index([createdAt], map: "KakaoPolicyQaLog_createdAt_asc_idx")
 }

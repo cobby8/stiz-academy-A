@@ -9,8 +9,8 @@ import {
   type KakaoSkillPayload,
   type LinkedPolicyHook,
 } from "@/lib/kakao-parent-chatbot";
-import { getKakaoRequestId } from "@/lib/kakao-chatbot-contract";
-import { isKakaoParentAuthIntent, kakaoConnectLinkReply, kakaoGuestEntry } from "@/lib/kakao-guest-entry";
+import { getKakaoRequestId, type ParentRequestKind } from "@/lib/kakao-chatbot-contract";
+import { hasKakaoNewEnrollmentHint, isKakaoParentAuthIntent, kakaoConnectLinkReply, kakaoGuestEntry } from "@/lib/kakao-guest-entry";
 import { guestPolicyEscalateResponse, isGuestPolicyCandidate, runPolicyFlow } from "@/lib/kakao-policy-qa";
 import { hashPolicyUserKey, realPolicyFlowDeps } from "@/lib/kakao-policy-qa-service";
 
@@ -19,6 +19,8 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
 export async function POST(request: NextRequest) {
+  // 동기 정책 답변이 카카오 5초 제한 안에 끝나도록, 요청을 받은 시각부터 남은 시간을 잰다
+  const startedAt = Date.now();
   if (!verifySkillSecret(request.headers.get("x-stiz-kakao-skill-secret"))) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
@@ -40,9 +42,14 @@ export async function POST(request: NextRequest) {
   const callbackUrl = payload.userRequest?.callbackUrl;
 
   // 정책 답변 흐름(꺼져 있으면 null → 아래 기존 응답이 그대로 나간다)
-  const askPolicy = (question: string, linked: boolean, escalate: () => Promise<Record<string, unknown>>) =>
+  const askPolicy = (
+    question: string,
+    linked: boolean,
+    escalate: () => Promise<Record<string, unknown>>,
+    kind: ParentRequestKind | null,
+  ) =>
     runPolicyFlow(
-      { question, linked, userKeyHash: hashPolicyUserKey(botId, userKey), callbackUrl, escalate },
+      { question, linked, userKeyHash: hashPolicyUserKey(botId, userKey), callbackUrl, escalate, kind, startedAt },
       realPolicyFlowDeps((task) => after(task)),
     );
 
@@ -52,9 +59,10 @@ export async function POST(request: NextRequest) {
     const identity = await resolveIdentity(botId, userKey);
     if (!identity || identity.status !== "ACTIVE" || !identity.parentUserId) {
       const origin = process.env.NEXT_PUBLIC_SITE_URL || request.nextUrl.origin;
-      // 인증 의도가 아닌 "질문"만 정책 답변을 시도한다. 답을 못 하면 원장님 확인 안내 + 상담 버튼.
-      if (isGuestPolicyCandidate(utterance, isKakaoParentAuthIntent(utterance))) {
-        const policyReply = await askPolicy(utterance, false, async () => guestPolicyEscalateResponse(origin));
+      // 인증 의도·신규 신호(체험·수강 신청·상담 등)가 아닌 "질문"만 정책 답변을 시도한다.
+      // 답을 못 하면 원장님 확인 안내 + 상담 버튼. 꺼짐·한도 초과면 null → 아래 기존 안내.
+      if (isGuestPolicyCandidate(utterance, isKakaoParentAuthIntent(utterance), hasKakaoNewEnrollmentHint(utterance))) {
+        const policyReply = await askPolicy(utterance, false, async () => guestPolicyEscalateResponse(origin), null);
         if (policyReply) return NextResponse.json(policyReply);
       }
       const guestResponse = kakaoGuestEntry(utterance, origin);
@@ -66,7 +74,7 @@ export async function POST(request: NextRequest) {
     }
     const requestId = getKakaoRequestId(payload, request.headers.get("x-kakao-request-id"));
     // 연결된 학부모: 업무·메뉴·작성 중 접수를 다 지난 질문만 이 연결점에 온다. 답을 못 하면 기존 접수로 넘긴다.
-    const policyHook: LinkedPolicyHook = (question, escalate) => askPolicy(question, true, escalate);
+    const policyHook: LinkedPolicyHook = (question, escalate, kind) => askPolicy(question, true, escalate, kind);
     return NextResponse.json(await handleLinkedMessage(identity, utterance, requestId, policyHook));
   } catch (error) {
     console.error("[kakao chatbot skill] failed:", error instanceof Error ? error.message : "UNKNOWN");

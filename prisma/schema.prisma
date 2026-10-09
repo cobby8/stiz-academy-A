@@ -2961,3 +2961,41 @@ model PosPaymentNotice {
   @@index([status, createdAt(sort: Desc)])
   @@index([tossOrderId])
 }
+
+/// 카카오 정책 답변 — 정책 문서 버전 이력 (migration 20261009120000_add_kakao_policy_qa 의 사본)
+/// 저장할 때마다 한 줄 추가한다. 가장 최근 행이 현재 문서다.
+/// ⚠️ DB 에는 content 길이 CHECK(30000자)가 더 있다.
+model KakaoPolicyDocumentVersion {
+  id           String   @id @default(dbgenerated("(gen_random_uuid())::text"))
+  content      String
+  editorUserId String?
+  editorName   String?
+  createdAt    DateTime @default(now()) @db.Timestamptz(6)
+
+  @@index([createdAt(sort: Desc)])
+}
+
+/// 카카오 정책 답변 켜기/끄기(킬 스위치). 행은 id='default' 하나뿐이고 기본값은 꺼짐.
+model KakaoPolicyQaSetting {
+  id              String   @id @default("default")
+  enabled         Boolean  @default(false)
+  updatedByUserId String?
+  updatedByName   String?
+  updatedAt       DateTime @default(now()) @db.Timestamptz(6)
+}
+
+/// 카카오 정책 답변 기록. 사용자키는 해시만, 전화번호는 저장하지 않는다. 180일 뒤 data-retention 크론이 지운다.
+model KakaoPolicyQaLog {
+  id          String   @id @default(dbgenerated("(gen_random_uuid())::text"))
+  question    String   @db.VarChar(500)
+  answer      String?
+  outcome     String // ANSWERED | ESCALATE | TIMEOUT | ERROR
+  mode        String // SYNC | CALLBACK
+  linked      Boolean
+  latencyMs   Int
+  userKeyHash String
+  callbackOk  Boolean?
+  createdAt   DateTime @default(now()) @db.Timestamptz(6)
+
+  @@index([createdAt(sort: Desc)])
+}

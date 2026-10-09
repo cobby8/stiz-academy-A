@@ -3,6 +3,8 @@ export type KakaoSkillPayload = {
   userRequest?: {
     requestId?: string;
     utterance?: string;
+    // 오픈빌더 블록에 「AI 챗봇 콜백」이 켜져 있을 때만 온다. 1분 안에 이 주소로 최종 응답을 POST 한다.
+    callbackUrl?: string;
     user?: { id?: string; properties?: Record<string, unknown> };
   };
 };

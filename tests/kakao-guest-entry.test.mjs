@@ -58,7 +58,8 @@ test("미인증 메뉴는 identity 생성 전 반환하고 기존 인증 흐름�
   const route = readFileSync("src/app/api/kakao/chatbot/skill/route.ts", "utf8");
   assert.ok(route.indexOf("if (guestResponse)") < route.indexOf("await issueLink"));
   assert.match(route, /identity.status !== "ACTIVE"/);
-  assert.match(route, /handleLinkedMessage\(identity, utterance, requestId\)/);
+  // 정책 답변 연결점(policyHook)이 붙었지만 기존 인자 순서는 그대로다
+  assert.match(route, /handleLinkedMessage\(identity, utterance, requestId(?:, policyHook)?\)/);
   assert.match(route, /kakaoConnectLinkReply\(link\)/);
 });
 

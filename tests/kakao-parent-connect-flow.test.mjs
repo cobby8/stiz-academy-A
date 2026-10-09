@@ -35,10 +35,13 @@ async function loadChatbot(live) {
     export async function notifyAdminsOfKakaoIntake() { return 0; }
   `);
   const contract = toDataUrl(await transpile("src/lib/kakao-chatbot-contract.ts"));
+  // 정책 답변 순수 모듈(챗봇이 질문 판별에 쓴다)도 같은 계약 모듈을 보게 해서 올린다
+  const policyQa = toDataUrl((await transpile("src/lib/kakao-policy-qa.ts")).split('"@/lib/kakao-chatbot-contract"').join(`"${contract}"`));
   const code = (await transpile("src/lib/kakao-parent-chatbot.ts"))
     .split('"@/lib/prisma"').join(`"${prismaStub}"`)
     .split('"@/lib/kakao-parent-reconfirmation"').join(`"${stub}"`)
     .split('"@/lib/kakao-intake-admin-alert"').join(`"${stub}"`)
+    .split('"@/lib/kakao-policy-qa"').join(`"${policyQa}"`)
     .split('"@/lib/kakao-chatbot-contract"').join(`"${contract}"`);
   return import(toDataUrl(code));
 }

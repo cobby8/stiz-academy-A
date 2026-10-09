@@ -30,6 +30,7 @@ const OPS_PATHS = [
     "/admin/finance",
     "/admin/requests",
     "/admin/kakao-requests",
+    "/admin/kakao-policy",
     "/admin/notification-deliveries",
     "/admin/feedback",
     "/admin/seasonal",
@@ -53,6 +54,7 @@ const MORE_OPS_PATHS = [
     "/admin/attendance/report",
     "/admin/requests",
     "/admin/kakao-requests",
+    "/admin/kakao-policy",
     "/admin/notification-deliveries",
     "/admin/feedback",
     "/admin/waitlist",
@@ -237,6 +239,8 @@ export default function AdminShellClient({
                                     <NavItem href="/admin/attendance/report" active={pathname.startsWith("/admin/attendance/report")} icon="📝" label="수업 리포트" compact />
                                     <NavItem href="/admin/requests" active={pathname.startsWith("/admin/requests")} icon="📩" label="학부모 요청" compact />
                                     <NavItem href="/admin/kakao-requests" active={pathname.startsWith("/admin/kakao-requests")} icon="💬" label="카카오 접수함" compact />
+                                    {/* 카카오 채널 정책 질문에 문서 기반으로 답하는 기능 — 정책 문서 편집·켜기/끄기·답변 기록 */}
+                                    <NavItem href="/admin/kakao-policy" active={pathname.startsWith("/admin/kakao-policy")} icon="📘" label="카카오 정책 답변" compact />
                                     <NavItem href="/admin/notification-deliveries" active={pathname.startsWith("/admin/notification-deliveries")} icon="🔔" label="담당자 전달 장부" compact />
                                     <NavItem href="/admin/makeup" active={pathname.startsWith("/admin/makeup")} icon="🔄" label="보강" compact />
                                     <NavItem href="/admin/stats" active={pathname.startsWith("/admin/stats")} icon="📊" label="상세 통계" compact />

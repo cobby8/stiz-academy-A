@@ -11,6 +11,7 @@ import {
   type ParentRequestKind,
 } from "@/lib/kakao-chatbot-contract";
 import { notifyAdminsOfKakaoIntake } from "@/lib/kakao-intake-admin-alert";
+import { LINKED_ESCALATE_LEAD, isLinkedPolicyCandidate, parsePolicyIntakeShortcut, type KakaoReply } from "@/lib/kakao-policy-qa";
 
 export { classifyParentUtterance, getKakaoUserKey } from "@/lib/kakao-chatbot-contract";
 export type { KakaoSkillPayload, ParentRequestKind } from "@/lib/kakao-chatbot-contract";
@@ -332,7 +333,13 @@ function draftResponse(draft: IntakeRow, studentName?: string | null) {
   );
 }
 
-export async function handleLinkedMessage(identity: IdentityRow, utterance: string, providerRequestId?: string | null) {
+export async function handleLinkedMessage(
+  identity: IdentityRow,
+  utterance: string,
+  providerRequestId?: string | null,
+  // 정책 답변 연결점(없거나 null 을 주면 기존 동작 그대로)
+  policy?: LinkedPolicyHook | null,
+) {
   const text = utterance.replace(/\s+/g, " ").trim().slice(0, 1000);
   if (!identity.parentUserId) throw new Error("IDENTITY_NOT_LINKED");
   const children = await childrenOf(identity.parentUserId);
@@ -408,6 +415,13 @@ export async function handleLinkedMessage(identity: IdentityRow, utterance: stri
     );
   }
 
+  // 정책 답변 아래 「원장님께 접수할까요?」를 누른 경우: 원래 질문 그대로 기존 접수 흐름으로 바로 간다.
+  // (「원장님께 문의: …」는 '원장님'으로 상담원 연결(HUMAN)로 분류되어 원문 그대로 접수된다 — 따로 처리할 것 없음)
+  const intakeShortcut = parsePolicyIntakeShortcut(text);
+  if (intakeShortcut) {
+    return createIntakeReply(identity, children, intakeShortcut.question, intakeShortcut.kind, providerRequestId);
+  }
+
   const kind = classifyParentUtterance(text);
   if (kind === "UNKNOWN" && /^(메뉴|처음|시작)$/.test(text)) {
     return kakaoText(`${parentDisplayName}, 무엇을 도와드릴까요? 평소처럼 문장으로 말씀하셔도 알아들을게요.`, ["결석·보강", "셔틀", "청구·영수증", "수강 변경", "정보·상담"]);
@@ -420,6 +434,36 @@ export async function handleLinkedMessage(identity: IdentityRow, utterance: stri
       { label: directKind.label, url: siteUrl(directKind.path) },
     );
   }
+  // 정책 질문(요금·환불·셔틀 규정 등): 인증·메뉴·바로가기 업무·작성 중 접수를 모두 지난 "질문"만 온다.
+  // policy 가 null 을 주면(꺼짐) 아래 기존 접수 흐름을 그대로 탄다. 답을 못 하면 같은 접수 흐름으로 넘긴다.
+  if (policy && isLinkedPolicyCandidate(kind, text, Boolean(draft))) {
+    const handled = await policy(text, () =>
+      createIntakeReply(identity, children, text, kind, providerRequestId, LINKED_ESCALATE_LEAD), kind);
+    if (handled) return handled;
+  }
+  return createIntakeReply(identity, children, text, kind, providerRequestId);
+}
+
+/**
+ * 정책 답변 연결점. null 을 돌려주면 기존 흐름을 그대로 진행한다.
+ * escalate 는 기존 접수 흐름(원장 확인 대기)이고, kind 는 답 아래 바로가기(청구·환불이면 「원장님께 접수할까요?」)를 고르는 데 쓴다.
+ */
+export type LinkedPolicyHook = (
+  question: string,
+  escalate: () => Promise<KakaoReply>,
+  kind: ParentRequestKind,
+) => Promise<KakaoReply | null>;
+
+/** 새 접수 초안을 만들고 "접수할까요?"를 묻는다(기존 흐름 그대로). lead 가 있으면 첫 줄에 붙인다. */
+async function createIntakeReply(
+  identity: IdentityRow,
+  children: ChildRow[],
+  text: string,
+  kind: ParentRequestKind,
+  providerRequestId: string | null | undefined,
+  lead?: string,
+) {
+  const say = (message: string) => (lead ? `${lead}\n\n${message}` : message);
   const child = selectChild(children, text);
   const intakeId = randomUUID();
   const created = await prisma.$transaction(async (tx) => {
@@ -451,10 +495,10 @@ export async function handleLinkedMessage(identity: IdentityRow, utterance: stri
     return repeated ?? kakaoText("이미 같은 요청을 확인하고 있어요. 자녀를 선택해 주세요.", children.slice(0, 10).map((item) => item.name));
   }
   if (!child) {
-    return kakaoText("어느 자녀의 요청인지 알려주세요.", children.slice(0, 10).map((item) => item.name));
+    return kakaoText(say("어느 자녀의 요청인지 알려주세요."), children.slice(0, 10).map((item) => item.name));
   }
   return kakaoText(
-    `${child.name} 학생의 ‘${KIND_LABEL[kind]}’ 요청으로 이해했어요.\n\n“${text}”\n\n이 내용으로 접수할까요?`,
+    say(`${child.name} 학생의 ‘${KIND_LABEL[kind]}’ 요청으로 이해했어요.\n\n“${text}”\n\n이 내용으로 접수할까요?`),
     ["접수할게요", "다시 말할게요", "취소"],
   );
 }

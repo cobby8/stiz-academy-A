@@ -3,6 +3,8 @@ export type KakaoSkillPayload = {
   userRequest?: {
     requestId?: string;
     utterance?: string;
+    // 오픈빌더 블록에 「AI 챗봇 콜백」이 켜져 있을 때만 온다. 1분 안에 이 주소로 최종 응답을 POST 한다.
+    callbackUrl?: string;
     user?: { id?: string; properties?: Record<string, unknown> };
   };
 };
@@ -66,6 +68,9 @@ export const KAKAO_BUTTON_LABEL_MAX = 14;
 export const KAKAO_MAX_CARD_BUTTONS = 3;
 export const KAKAO_MAX_QUICK_REPLIES = 10;
 
+/** 바로가기: 문자열이면 보이는 이름 = 보내는 문장. 객체면 이름은 짧게, 문장에는 원래 질문 같은 내용을 싣는다. */
+export type KakaoQuickReply = string | { label: string; messageText: string };
+
 export type KakaoCardButton =
   | { action: "webLink"; label: string; webLinkUrl: string }
   | { action: "message"; label: string; messageText: string };
@@ -85,7 +90,7 @@ export function buildKakaoSkillResponse(input: {
   text: string;
   title?: string;
   buttons?: KakaoCardButton[];
-  quickReplies?: string[];
+  quickReplies?: KakaoQuickReply[];
 }) {
   const buttons = (input.buttons ?? [])
     .slice(0, KAKAO_MAX_CARD_BUTTONS)
@@ -106,7 +111,11 @@ export function buildKakaoSkillResponse(input: {
       // messageText 는 자르지 않는다 — 버튼을 누르면 이 문장이 그대로 발화로 돌아와 매칭된다.
       quickReplies: (input.quickReplies ?? [])
         .slice(0, KAKAO_MAX_QUICK_REPLIES)
-        .map((label) => ({ action: "message", label: clip(label, KAKAO_BUTTON_LABEL_MAX), messageText: label })),
+        .map((reply) => {
+          const label = typeof reply === "string" ? reply : reply.label;
+          const messageText = typeof reply === "string" ? reply : reply.messageText;
+          return { action: "message", label: clip(label, KAKAO_BUTTON_LABEL_MAX), messageText };
+        }),
     },
   };
 }

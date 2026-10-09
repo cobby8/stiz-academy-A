@@ -20,6 +20,11 @@ export function isKakaoParentAuthIntent(utterance: string): boolean {
   return AUTH_HINT.test(text);
 }
 
+/** 처음 온 사람의 신청·문의 신호(체험·신규·수강 신청·상담 등)가 있는지 — 있으면 정책 답변보다 기존 안내 카드가 먼저다 */
+export function hasKakaoNewEnrollmentHint(utterance: string): boolean {
+  return NEW_HINT.test(utterance.replace(/\s+/g, " ").trim());
+}
+
 // 안내 카드 맨 위에 두는 "이미 다니는 학부모" 버튼. 누르면 '기존 수강생 인증' 발화가 돌아와 인증 링크를 받는다.
 const AUTH_BUTTON: KakaoCardButton = { action: "message", label: "기존 수강생 인증", messageText: "기존 수강생 인증" };
 

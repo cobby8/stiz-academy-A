@@ -26,7 +26,8 @@ interface FormData {
     childSchool: string;
     parentPhone: string;
     source: string;
-    trialFeeConfirmed: boolean;
+    // 「체험수업 비용과 입금 계좌를 확인했습니다」 체크 — 학부모 동의일 뿐 입금 완료가 아니다
+    trialFeeNoticeAgreed: boolean;
     honeypot: string;
 }
 
@@ -72,7 +73,7 @@ const INITIAL_FORM: FormData = {
     childSchool: "",
     parentPhone: "",
     source: "",
-    trialFeeConfirmed: false,
+    trialFeeNoticeAgreed: false,
     honeypot: "",
 };
 
@@ -203,7 +204,7 @@ export default function TrialApplicationForm({ availableSlots, contactPhone, ini
             childSchool: existing.childSchool || prev.childSchool,
             parentPhone: existing.parentPhone || prev.parentPhone,
             source: existing.source || prev.source,
-            trialFeeConfirmed: existing.trialFeeConfirmed || prev.trialFeeConfirmed,
+            trialFeeNoticeAgreed: existing.trialFeeNoticeAgreed || prev.trialFeeNoticeAgreed,
         }));
         setExistingNotice("기존 체험수업 신청서를 불러왔습니다. 필요한 부분만 수정해서 다시 제출해주세요.");
     };
@@ -224,7 +225,7 @@ export default function TrialApplicationForm({ availableSlots, contactPhone, ini
     };
 
     const handleSubmit = () => {
-        if (!form.trialFeeConfirmed) {
+        if (!form.trialFeeNoticeAgreed) {
             setError("체험수업 비용 확인을 체크해주세요.");
             return;
         }
@@ -244,7 +245,7 @@ export default function TrialApplicationForm({ availableSlots, contactPhone, ini
                     childSchool: form.childSchool,
                     parentPhone: form.parentPhone,
                     source: form.source,
-                    trialFeeConfirmed: form.trialFeeConfirmed,
+                    trialFeeNoticeAgreed: form.trialFeeNoticeAgreed,
                     honeypot: form.honeypot,
                 });
                 setCompletionMode(result.mode === "updated" ? "updated" : "created");
@@ -402,7 +403,7 @@ export default function TrialApplicationForm({ availableSlots, contactPhone, ini
                             {paymentNotice && <p className="mt-3 text-xs font-semibold text-brand-orange-600 dark:text-brand-neon-lime">{paymentNotice}</p>}
                         </div>
                         <label className="flex cursor-pointer items-start gap-2 rounded-xl border border-gray-200 bg-gray-50 p-4 text-sm text-gray-700 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-200">
-                            <input type="checkbox" checked={form.trialFeeConfirmed} onChange={(event) => update("trialFeeConfirmed", event.target.checked)} className="mt-1 h-4 w-4 rounded border-gray-300 text-brand-orange-500 focus:ring-brand-orange-500 dark:text-brand-neon-lime" />
+                            <input type="checkbox" checked={form.trialFeeNoticeAgreed} onChange={(event) => update("trialFeeNoticeAgreed", event.target.checked)} className="mt-1 h-4 w-4 rounded border-gray-300 text-brand-orange-500 focus:ring-brand-orange-500 dark:text-brand-neon-lime" />
                             <span>체험수업 비용과 입금 계좌를 확인했습니다.</span>
                         </label>
                         <input type="text" value={form.honeypot} onChange={(event) => update("honeypot", event.target.value)} className="hidden" tabIndex={-1} autoComplete="off" />

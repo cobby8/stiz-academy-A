@@ -3915,6 +3915,8 @@ export async function ensureTrialLeadTable() {
             ['"coachNoticeSentAt"', "TIMESTAMPTZ"],
             ['"coachNoticeSentTo"', "TEXT"],
             ['"trialFeeConfirmed"', "BOOLEAN DEFAULT false"],
+            // 학부모의 「체험비·계좌 확인」 체크 시각 — 실제 입금 확인(trialFeeConfirmed)과 별개
+            ['"trialFeeNoticeAgreedAt"', "TIMESTAMPTZ"],
             ['"hopeNote"', "TEXT"],
             ['"agreedTerms"', "BOOLEAN DEFAULT false"],
             ['"agreedPrivacy"', "BOOLEAN DEFAULT false"],
@@ -3979,7 +3981,9 @@ const TRIAL_LEAD_COLUMNS = [
     // Phase A 추가 필드
     "childBirthDate", "childGrade", "childGender", "childSchool", "basketballExp",
     "preferredDays", "preferredSlotKey", "preferredDay", "preferredPeriod",
-    "trialDate", "trialFeeConfirmed", "hopeNote", "agreedTerms", "agreedPrivacy",
+    // trialFeeConfirmed 는 일부러 뺐다 — 입금 확인은 confirmTrialFeePayment(감사 이력 포함)만 바꾼다.
+    // 공용 수정에 남겨 두면 오래된 화면 값으로 덮어써 확인이 풀리거나 이력 없이 바뀔 수 있다.
+    "trialDate", "hopeNote", "agreedTerms", "agreedPrivacy",
 ] as const;
 
 /**

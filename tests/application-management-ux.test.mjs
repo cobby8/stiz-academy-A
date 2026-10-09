@@ -46,7 +46,8 @@ test("체험 신청은 수정, 일정 변경, 취소 모달로 관리할 수 있
   assert.match(trialModals, /status:\s*"CANCELLED"/);
   assert.match(adminAction, /"childSchool",\s*"basketballExp"/);
   assert.match(adminAction, /"preferredDay",\s*"preferredPeriod"/);
-  assert.match(adminAction, /"trialDate",\s*"trialFeeConfirmed"/);
+  // 입금 확인은 공용 수정에서 빠지고 전용 action(confirmTrialFeePayment)만 바꾼다(2026-10-09)
+  assert.match(adminAction, /"trialDate",\s*"hopeNote"/);
 });
 
 test("체험 일정 변경은 선택 날짜의 운영 수업만 조회하고 실제 확정값을 저장한다", () => {
@@ -153,7 +154,7 @@ test("체험 신청은 한 줄 목록에서 핵심 정보와 빠른 처리만 �
   assert.match(trialClient, /NAVER_SEARCH: "네이버 키워드 검색"/);
   assert.match(trialClient, /lead\.status === "SCHEDULED" \? "일정 변경" : "일정 확정"/);
   assert.match(trialClient, /\[lead\.childName, lead\.childGrade \|\| lead\.childAge, lead\.childSchool\]/);
-  assert.match(trialModals, /체험비 상태: \{form\.trialFeeConfirmed \? "입금 확인 완료" : "미확인"\}/);
+  assert.match(trialModals, /체험비 상태: \{trialFeeStatusLabel\(lead\)\}/);
   assert.doesNotMatch(trialModals, /onChange=\{\(e\) => setForm\(\{ \.\.\.form, trialFeeConfirmed: e\.target\.checked \}\)\}/);
   assert.doesNotMatch(trialClient, /viewMode/);
   assert.doesNotMatch(trialClient, /setViewMode/);

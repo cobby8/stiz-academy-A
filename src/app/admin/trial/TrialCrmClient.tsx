@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type
 import dynamic from "next/dynamic";
 import AdminModal from "@/components/admin/AdminModal";
 import ManualSmsModal from "@/app/admin/apply/ManualSmsModal";
+import { trialFeeStatusLabel } from "@/lib/trial-fee-confirmation";
 import {
     updateTrialLead,
     sendPostTrialEnrollGuide,
@@ -54,7 +55,8 @@ export interface TrialLead {
     preferredDay: string | null;
     preferredPeriod: string | null;
     trialDate: string | null;
-    trialFeeConfirmed: boolean;
+    trialFeeConfirmed: boolean; // 학원이 실제 입금을 확인함(관리자 전용 버튼)
+    trialFeeNoticeAgreedAt?: string | null; // 학부모가 신청서에서 비용·계좌 안내에 동의한 시각(입금 아님)
     hopeNote: string | null;
     agreedTerms: boolean;
     agreedPrivacy: boolean;
@@ -1760,7 +1762,8 @@ function TrialLeadDetailModal({
         ["보호자", [lead.parentName || "미입력", lead.parentPhone].filter(Boolean).join(" · ")],
         ["유입경로", SOURCE_LABELS[lead.source] || lead.source],
         ["농구 경험", lead.basketballExp || "미입력"],
-        ["체험비", lead.trialFeeConfirmed ? "입금 확인" : "미확인"],
+        // 학부모 동의(trialFeeNoticeAgreedAt)만으로는 「입금 완료」가 되지 않는다
+        ["체험비", trialFeeStatusLabel(lead)],
         ["최근 연락", lead.latestContactAction ? `${CONTACT_ACTION_LABELS[lead.latestContactAction] ?? lead.latestContactAction}${lead.latestContactAt ? ` · ${formatContactDateTime(lead.latestContactAt)}` : ""}` : "기록 없음"],
     ];
 

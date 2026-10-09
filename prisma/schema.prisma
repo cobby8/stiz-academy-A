@@ -1618,7 +1618,8 @@ model TrialLead {
   preferredDay                String? // Google Form: 요일
   preferredPeriod             String? // Google Form: 교시
   trialDate                   DateTime?             @db.Timestamptz(6) // Google Form: 체험수업 희망일
-  trialFeeConfirmed           Boolean               @default(false) // Google Form: 체험수업 비용 확인
+  trialFeeConfirmed           Boolean               @default(false) // 학원(관리자)이 실제 입금을 확인함 — 관리자 전용 버튼에서만 true
+  trialFeeNoticeAgreedAt      DateTime?             @db.Timestamptz(6) // 학부모가 신청서에서 「체험비·입금 계좌 확인」에 체크한 시각(입금 아님)
   hopeNote                    String? // 바라는 점 (자유 입력)
   agreedTerms                 Boolean               @default(false) // 이용약관 동의 여부
   agreedPrivacy               Boolean               @default(false) // 개인정보 수집/이용 동의 여부

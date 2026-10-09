@@ -60,6 +60,20 @@ export async function confirmTrialFeeOnce(
     };
 }
 
+/**
+ * 체험비 상태 문구 — 관리자 화면 모든 곳에서 이 함수 하나만 쓴다.
+ * - trialFeeConfirmed: 학원이 실제 입금을 확인했을 때만 true(관리자 전용 버튼)
+ * - trialFeeNoticeAgreedAt: 학부모가 신청서에서 「비용·계좌 확인」에 체크한 시각(입금 아님)
+ * 학부모 체크만으로 「입금 완료」가 보이던 사고(2026-10-09)를 막으려고 두 값을 나눠 판단한다.
+ */
+export function trialFeeStatusLabel(lead: {
+    trialFeeConfirmed?: boolean | null;
+    trialFeeNoticeAgreedAt?: string | Date | null;
+}): "입금 완료" | "입금 대기(학부모 동의함)" | "입금 대기" {
+    if (lead.trialFeeConfirmed) return "입금 완료";
+    return lead.trialFeeNoticeAgreedAt ? "입금 대기(학부모 동의함)" : "입금 대기";
+}
+
 /** 입금 확인과 감사 이력을 같은 트랜잭션에 묶어 반쪽 저장을 방지한다. */
 export async function confirmTrialFeeWithAudit(
     db: TrialFeeConfirmationTransactionDb,

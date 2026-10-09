@@ -9,6 +9,7 @@ import {
     toSeoulScheduledDateTime,
 } from "@/lib/trial-schedule-time";
 import type { ClassInfo, TrialLead } from "./TrialCrmClient";
+import { trialFeeStatusLabel } from "@/lib/trial-fee-confirmation";
 
 interface TrialCrmModalsProps {
     addOpen: boolean;
@@ -378,7 +379,6 @@ function TrialEditModal({
         trialDate: dateInputValue(lead.trialDate),
         preferredDay: lead.preferredDay ?? "",
         preferredPeriod: lead.preferredPeriod ?? "",
-        trialFeeConfirmed: Boolean(lead.trialFeeConfirmed),
         hopeNote: lead.hopeNote ?? "",
         memo: lead.memo ?? "",
     });
@@ -404,7 +404,7 @@ function TrialEditModal({
             trialDate: form.trialDate || null,
             preferredDay: form.preferredDay.trim() || null,
             preferredPeriod: form.preferredPeriod.trim() || null,
-            trialFeeConfirmed: form.trialFeeConfirmed,
+            // trialFeeConfirmed 는 보내지 않는다 — 입금 확인은 전용 버튼(이력 기록)에서만 바뀐다
             hopeNote: form.hopeNote.trim() || null,
             memo: form.memo.trim() || null,
         });
@@ -481,7 +481,7 @@ function TrialEditModal({
                         </FormField>
                     </div>
                     <div className="rounded-lg border border-gray-200 px-3 py-2 text-sm font-semibold text-gray-700 dark:border-gray-700 dark:text-gray-200">
-                        체험비 상태: {form.trialFeeConfirmed ? "입금 확인 완료" : "미확인"}
+                        체험비 상태: {trialFeeStatusLabel(lead)}
                         <p className="mt-1 text-xs font-medium text-gray-400">입금 확인은 상세 화면의 전용 버튼에서 처리합니다.</p>
                     </div>
                     <FormField label="바라는 점">
